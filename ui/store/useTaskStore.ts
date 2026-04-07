@@ -7,8 +7,10 @@ interface TaskState {
   nodes: Node<NodeData>[];
   edges: Edge[];
   metrics: TaskMetrics;
+  selectedNodeId: string | null;
   processEvent: (event: RuntimeEvent) => void;
   reset: () => void;
+  setSelectedNodeId: (nodeId: string | null) => void;
 }
 
 const dagreGraph = new dagre.graphlib.Graph();
@@ -51,8 +53,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     totalTokens: 0,
     totalCost: 0,
   },
+  selectedNodeId: null,
 
-  reset: () => set({ nodes: [], edges: [], metrics: { totalTokens: 0, totalCost: 0 } }),
+  reset: () => set({ nodes: [], edges: [], metrics: { totalTokens: 0, totalCost: 0 }, selectedNodeId: null }),
+
+  setSelectedNodeId: (nodeId: string | null) => set({ selectedNodeId: nodeId }),
 
   processEvent: (event: RuntimeEvent) => {
     const { type, payload } = event;
