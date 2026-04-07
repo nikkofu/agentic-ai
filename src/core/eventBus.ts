@@ -30,8 +30,16 @@ export function createInMemoryEventBus() {
       });
     },
     subscribe(patternOrCallback: string | EventSubscriber, callback?: EventSubscriber) {
-      const pattern = typeof patternOrCallback === "string" ? patternOrCallback : "*";
-      const handler = typeof patternOrCallback === "function" ? patternOrCallback : callback;
+      let pattern: string;
+      let handler: EventSubscriber;
+
+      if (typeof patternOrCallback === "function") {
+        pattern = "*";
+        handler = patternOrCallback;
+      } else {
+        pattern = patternOrCallback;
+        handler = callback!;
+      }
 
       if (!handler) {
         throw new Error("subscribe requires a callback");
@@ -51,7 +59,7 @@ export function createInMemoryEventBus() {
 }
 
 function matches(pattern: string, eventType: string): boolean {
-  if (pattern === "*") {
+  if (pattern === "*" || pattern === "") {
     return true;
   }
 

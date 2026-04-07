@@ -1,12 +1,29 @@
-import { TaskGraph, TaskNode } from "../types/runtime";
+import { TaskGraph, TaskNode, AgentRole } from "../types/runtime";
 import { RuntimeEvent } from "./eventBus";
 
+export type TaskNodeInput = {
+  nodeId: string;
+  parentNodeId?: string;
+  role: AgentRole;
+  state: TaskNode["state"];
+  depth: number;
+  attempt: number;
+  inputSummary: string;
+  outputSummary?: string;
+};
+
+export type TaskGraphInput = {
+  taskId: string;
+  rootNodeId: string;
+};
+
 export interface TaskStore {
-  createGraph(graph: TaskGraph): Promise<void>;
-  upsertNode(taskId: string, node: TaskNode): Promise<void>;
+  createGraph(input: TaskGraphInput): Promise<void>;
+  upsertNode(taskId: string, node: TaskNodeInput): Promise<void>;
   updateGraphStatus(taskId: string, status: TaskGraph["status"]): Promise<void>;
-  appendEvent(taskId: string, event: RuntimeEvent): Promise<void>;
+  appendEvent(event: RuntimeEvent): Promise<void>;
   getGraph(taskId: string): Promise<TaskGraph | null>;
+  getNode(taskId: string, nodeId: string): Promise<TaskNode | null>;
   getEvents(taskId: string): Promise<RuntimeEvent[]>;
 }
 
@@ -15,22 +32,32 @@ export function createInMemoryTaskStore(): TaskStore {
   const events = new Map<string, RuntimeEvent[]>();
 
   return {
-    async createGraph(graph: TaskGraph) {
-      // Deep copy to prevent external mutations affecting the store
-      graphs.set(graph.taskId, { ...graph, nodes: { ...graph.nodes } });
-      events.set(graph.taskId, []);
+    async createGraph(input: TaskGraphInput) {
+      graphs.set(input.taskId, {
+        taskId: input.taskId,
+        rootNodeId: input.rootNodeId,
+        frontier: [],
+        nodes: {},
+        status: "running",
+        createdAt: new Date().toISOString()
+      });
+      events.set(input.taskId, []);
     },
-    async upsertNode(taskId: string, node: TaskNode) {
+    async upsertNode(taskId: string, node: TaskNodeInput) {
       const graph = graphs.get(taskId);
       if (!graph) throw new Error(`Graph ${taskId} not found`);
-      graph.nodes[node.nodeId] = { ...node };
+      graph.nodes[node.nodeId] = { 
+        ...node,
+        children: graph.nodes[node.nodeId]?.children ?? [] 
+      };
     },
     async updateGraphStatus(taskId: string, status: TaskGraph["status"]) {
       const graph = graphs.get(taskId);
       if (!graph) throw new Error(`Graph ${taskId} not found`);
       graph.status = status;
     },
-    async appendEvent(taskId: string, event: RuntimeEvent) {
+    async appendEvent(event: RuntimeEvent) {
+      const taskId = (event.payload?.task_id as string) || "unknown";
       const log = events.get(taskId) || [];
       log.push({ ...event });
       events.set(taskId, log);
@@ -38,8 +65,11 @@ export function createInMemoryTaskStore(): TaskStore {
     async getGraph(taskId: string) {
       const graph = graphs.get(taskId);
       if (!graph) return null;
-      // Return a shallow copy of nodes to prevent some mutations, but deep copy would be safer
       return { ...graph, nodes: { ...graph.nodes } };
+    },
+    async getNode(taskId: string, nodeId: string) {
+      const graph = graphs.get(taskId);
+      return graph?.nodes[nodeId] ?? null;
     },
     async getEvents(taskId: string) {
       return [...(events.get(taskId) || [])];

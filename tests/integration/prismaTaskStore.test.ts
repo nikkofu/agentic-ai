@@ -19,7 +19,7 @@ describe("PrismaTaskStore Integration", () => {
 
   it("can round-trip a task graph and nodes", async () => {
     const taskId = "test-task-" + randomUUID();
-    await store.createGraph(taskId, "root");
+    await store.createGraph({ taskId, rootNodeId: "root" });
     
     await store.upsertNode(taskId, {
       nodeId: "root",
@@ -41,7 +41,7 @@ describe("PrismaTaskStore Integration", () => {
 
   it("can store and retrieve events", async () => {
     const taskId = "test-task-events-" + randomUUID();
-    await store.createGraph(taskId, "root"); // Required by foreign key
+    await store.createGraph({ taskId, rootNodeId: "root" }); // Required by foreign key
 
     const event = {
       type: "TestEvent",

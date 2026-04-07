@@ -1,16 +1,18 @@
 import { PrismaClient } from "@prisma/client";
-import { TaskStore, TaskNodeInput } from "./taskStore";
+import { TaskStore, TaskNodeInput, TaskGraphInput } from "./taskStore";
 import { RuntimeEvent } from "./eventBus";
 
 export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
   return {
-    async createGraph(taskId: string, rootNodeId: string) {
-      await prisma.taskGraph.create({
-        data: {
-          task_id: taskId,
-          root_node_id: rootNodeId,
+    async createGraph(input: TaskGraphInput) {
+      await prisma.taskGraph.upsert({
+        where: { task_id: input.taskId },
+        create: {
+          task_id: input.taskId,
+          root_node_id: input.rootNodeId,
           status: "running"
-        }
+        },
+        update: {}
       });
     },
 
@@ -89,14 +91,14 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
     },
 
     async appendEvent(event: RuntimeEvent) {
-      const taskId = (event.payload.task_id as string) || "unknown";
+      const taskId = (event.payload?.task_id as string) || "unknown";
       await prisma.runtimeEvent.create({
         data: {
           task_id: taskId,
-          node_id: event.payload.node_id as string | null,
+          node_id: (event.payload?.node_id as string | undefined) || null,
           type: event.type,
           payload: JSON.stringify(event.payload),
-          ts: BigInt(event.ts)
+          ts: BigInt(event.ts ?? Date.now())
         }
       });
     },

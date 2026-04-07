@@ -14,7 +14,6 @@ model TaskGraph {
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
   nodes        TaskNode[]
-  events       RuntimeEvent[]
 }
 
 model TaskNode {
@@ -41,8 +40,6 @@ model RuntimeEvent {
   type      String   
   payload   String   
   ts        BigInt   
-  
-  task      TaskGraph @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
 
   @@index([task_id])
 }

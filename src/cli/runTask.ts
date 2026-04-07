@@ -7,6 +7,8 @@ import { createInMemoryEventBus } from "../core/eventBus";
 import { createInMemoryEventLogStore } from "../core/eventLogStore";
 import { createOrchestrator } from "../core/orchestrator";
 import { resolveModelRoute } from "../model/modelRouter";
+import { PrismaClient } from "@prisma/client";
+import { createPrismaTaskStore } from "../core/prismaTaskStore";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 type RunTaskInput = {
@@ -35,9 +37,13 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const config = getRuntimeConfig();
   const eventBus = createInMemoryEventBus();
   const eventLogStore = createInMemoryEventLogStore();
+  
+  // Initialize persistence
+  const prisma = new PrismaClient();
+  const taskStore = createPrismaTaskStore(prisma);
 
   const route = resolveModelRoute(config, "planner", process.env);
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = args.generate ? "mock-key" : process.env.OPENROUTER_API_KEY;
 
   const runtime = createAgentRuntime({
     mode: "openrouter",
@@ -54,42 +60,47 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const orchestrator = createOrchestrator({
     eventBus,
     eventLogStore,
+    taskStore,
     guardrails: config.guardrails,
     runtime
   });
 
   const taskId = randomUUID();
 
-  const result = await orchestrator.runSingleNodeTask({
-    taskId,
-    nodeId: "node-root",
-    role: "planner",
-    runtimeInput: {
-      apiKey,
-      model: route.model,
-      fallbackModels: config.models.fallback,
-      reasoner: route.reasoner,
-      retry: config.retry,
-      input: [{ role: "user", content: args.input }]
-    }
-  });
+  try {
+    const result = await orchestrator.runSingleNodeTask({
+      taskId,
+      nodeId: "node-root",
+      role: "planner",
+      runtimeInput: {
+        apiKey,
+        model: route.model,
+        fallbackModels: config.models.fallback,
+        reasoner: route.reasoner,
+        retry: config.retry,
+        input: [{ role: "user", content: args.input }]
+      }
+    });
 
-  const events = eventLogStore.getAll();
+    const events = eventLogStore.getAll();
 
-  return {
-    taskId,
-    finalState: result.finalState === "aborted" ? "aborted" : "completed",
-    summary: {
-      nodeCount: 1,
-      childSpawns: 1,
-      toolCalls: {
-        localSuccess: events.some((e) => e.type === "ToolReturned") ? 1 : 0,
-        mcpSuccess: 1
-      },
-      evaluatorDecisions: events.filter((e) => e.type === "Evaluated").map((e) => String(e.payload.decision ?? "unknown")),
-      path: result.stateTrace
-    }
-  };
+    return {
+      taskId,
+      finalState: result.finalState === "aborted" ? "aborted" : "completed",
+      summary: {
+        nodeCount: 1,
+        childSpawns: 1,
+        toolCalls: {
+          localSuccess: events.some((e) => e.type === "ToolReturned") ? 1 : 0,
+          mcpSuccess: 1
+        },
+        evaluatorDecisions: events.filter((e) => e.type === "Evaluated").map((e) => String(e.payload.decision ?? "unknown")),
+        path: result.stateTrace
+      }
+    };
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 export function parseRunTaskArgs(argv: string[]): RunTaskInput {
@@ -173,7 +184,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   run
     .then((output) => {
-      process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      if (output) {
+        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      }
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
