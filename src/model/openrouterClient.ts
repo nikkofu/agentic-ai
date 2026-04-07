@@ -1,3 +1,9 @@
+export type LLMUsage = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+};
+
 export type OpenRouterGenerateRequest = {
   apiKey: string;
   model: string;
@@ -8,6 +14,7 @@ export type OpenRouterGenerateRequest = {
 
 export type OpenRouterGenerateResponse = {
   outputText: string;
+  usage: LLMUsage;
   raw: unknown;
 };
 
@@ -32,9 +39,16 @@ export async function generateWithOpenRouter(request: OpenRouterGenerateRequest)
 
   const raw = await response.json();
   const outputText = typeof raw?.output_text === "string" ? raw.output_text : "";
+  
+  const usage: LLMUsage = {
+    prompt_tokens: raw?.usage?.prompt_tokens ?? 0,
+    completion_tokens: raw?.usage?.completion_tokens ?? 0,
+    total_tokens: raw?.usage?.total_tokens ?? 0
+  };
 
   return {
     outputText,
+    usage,
     raw
   };
 }
