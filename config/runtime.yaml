@@ -2,7 +2,7 @@ models:
   default: "qwen/qwen3.6-plus:free"
   fallback:
     - "qwen/qwen3.6-plus:free"
-  byAgentRole:
+  by_agent_role:
     planner: "qwen/qwen3.6-plus:free"
     researcher: "qwen/qwen3.6-plus:free"
     coder: "qwen/qwen3.6-plus:free"
@@ -10,24 +10,28 @@ models:
 
 reasoner:
   default: "medium"
-  byAgentRole:
+  by_agent_role:
     planner: "high"
     researcher: "high"
     coder: "medium"
     writer: "low"
 
 scheduler:
-  defaultPolicy: "bfs"
-  policyOverrides: {}
+  default_policy: "bfs"
+  policy_overrides: {}
 
 guardrails:
-  maxDepth: 4
-  maxBranch: 3
-  maxSteps: 60
-  maxBudget: 5.0
+  max_depth: 4
+  max_branch: 3
+  max_steps: 60
+  max_budget: 5.0
 
 evaluator:
   weights:
     quality: 0.6
     cost: 0.2
     latency: 0.2
+
+retry:
+  max_retries: 3
+  base_delay_ms: 1000

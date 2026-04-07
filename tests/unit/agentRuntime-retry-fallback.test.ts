@@ -17,7 +17,7 @@ describe("agentRuntime retry and fallback", () => {
       model: "primary/model",
       reasoner: "high",
       input: [{ role: "user", content: "hello" }],
-      retry: { maxRetries: 2, baseDelayMs: 1 }
+      retry: { max_retries: 2, base_delay_ms: 1 }
     });
 
     expect(generate).toHaveBeenCalledTimes(2);
@@ -37,7 +37,7 @@ describe("agentRuntime retry and fallback", () => {
         model: "primary/model",
         reasoner: "high",
         input: [{ role: "user", content: "hello" }],
-        retry: { maxRetries: 2, baseDelayMs: 1 }
+        retry: { max_retries: 2, base_delay_ms: 1 }
       })
     ).rejects.toThrow(/400/);
 
@@ -61,7 +61,7 @@ describe("agentRuntime retry and fallback", () => {
       fallbackModels: ["secondary/model"],
       reasoner: "high",
       input: [{ role: "user", content: "hello" }],
-      retry: { maxRetries: 1, baseDelayMs: 1 }
+      retry: { max_retries: 1, base_delay_ms: 1 }
     });
 
     expect(generate).toHaveBeenNthCalledWith(

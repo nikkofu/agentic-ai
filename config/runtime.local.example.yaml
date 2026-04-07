@@ -1,7 +1,7 @@
 # Local-only runtime overrides (do not commit real secrets)
 models:
   default: "qwen/qwen3.6-plus:free"
-  byAgentRole:
+  by_agent_role:
     planner: "qwen/qwen3.6-plus:free"
 
 reasoner:

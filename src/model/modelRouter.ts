@@ -11,9 +11,9 @@ export function resolveModelRoute(
   env: Record<string, string | undefined> = process.env
 ): ModelRoute {
   const modelOverride = env.OPENROUTER_DEFAULT_MODEL;
-  const model = modelOverride ?? config.models.byAgentRole[role] ?? config.models.default;
+  const model = modelOverride ?? config.models.by_agent_role[role] ?? config.models.default;
 
-  const reasoner = config.reasoner.byAgentRole[role] ?? config.reasoner.default;
+  const reasoner = config.reasoner.by_agent_role[role] ?? config.reasoner.default;
 
   return {
     model,

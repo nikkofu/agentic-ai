@@ -10,21 +10,21 @@ export const runtimeConfigSchema = z.object({
   models: z.object({
     default: z.string(),
     fallback: z.array(z.string()).default([]),
-    byAgentRole: z.record(agentRoleSchema, z.string())
+    by_agent_role: z.record(agentRoleSchema, z.string())
   }),
   reasoner: z.object({
     default: z.string(),
-    byAgentRole: z.record(agentRoleSchema, z.string())
+    by_agent_role: z.record(agentRoleSchema, z.string())
   }),
   scheduler: z.object({
-    defaultPolicy: schedulerPolicySchema,
-    policyOverrides: z.record(z.string(), schedulerPolicySchema)
+    default_policy: schedulerPolicySchema,
+    policy_overrides: z.record(z.string(), schedulerPolicySchema)
   }),
   guardrails: z.object({
-    maxDepth: z.number().int().nonnegative(),
-    maxBranch: z.number().int().nonnegative(),
-    maxSteps: z.number().int().nonnegative(),
-    maxBudget: z.number().nonnegative()
+    max_depth: z.number().int().nonnegative(),
+    max_branch: z.number().int().nonnegative(),
+    max_steps: z.number().int().nonnegative(),
+    max_budget: z.number().nonnegative()
   }),
   evaluator: z.object({
     weights: z.object({
@@ -32,6 +32,10 @@ export const runtimeConfigSchema = z.object({
       cost: z.number().min(0).max(1),
       latency: z.number().min(0).max(1)
     })
+  }),
+  retry: z.object({
+    max_retries: z.number().int().nonnegative().default(3),
+    base_delay_ms: z.number().int().nonnegative().default(1000)
   })
 });
 

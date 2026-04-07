@@ -13,10 +13,10 @@ describe("orchestrator state machine", () => {
       eventBus,
       eventLogStore,
       guardrails: {
-        maxDepth: 4,
-        maxBranch: 3,
-        maxSteps: 60,
-        maxBudget: 5
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
       }
     });
 
@@ -38,10 +38,10 @@ describe("orchestrator state machine", () => {
       eventBus,
       eventLogStore,
       guardrails: {
-        maxDepth: 4,
-        maxBranch: 3,
-        maxSteps: 60,
-        maxBudget: 5
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
       }
     });
 
@@ -73,10 +73,10 @@ describe("orchestrator state machine", () => {
       eventBus,
       eventLogStore,
       guardrails: {
-        maxDepth: 0,
-        maxBranch: 0,
-        maxSteps: 0,
-        maxBudget: 0
+        max_depth: 0,
+        max_branch: 0,
+        max_steps: 0,
+        max_budget: 0
       }
     });
 

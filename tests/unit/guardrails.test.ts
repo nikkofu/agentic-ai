@@ -4,10 +4,10 @@ import { checkSpawnGuardrails } from "../../src/guardrails/guardrails";
 
 describe("checkSpawnGuardrails", () => {
   const limits = {
-    maxDepth: 4,
-    maxBranch: 3,
-    maxSteps: 60,
-    maxBudget: 5
+    max_depth: 4,
+    max_branch: 3,
+    max_steps: 60,
+    max_budget: 5
   };
 
   it("allows spawn when all limits are under threshold", () => {
@@ -36,7 +36,7 @@ describe("checkSpawnGuardrails", () => {
     );
 
     expect(result.allowed).toBe(false);
-    expect(result.reason).toBe("maxDepth");
+    expect(result.reason).toBe("max_depth");
   });
 
   it("blocks spawn when branch limit is reached", () => {
@@ -51,7 +51,7 @@ describe("checkSpawnGuardrails", () => {
     );
 
     expect(result.allowed).toBe(false);
-    expect(result.reason).toBe("maxBranch");
+    expect(result.reason).toBe("max_branch");
   });
 
   it("blocks spawn when step limit is reached", () => {
@@ -66,7 +66,7 @@ describe("checkSpawnGuardrails", () => {
     );
 
     expect(result.allowed).toBe(false);
-    expect(result.reason).toBe("maxSteps");
+    expect(result.reason).toBe("max_steps");
   });
 
   it("blocks spawn when budget limit is reached", () => {
@@ -81,6 +81,6 @@ describe("checkSpawnGuardrails", () => {
     );
 
     expect(result.allowed).toBe(false);
-    expect(result.reason).toBe("maxBudget");
+    expect(result.reason).toBe("max_budget");
   });
 });

@@ -6,31 +6,31 @@ export type SpawnGuardrailInput = {
 };
 
 export type SpawnGuardrailLimits = {
-  maxDepth: number;
-  maxBranch: number;
-  maxSteps: number;
-  maxBudget: number;
+  max_depth: number;
+  max_branch: number;
+  max_steps: number;
+  max_budget: number;
 };
 
 export type SpawnGuardrailResult =
   | { allowed: true }
-  | { allowed: false; reason: "maxDepth" | "maxBranch" | "maxSteps" | "maxBudget" };
+  | { allowed: false; reason: "max_depth" | "max_branch" | "max_steps" | "max_budget" };
 
 export function checkSpawnGuardrails(input: SpawnGuardrailInput, limits: SpawnGuardrailLimits): SpawnGuardrailResult {
-  if (input.currentDepth >= limits.maxDepth) {
-    return { allowed: false, reason: "maxDepth" };
+  if (input.currentDepth >= limits.max_depth) {
+    return { allowed: false, reason: "max_depth" };
   }
 
-  if (input.childrenCount >= limits.maxBranch) {
-    return { allowed: false, reason: "maxBranch" };
+  if (input.childrenCount >= limits.max_branch) {
+    return { allowed: false, reason: "max_branch" };
   }
 
-  if (input.totalSteps >= limits.maxSteps) {
-    return { allowed: false, reason: "maxSteps" };
+  if (input.totalSteps >= limits.max_steps) {
+    return { allowed: false, reason: "max_steps" };
   }
 
-  if (input.spentBudget >= limits.maxBudget) {
-    return { allowed: false, reason: "maxBudget" };
+  if (input.spentBudget >= limits.max_budget) {
+    return { allowed: false, reason: "max_budget" };
   }
 
   return { allowed: true };

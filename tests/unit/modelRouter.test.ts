@@ -6,7 +6,7 @@ import type { RuntimeConfig } from "../../src/types/runtime";
 const baseConfig: RuntimeConfig = {
   models: {
     default: "qwen/qwen3.6-plus:free",
-    byAgentRole: {
+    by_agent_role: {
       planner: "qwen/qwen3.6-plus:free",
       researcher: "qwen/qwen3.6-plus:free",
       coder: "qwen/qwen3.6-plus:free",
@@ -15,7 +15,7 @@ const baseConfig: RuntimeConfig = {
   },
   reasoner: {
     default: "low",
-    byAgentRole: {
+    by_agent_role: {
       planner: "high",
       researcher: "low",
       coder: "low",
@@ -23,14 +23,14 @@ const baseConfig: RuntimeConfig = {
     }
   },
   scheduler: {
-    defaultPolicy: "bfs",
-    policyOverrides: {}
+    default_policy: "bfs",
+    policy_overrides: {}
   },
   guardrails: {
-    maxDepth: 4,
-    maxBranch: 3,
-    maxSteps: 60,
-    maxBudget: 5
+    max_depth: 4,
+    max_branch: 3,
+    max_steps: 60,
+    max_budget: 5
   },
   evaluator: {
     weights: {
@@ -54,7 +54,7 @@ describe("resolveModelRoute", () => {
       ...baseConfig,
       reasoner: {
         default: "low",
-        byAgentRole: {
+        by_agent_role: {
           planner: "high",
           researcher: "low",
           coder: "low",

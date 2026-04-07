@@ -14,10 +14,10 @@ type EventLogStore = {
 };
 
 type GuardrailLimits = {
-  maxDepth: number;
-  maxBranch: number;
-  maxSteps: number;
-  maxBudget: number;
+  max_depth: number;
+  max_branch: number;
+  max_steps: number;
+  max_budget: number;
 };
 
 type OrchestratorDeps = {

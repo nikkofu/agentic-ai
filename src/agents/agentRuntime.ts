@@ -5,8 +5,8 @@ type SimulatedRunArgs = {
 };
 
 type RetryPolicy = {
-  maxRetries: number;
-  baseDelayMs: number;
+  max_retries: number;
+  base_delay_ms: number;
 };
 
 type OpenRouterRunArgs = {
@@ -40,13 +40,13 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
           throw new Error("OPENROUTER_API_KEY is required");
         }
 
-        const retry = openrouterArgs.retry ?? { maxRetries: 0, baseDelayMs: 100 };
+        const retry = openrouterArgs.retry ?? { max_retries: 0, base_delay_ms: 100 };
         const models = [openrouterArgs.model, ...(openrouterArgs.fallbackModels ?? [])];
 
         let lastError: unknown;
 
         for (const model of models) {
-          for (let attempt = 0; attempt <= retry.maxRetries; attempt += 1) {
+          for (let attempt = 0; attempt <= retry.max_retries; attempt += 1) {
             try {
               const response = await generate({
                 apiKey: openrouterArgs.apiKey,
@@ -67,11 +67,11 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
                 throw error;
               }
 
-              if (attempt >= retry.maxRetries) {
+              if (attempt >= retry.max_retries) {
                 break;
               }
 
-              const backoff = retry.baseDelayMs * 2 ** attempt;
+              const backoff = retry.base_delay_ms * 2 ** attempt;
               await sleep(backoff);
             }
           }

@@ -18,7 +18,7 @@ describe("layered runtime config", () => {
 
     fs.writeFileSync(
       basePath,
-      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  byAgentRole:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  byAgentRole:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  defaultPolicy: \"bfs\"\n  policyOverrides: {}\nguardrails:\n  maxDepth: 4\n  maxBranch: 3\n  maxSteps: 60\n  maxBudget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\n`
+      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  by_agent_role:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  by_agent_role:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  default_policy: \"bfs\"\n  policy_overrides: {}\nguardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\nretry:\n  max_retries: 3\n  base_delay_ms: 1000\n`
     );
 
     const config = getRuntimeConfig(basePath);
@@ -31,7 +31,7 @@ describe("layered runtime config", () => {
 
     fs.writeFileSync(
       basePath,
-      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  byAgentRole:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  byAgentRole:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  defaultPolicy: \"bfs\"\n  policyOverrides: {}\nguardrails:\n  maxDepth: 4\n  maxBranch: 3\n  maxSteps: 60\n  maxBudget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\n`
+      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  by_agent_role:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  by_agent_role:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  default_policy: \"bfs\"\n  policy_overrides: {}\nguardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\nretry:\n  max_retries: 3\n  base_delay_ms: 1000\n`
     );
 
     fs.writeFileSync(localPath, `models:\n  default: \"minimax/minimax-m2.5:free\"\n`);
@@ -46,7 +46,7 @@ describe("layered runtime config", () => {
 
     fs.writeFileSync(
       basePath,
-      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  byAgentRole:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  byAgentRole:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  defaultPolicy: \"bfs\"\n  policyOverrides: {}\nguardrails:\n  maxDepth: 4\n  maxBranch: 3\n  maxSteps: 60\n  maxBudget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\n`
+      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  by_agent_role:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  by_agent_role:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  default_policy: \"bfs\"\n  policy_overrides: {}\nguardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\nretry:\n  max_retries: 3\n  base_delay_ms: 1000\n`
     );
 
     process.env.OPENROUTER_DEFAULT_MODEL = "openai/gpt-4.1-mini";
