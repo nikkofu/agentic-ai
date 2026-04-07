@@ -16,10 +16,18 @@ export class McpHub {
   async initialize() {
     const initPromises = Object.entries(this.configs).map(async ([name, config]) => {
       try {
+        // Filter out undefined env vars to satisfy TS
+        const filteredProcessEnv: Record<string, string> = {};
+        for (const [k, v] of Object.entries(process.env)) {
+          if (v !== undefined) {
+            filteredProcessEnv[k] = v;
+          }
+        }
+
         const transport = new StdioClientTransport({
           command: config.command,
           args: config.args ?? [],
-          env: { ...process.env, ...config.env }
+          env: { ...filteredProcessEnv, ...config.env }
         });
 
         const client = new Client(
