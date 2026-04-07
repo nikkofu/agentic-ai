@@ -14,8 +14,9 @@ export function getRuntimeConfig(configPath = path.resolve(process.cwd(), "confi
   const merged = deepMerge(baseParsed, localParsed);
 
   if (process.env.OPENROUTER_DEFAULT_MODEL) {
-    merged.models = merged.models ?? {};
-    merged.models.default = process.env.OPENROUTER_DEFAULT_MODEL;
+    const models = (merged.models ?? {}) as Record<string, unknown>;
+    models.default = process.env.OPENROUTER_DEFAULT_MODEL;
+    merged.models = models;
   }
 
   return runtimeConfigSchema.parse(merged);
