@@ -1,1 +1,1 @@
-export {};
+export { runTask } from "./cli/runTask";
