@@ -23,9 +23,9 @@ describe("eventBus filtered subscribe", () => {
 
     bus.subscribe("Task.*", onTaskWildcard);
 
-    bus.publish({ type: "Task.Submitted", payload: { task_id: "t1" }, ts: Date.now() });
-    bus.publish({ type: "Task.Closed", payload: { task_id: "t1" }, ts: Date.now() });
-    bus.publish({ type: "ToolInvoked", payload: {}, ts: Date.now() });
+    bus.publish({ type: "Task.Submitted", payload: { task_id: "t1", node_id: "n1", tool: "echo" }, ts: Date.now() });
+    bus.publish({ type: "Task.Closed", payload: { task_id: "t1", node_id: "n1", tool: "echo" }, ts: Date.now() });
+    bus.publish({ type: "ToolInvoked", payload: { task_id: "t1", node_id: "n1", tool: "echo" }, ts: Date.now() });
 
     expect(onTaskWildcard).toHaveBeenCalledTimes(2);
   });

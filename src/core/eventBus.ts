@@ -1,3 +1,5 @@
+import { eventSchemaRegistry } from "./eventSchemas";
+
 export type RuntimeEvent = {
   type: string;
   payload: Record<string, unknown>;
@@ -16,6 +18,11 @@ export function createInMemoryEventBus() {
 
   return {
     publish(event: RuntimeEvent) {
+      const schema = eventSchemaRegistry[event.type as keyof typeof eventSchemaRegistry];
+      if (schema) {
+        schema.parse(event.payload);
+      }
+
       subscriptions.forEach((subscription) => {
         if (matches(subscription.pattern, event.type)) {
           subscription.callback(event);
