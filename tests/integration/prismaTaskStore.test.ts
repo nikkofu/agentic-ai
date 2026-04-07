@@ -41,8 +41,8 @@ describe("PrismaTaskStore Integration", () => {
 
   it("can store and retrieve events", async () => {
     const taskId = "test-task-events-" + randomUUID();
-    await store.createGraph({ taskId, rootNodeId: "root" }); // Required by foreign key
-
+    // FK removed, but persistenceManager logic still uses task_id
+    
     const event = {
       type: "TestEvent",
       payload: { task_id: taskId, data: "hello" },
