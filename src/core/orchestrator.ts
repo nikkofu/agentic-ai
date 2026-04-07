@@ -146,6 +146,54 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         completedNodes: results.length,
         joinDecision: "stop"
       };
+    },
+
+    resumeTask: async (taskId: string, maxParallel: number = 2) => {
+      if (!deps.taskStore) throw new Error("TaskStore is required for resumeTask");
+      
+      const graph = await deps.taskStore.getGraph(taskId);
+      if (!graph) throw new Error(`Task ${taskId} not found`);
+
+      // Identify incomplete nodes
+      const incompleteNodes = Object.values(graph.nodes).filter(
+        node => node.state === "pending" || node.state === "running"
+      );
+
+      if (incompleteNodes.length === 0) {
+        return { completedNodes: 0, status: "completed", message: "No nodes to resume" };
+      }
+
+      publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, resumed: true });
+
+      const results: { nodeId: string; state: NodeState }[] = [];
+      const queue = [...incompleteNodes];
+
+      const runNext = async () => {
+        if (queue.length === 0) return;
+        const node = queue.shift()!;
+        const res = await runNode({
+          taskId: taskId,
+          nodeId: node.nodeId,
+          role: node.role,
+          runtimeInput: {}
+        });
+        results.push({ nodeId: node.nodeId, state: res.finalState });
+      };
+
+      const workers = Array.from({ length: Math.min(maxParallel, incompleteNodes.length) }, async () => {
+        while (queue.length > 0) {
+          await runNext();
+        }
+      });
+
+      await Promise.all(workers);
+
+      publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: "completed", resumed: true });
+
+      return {
+        completedNodes: results.length,
+        status: "completed"
+      };
     }
   };
 }
