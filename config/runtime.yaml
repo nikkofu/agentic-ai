@@ -1,0 +1,31 @@
+models:
+  default: "openrouter:anthropic/claude-sonnet-4.6"
+  byAgentRole:
+    planner: "openrouter:anthropic/claude-opus-4.6"
+    researcher: "openrouter:anthropic/claude-sonnet-4.6"
+    coder: "openrouter:anthropic/claude-sonnet-4.6"
+    writer: "openrouter:anthropic/claude-haiku-4.5"
+
+reasoner:
+  default: "medium"
+  byAgentRole:
+    planner: "high"
+    researcher: "high"
+    coder: "medium"
+    writer: "low"
+
+scheduler:
+  defaultPolicy: "bfs"
+  policyOverrides: {}
+
+guardrails:
+  maxDepth: 4
+  maxBranch: 3
+  maxSteps: 60
+  maxBudget: 5.0
+
+evaluator:
+  weights:
+    quality: 0.6
+    cost: 0.2
+    latency: 0.2
