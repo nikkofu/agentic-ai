@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { randomUUID } from "node:crypto";
 
 import { createAgentRuntime } from "../agents/agentRuntime";
@@ -10,6 +11,7 @@ import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../m
 
 type RunTaskInput = {
   input: string;
+  repl?: boolean;
   verbose?: boolean;
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
 };
@@ -93,14 +95,82 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
   const inputArgIndex = argv.findIndex((arg) => arg === "--input" || arg === "-p");
   const input = inputArgIndex >= 0 ? argv[inputArgIndex + 1] ?? "" : "";
   const verbose = argv.includes("--verbose");
+  const repl = argv.includes("--repl");
 
-  return { input, verbose };
+  return { input, verbose, repl };
+}
+
+export function processReplCommand(line: string):
+  | { action: "approve" }
+  | { action: "reject" }
+  | { action: "exit" }
+  | { action: "prompt"; prompt: string }
+  | { action: "noop" } {
+  const input = line.trim();
+
+  if (input === "/approve") {
+    return { action: "approve" };
+  }
+
+  if (input === "/reject") {
+    return { action: "reject" };
+  }
+
+  if (input === "/exit") {
+    return { action: "exit" };
+  }
+
+  if (input.length === 0) {
+    return { action: "noop" };
+  }
+
+  return { action: "prompt", prompt: input };
+}
+
+async function runReplSession(verbose: boolean): Promise<void> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    while (true) {
+      const line = (await rl.question("agentic> ")).trim();
+
+      const command = processReplCommand(line);
+
+      if (command.action === "exit") {
+        break;
+      }
+
+      if (command.action === "approve") {
+        console.log("revise approved");
+        continue;
+      }
+
+      if (command.action === "reject") {
+        console.log("revise rejected");
+        continue;
+      }
+
+      if (command.action === "noop") {
+        continue;
+      }
+
+      const output = await runTask({ input: command.prompt, verbose });
+      process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    }
+  } finally {
+    rl.close();
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const parsed = parseRunTaskArgs(process.argv.slice(2));
 
-  runTask(parsed)
+  const run = parsed.repl ? runReplSession(parsed.verbose ?? false) : runTask(parsed);
+
+  run
     .then((output) => {
       process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
     })
