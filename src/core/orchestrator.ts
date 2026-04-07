@@ -24,12 +24,14 @@ type OrchestratorDeps = {
   eventBus: EventBus;
   eventLogStore: EventLogStore;
   guardrails: GuardrailLimits;
+  runtime?: ReturnType<typeof createAgentRuntime>;
 };
 
 type RunTaskInput = {
   taskId: string;
   nodeId: string;
   role: AgentRole;
+  runtimeInput?: Record<string, unknown>;
 };
 
 type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "completed" | "aborted";
@@ -37,7 +39,7 @@ type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "comple
 export function createOrchestrator(deps: OrchestratorDeps) {
   deps.eventBus.subscribe((event) => deps.eventLogStore.append(event));
 
-  const runtime = createAgentRuntime();
+  const runtime = deps.runtime ?? createAgentRuntime();
 
   return {
     async runSingleNodeTask(input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> {
@@ -70,7 +72,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       stateTrace.push("waiting_tool");
       publish(deps.eventBus, "ToolInvoked", { taskId: input.taskId, nodeId: input.nodeId, tool: "echo" });
-      await runtime.run();
+      await runtime.run(input.runtimeInput);
       publish(deps.eventBus, "ToolReturned", { taskId: input.taskId, nodeId: input.nodeId, ok: true });
 
       stateTrace.push("evaluating");
