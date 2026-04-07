@@ -29,8 +29,15 @@ export function createInMemoryEventBus() {
         }
       });
     },
-    subscribe(pattern: string, callback: EventSubscriber) {
-      const entry: Subscription = { pattern, callback };
+    subscribe(patternOrCallback: string | EventSubscriber, callback?: EventSubscriber) {
+      const pattern = typeof patternOrCallback === "string" ? patternOrCallback : "*";
+      const handler = typeof patternOrCallback === "function" ? patternOrCallback : callback;
+
+      if (!handler) {
+        throw new Error("subscribe requires a callback");
+      }
+
+      const entry: Subscription = { pattern, callback: handler };
       subscriptions.push(entry);
 
       return () => {
@@ -44,8 +51,12 @@ export function createInMemoryEventBus() {
 }
 
 function matches(pattern: string, eventType: string): boolean {
+  if (pattern === "*") {
+    return true;
+  }
+
   if (pattern.endsWith(".*")) {
-    const prefix = pattern.slice(0, -1);
+    const prefix = pattern.slice(0, -2);
     return eventType.startsWith(prefix);
   }
 

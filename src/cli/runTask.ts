@@ -10,6 +10,7 @@ import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../m
 
 type RunTaskInput = {
   input: string;
+  verbose?: boolean;
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
 };
 
@@ -40,6 +41,13 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     mode: "openrouter",
     generate: args.generate
   });
+
+  if (args.verbose) {
+    eventBus.subscribe("*", (event) => {
+      const key = event.payload.task_id ?? event.payload.node_id ?? "-";
+      console.log(`[${new Date(event.ts).toISOString()}] ${event.type} key=${String(key)}`);
+    });
+  }
 
   const orchestrator = createOrchestrator({
     eventBus,
@@ -80,11 +88,18 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const inputArgIndex = process.argv.findIndex((arg) => arg === "--input");
-  const input = inputArgIndex >= 0 ? process.argv[inputArgIndex + 1] ?? "" : "";
+export function parseRunTaskArgs(argv: string[]): RunTaskInput {
+  const inputArgIndex = argv.findIndex((arg) => arg === "--input" || arg === "-p");
+  const input = inputArgIndex >= 0 ? argv[inputArgIndex + 1] ?? "" : "";
+  const verbose = argv.includes("--verbose");
 
-  runTask({ input })
+  return { input, verbose };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const parsed = parseRunTaskArgs(process.argv.slice(2));
+
+  runTask(parsed)
     .then((output) => {
       process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
     })

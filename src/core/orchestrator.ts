@@ -45,7 +45,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     async runSingleNodeTask(input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> {
       const stateTrace: NodeState[] = ["pending"];
 
-      publish(deps.eventBus, "TaskSubmitted", input);
+      publish(deps.eventBus, "TaskSubmitted", { task_id: input.taskId });
 
       const guardrail = checkSpawnGuardrails(
         {
@@ -58,29 +58,29 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       );
 
       if (!guardrail.allowed) {
-        publish(deps.eventBus, "GuardrailTripped", { taskId: input.taskId, nodeId: input.nodeId, reason: guardrail.reason });
-        publish(deps.eventBus, "TaskClosed", { taskId: input.taskId, state: "aborted" });
+        publish(deps.eventBus, "GuardrailTripped", { task_id: input.taskId, node_id: input.nodeId, reason: guardrail.reason });
+        publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: "aborted" });
         stateTrace.push("aborted");
         return { finalState: "aborted", stateTrace };
       }
 
-      publish(deps.eventBus, "NodeScheduled", { taskId: input.taskId, nodeId: input.nodeId });
+      publish(deps.eventBus, "NodeScheduled", { task_id: input.taskId, node_id: input.nodeId });
       stateTrace.push("running");
-      publish(deps.eventBus, "AgentStarted", { taskId: input.taskId, nodeId: input.nodeId, role: input.role });
-      publish(deps.eventBus, "PromptComposed", { taskId: input.taskId, nodeId: input.nodeId });
-      publish(deps.eventBus, "ModelCalled", { taskId: input.taskId, nodeId: input.nodeId });
+      publish(deps.eventBus, "AgentStarted", { task_id: input.taskId, node_id: input.nodeId, role: input.role });
+      publish(deps.eventBus, "PromptComposed", { task_id: input.taskId, node_id: input.nodeId });
+      publish(deps.eventBus, "ModelCalled", { task_id: input.taskId, node_id: input.nodeId });
 
       stateTrace.push("waiting_tool");
-      publish(deps.eventBus, "ToolInvoked", { taskId: input.taskId, nodeId: input.nodeId, tool: "echo" });
+      publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "echo" });
       await runtime.run(input.runtimeInput);
-      publish(deps.eventBus, "ToolReturned", { taskId: input.taskId, nodeId: input.nodeId, ok: true });
+      publish(deps.eventBus, "ToolReturned", { task_id: input.taskId, node_id: input.nodeId, ok: true });
 
       stateTrace.push("evaluating");
-      publish(deps.eventBus, "Evaluated", { taskId: input.taskId, nodeId: input.nodeId, decision: "stop" });
+      publish(deps.eventBus, "Evaluated", { task_id: input.taskId, node_id: input.nodeId, decision: "stop" });
 
       stateTrace.push("completed");
-      publish(deps.eventBus, "NodeCompleted", { taskId: input.taskId, nodeId: input.nodeId });
-      publish(deps.eventBus, "TaskClosed", { taskId: input.taskId, state: "completed" });
+      publish(deps.eventBus, "NodeCompleted", { task_id: input.taskId, node_id: input.nodeId });
+      publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: "completed" });
 
       return {
         finalState: "completed",
