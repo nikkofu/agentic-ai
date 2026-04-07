@@ -13,7 +13,12 @@ type Subscription = {
   callback: EventSubscriber;
 };
 
-export function createInMemoryEventBus() {
+export type EventBus = {
+  publish(event: RuntimeEvent): void;
+  subscribe(patternOrCallback: string | EventSubscriber, callback?: EventSubscriber): () => void;
+};
+
+export function createInMemoryEventBus(): EventBus {
   const subscriptions: Subscription[] = [];
 
   return {

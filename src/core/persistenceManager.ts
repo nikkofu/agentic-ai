@@ -1,21 +1,22 @@
 import { EventBus, RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
+import { TaskGraph } from "../types/runtime";
 
 export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStore) {
   // 1. 全量记录事件日志
-  eventBus.subscribe("*", (event) => {
+  eventBus.subscribe("*", (event: RuntimeEvent) => {
     taskStore.appendEvent(event);
   });
 
   // 2. 根据关键事件同步任务状态
-  eventBus.subscribe("TaskSubmitted", (event) => {
+  eventBus.subscribe("TaskSubmitted", (event: RuntimeEvent) => {
     taskStore.createGraph({
       taskId: event.payload.task_id as string,
       rootNodeId: event.payload.node_id as string || "root"
     });
   });
 
-  eventBus.subscribe("NodeScheduled", (event) => {
+  eventBus.subscribe("NodeScheduled", (event: RuntimeEvent) => {
     taskStore.upsertNode(event.payload.task_id as string, {
       nodeId: event.payload.node_id as string,
       role: "planner", // Default role
@@ -26,7 +27,7 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
     });
   });
 
-  eventBus.subscribe("AgentStarted", (event) => {
+  eventBus.subscribe("AgentStarted", (event: RuntimeEvent) => {
     taskStore.upsertNode(event.payload.task_id as string, {
       nodeId: event.payload.node_id as string,
       role: event.payload.role as any,
@@ -37,7 +38,7 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
     });
   });
 
-  eventBus.subscribe("Evaluated", (event) => {
+  eventBus.subscribe("Evaluated", (event: RuntimeEvent) => {
     taskStore.upsertNode(event.payload.task_id as string, {
       nodeId: event.payload.node_id as string,
       role: "planner", 
@@ -49,7 +50,11 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
     });
   });
 
-  eventBus.subscribe("TaskClosed", (event) => {
-    taskStore.updateGraphStatus(event.payload.task_id as string, event.payload.state as string);
+  eventBus.subscribe("TaskClosed", (event: RuntimeEvent) => {
+    const state = event.payload.state as string;
+    const validStates: TaskGraph["status"][] = ["running", "completed", "failed", "aborted"];
+    if (validStates.includes(state as any)) {
+      taskStore.updateGraphStatus(event.payload.task_id as string, state as any);
+    }
   });
 }

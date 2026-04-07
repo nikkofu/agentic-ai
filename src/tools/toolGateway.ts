@@ -1,5 +1,6 @@
 import type { LocalToolRegistry } from "./localToolRegistry";
-import { McpError, type McpClient } from "./mcpClient";
+import { McpError } from "./mcpClient";
+import type { McpHub } from "./mcpHub";
 
 type ToolCall = {
   transport: "local" | "mcp";
@@ -23,7 +24,7 @@ type ToolResult = {
   };
 };
 
-export function createToolGateway(localRegistry: LocalToolRegistry, mcpClient: McpClient) {
+export function createToolGateway(localRegistry: LocalToolRegistry, mcpHub: McpHub) {
   return {
     async invoke(call: ToolCall): Promise<ToolResult> {
       const startedAt = Date.now();
@@ -55,7 +56,7 @@ export function createToolGateway(localRegistry: LocalToolRegistry, mcpClient: M
       }
 
       try {
-        const data = await mcpClient.invoke(call.tool, call.input);
+        const data = await mcpHub.callTool(call.tool, call.input);
 
         return {
           ok: true,

@@ -9,6 +9,9 @@ import { createOrchestrator } from "../core/orchestrator";
 import { resolveModelRoute } from "../model/modelRouter";
 import { PrismaClient } from "@prisma/client";
 import { createPrismaTaskStore } from "../core/prismaTaskStore";
+import { McpHub } from "../tools/mcpHub";
+import { createToolGateway } from "../tools/toolGateway";
+import { createLocalToolRegistry } from "../tools/localToolRegistry";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 type RunTaskInput = {
@@ -42,6 +45,9 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const prisma = new PrismaClient();
   const taskStore = createPrismaTaskStore(prisma);
 
+  // Initialize MCP Hub
+  const mcpHub = new McpHub(config.mcp_servers);
+
   const route = resolveModelRoute(config, "planner", process.env);
   const apiKey = args.generate ? "mock-key" : process.env.OPENROUTER_API_KEY;
 
@@ -57,12 +63,20 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     });
   }
 
+  // MCP Hub should be initialized before orchestrator runs
+  if (Object.keys(config.mcp_servers).length > 0) {
+    await mcpHub.initialize();
+  }
+
+  const toolGateway = createToolGateway(createLocalToolRegistry([]), mcpHub);
+
   const orchestrator = createOrchestrator({
     eventBus,
     eventLogStore,
     taskStore,
     guardrails: config.guardrails,
-    runtime
+    runtime,
+    toolGateway
   });
 
   const taskId = randomUUID();
@@ -99,6 +113,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       }
     };
   } finally {
+    await mcpHub.closeAll();
     await prisma.$disconnect();
   }
 }

@@ -1,9 +1,9 @@
-import { configDefaults, defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
     environment: "node",
-    passWithNoTests: true,
-    exclude: configDefaults.exclude
+    testTimeout: 30000,
+    include: ["tests/**/*.test.ts"]
   }
 });

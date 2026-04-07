@@ -65,7 +65,8 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
         depth: node.depth,
         attempt: node.attempt,
         inputSummary: node.input_summary,
-        outputSummary: node.output_summary ?? undefined
+        outputSummary: node.output_summary ?? undefined,
+        children: [] // Prisma schema currently doesn't store edge list, return empty
       };
     },
 
@@ -85,7 +86,8 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
           state: n.state as any,
           depth: n.depth,
           attempt: n.attempt,
-          inputSummary: n.input_summary
+          inputSummary: n.input_summary,
+          children: []
         }]))
       } as any;
     },

@@ -36,7 +36,12 @@ export const runtimeConfigSchema = z.object({
   retry: z.object({
     max_retries: z.number().int().nonnegative().default(3),
     base_delay_ms: z.number().int().nonnegative().default(1000)
-  })
+  }),
+  mcp_servers: z.record(z.string(), z.object({
+    command: z.string(),
+    args: z.array(z.string()).default([]),
+    env: z.record(z.string(), z.string()).optional()
+  })).default({})
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;

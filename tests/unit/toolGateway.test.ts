@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { createToolGateway } from "../../src/tools/toolGateway";
 import { createLocalToolRegistry } from "../../src/tools/localToolRegistry";
-import { createMockMcpClient } from "../fixtures/mcp/mockMcpServer";
+import { createMockMcpHub } from "../fixtures/mcp/mockMcpServer";
 import { echoTool } from "../fixtures/localTools/echoTool";
 
 describe("toolGateway", () => {
   it("normalizes successful local tool results", async () => {
     const localRegistry = createLocalToolRegistry([echoTool]);
-    const gateway = createToolGateway(localRegistry, createMockMcpClient());
+    const gateway = createToolGateway(localRegistry, createMockMcpHub());
 
     const result = await gateway.invoke({
       transport: "local",
@@ -25,7 +25,7 @@ describe("toolGateway", () => {
 
   it("maps local tool not found to error shape", async () => {
     const localRegistry = createLocalToolRegistry([]);
-    const gateway = createToolGateway(localRegistry, createMockMcpClient());
+    const gateway = createToolGateway(localRegistry, createMockMcpHub());
 
     const result = await gateway.invoke({
       transport: "local",
@@ -40,11 +40,11 @@ describe("toolGateway", () => {
 
   it("normalizes successful MCP results", async () => {
     const localRegistry = createLocalToolRegistry([]);
-    const gateway = createToolGateway(localRegistry, createMockMcpClient());
+    const gateway = createToolGateway(localRegistry, createMockMcpHub());
 
     const result = await gateway.invoke({
       transport: "mcp",
-      tool: "search_docs",
+      tool: "docs/search_docs",
       input: { q: "agent" }
     });
 
@@ -55,11 +55,11 @@ describe("toolGateway", () => {
 
   it("maps MCP timeout to recoverable error", async () => {
     const localRegistry = createLocalToolRegistry([]);
-    const gateway = createToolGateway(localRegistry, createMockMcpClient({ mode: "timeout" }));
+    const gateway = createToolGateway(localRegistry, createMockMcpHub({ mode: "timeout" }));
 
     const result = await gateway.invoke({
       transport: "mcp",
-      tool: "search_docs",
+      tool: "docs/search_docs",
       input: { q: "agent" }
     });
 
@@ -70,11 +70,11 @@ describe("toolGateway", () => {
 
   it("maps MCP auth errors to non-recoverable", async () => {
     const localRegistry = createLocalToolRegistry([]);
-    const gateway = createToolGateway(localRegistry, createMockMcpClient({ mode: "auth" }));
+    const gateway = createToolGateway(localRegistry, createMockMcpHub({ mode: "auth" }));
 
     const result = await gateway.invoke({
       transport: "mcp",
-      tool: "search_docs",
+      tool: "docs/search_docs",
       input: { q: "agent" }
     });
 
@@ -85,11 +85,11 @@ describe("toolGateway", () => {
 
   it("maps MCP protocol errors to non-recoverable", async () => {
     const localRegistry = createLocalToolRegistry([]);
-    const gateway = createToolGateway(localRegistry, createMockMcpClient({ mode: "protocol" }));
+    const gateway = createToolGateway(localRegistry, createMockMcpHub({ mode: "protocol" }));
 
     const result = await gateway.invoke({
       transport: "mcp",
-      tool: "search_docs",
+      tool: "docs/search_docs",
       input: { q: "agent" }
     });
 
