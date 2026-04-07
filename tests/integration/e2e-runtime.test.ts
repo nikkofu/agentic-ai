@@ -1,11 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { runTask } from "../../src/cli/runTask";
 
 describe("runtime e2e", () => {
   it("runs full loop and returns execution summary", async () => {
-    const result = await runTask({ input: "build a plan" });
+    process.env.OPENROUTER_API_KEY = "k-test";
 
+    const generate = vi.fn(async () => ({ outputText: "ok", raw: { ok: true } }));
+    const result = await runTask({ input: "build a plan", generate });
+
+    expect(generate).toHaveBeenCalledTimes(1);
     expect(result.taskId).toBeTruthy();
     expect(result.finalState).toBe("completed");
 
