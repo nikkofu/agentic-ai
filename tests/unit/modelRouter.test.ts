@@ -43,7 +43,7 @@ const baseConfig: RuntimeConfig = {
 
 describe("resolveModelRoute", () => {
   it("uses role-specific reasoner and model", () => {
-    const route = resolveModelRoute(baseConfig, "planner");
+    const route = resolveModelRoute(baseConfig, "planner", {});
 
     expect(route.model).toBe("qwen/qwen3.6-plus:free");
     expect(route.reasoner).toBe("high");
@@ -63,7 +63,7 @@ describe("resolveModelRoute", () => {
       }
     };
 
-    const route = resolveModelRoute(config, "coder");
+    const route = resolveModelRoute(config, "coder", {});
     expect(route.reasoner).toBe("low");
   });
 
@@ -73,5 +73,20 @@ describe("resolveModelRoute", () => {
     });
 
     expect(route.model).toBe("qwen/qwen3.6-plus:free");
+  });
+
+  it("ignores ambient process.env when explicit env is empty", () => {
+    const previous = process.env.OPENROUTER_DEFAULT_MODEL;
+    process.env.OPENROUTER_DEFAULT_MODEL = "minimax/minimax-m2.5:free";
+
+    const route = resolveModelRoute(baseConfig, "planner", {});
+
+    expect(route.model).toBe("qwen/qwen3.6-plus:free");
+
+    if (previous === undefined) {
+      delete process.env.OPENROUTER_DEFAULT_MODEL;
+    } else {
+      process.env.OPENROUTER_DEFAULT_MODEL = previous;
+    }
   });
 });
