@@ -18,7 +18,11 @@ export const runtimeConfigSchema = z.object({
   }),
   scheduler: z.object({
     default_policy: schedulerPolicySchema,
-    policy_overrides: z.record(z.string(), schedulerPolicySchema)
+    policy_overrides: z.record(z.string(), schedulerPolicySchema),
+    rate_limit: z.object({
+      requests_per_minute: z.number().int().positive(),
+      burst_capacity: z.number().int().positive()
+    }).optional()
   }),
   guardrails: z.object({
     max_depth: z.number().int().nonnegative(),

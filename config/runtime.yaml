@@ -19,6 +19,9 @@ reasoner:
 scheduler:
   default_policy: "bfs"
   policy_overrides: {}
+  rate_limit:
+    requests_per_minute: 60
+    burst_capacity: 5
 
 guardrails:
   max_depth: 4
