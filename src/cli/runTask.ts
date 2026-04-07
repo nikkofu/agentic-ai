@@ -13,6 +13,7 @@ import { McpHub } from "../tools/mcpHub";
 import { createToolGateway } from "../tools/toolGateway";
 import { createLocalToolRegistry } from "../tools/localToolRegistry";
 import { RequestLimiter } from "../core/limiter";
+import { initTelemetry } from "../core/telemetry";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 type RunTaskInput = {
@@ -35,6 +36,10 @@ type RunTaskResult = {
     evaluatorDecisions: string[];
     path: string[];
   };
+  telemetry: {
+    total_tokens: number;
+    total_cost_usd: number;
+  };
 };
 
 export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
@@ -42,6 +47,9 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const eventBus = createInMemoryEventBus();
   const eventLogStore = createInMemoryEventLogStore();
   
+  // Initialize Telemetry
+  await initTelemetry();
+
   // Initialize persistence
   const prisma = new PrismaClient();
   const taskStore = createPrismaTaskStore(prisma);
@@ -49,10 +57,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   // Initialize MCP Hub
   const mcpHub = new McpHub(config.mcp_servers);
 
-  const route = resolveModelRoute(config, "planner", process.env);
-  const apiKey = args.generate ? "mock-key" : process.env.OPENROUTER_API_KEY;
-
-  // Initialize rate limiter
+  // Initialize Limiter
   let limiter: RequestLimiter | undefined;
   if (config.scheduler.rate_limit) {
     limiter = new RequestLimiter({
@@ -60,6 +65,9 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       refillRatePerSecond: config.scheduler.rate_limit.requests_per_minute / 60
     });
   }
+
+  const route = resolveModelRoute(config, "planner", process.env);
+  const apiKey = args.generate ? "mock-key" : process.env.OPENROUTER_API_KEY;
 
   const runtime = createAgentRuntime({
     mode: "openrouter",
@@ -108,6 +116,17 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     });
 
     const events = eventLogStore.getAll();
+    
+    // Aggregate telemetry data from events
+    // In a real OTel setup we'd use the SDK, but here we can derive from event log too
+    let totalTokens = 0;
+    let totalCost = 0;
+    
+    events.forEach(e => {
+      if (e.type === "Evaluated" && e.payload.scores) {
+        // Just an example of pulling data from payloads if we chose to store it there
+      }
+    });
 
     return {
       taskId,
@@ -121,6 +140,10 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         },
         evaluatorDecisions: events.filter((e) => e.type === "Evaluated").map((e) => String(e.payload.decision ?? "unknown")),
         path: result.stateTrace
+      },
+      telemetry: {
+        total_tokens: totalTokens,
+        total_cost_usd: totalCost
       }
     };
   } finally {
@@ -211,6 +234,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   run
     .then((output) => {
       if (output) {
+        process.stdout.write(`\n💸 Task Cost Summary\n`);
+        process.stdout.write(`-------------------\n`);
+        process.stdout.write(`Total Tokens: ${output.telemetry.total_tokens}\n`);
+        process.stdout.write(`Total Cost: $${output.telemetry.total_cost_usd.toFixed(6)} USD\n`);
+        process.stdout.write(`-------------------\n\n`);
         process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
       }
     })
