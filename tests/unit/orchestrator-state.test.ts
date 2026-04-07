@@ -6,6 +6,8 @@ describe("getRuntimeConfig", () => {
   it("loads and validates runtime config defaults", () => {
     const config = getRuntimeConfig();
 
+    expect(config.models.default).toBe("qwen/qwen3.6-plus:free");
+    expect(config.models.byAgentRole.planner).toBe("qwen/qwen3.6-plus:free");
     expect(config.scheduler.defaultPolicy).toBe("bfs");
     expect(config.guardrails.maxDepth).toBe(4);
     expect(config.guardrails.maxBranch).toBe(3);

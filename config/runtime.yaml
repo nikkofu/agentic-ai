@@ -1,10 +1,10 @@
 models:
-  default: "openrouter:anthropic/claude-sonnet-4.6"
+  default: "qwen/qwen3.6-plus:free"
   byAgentRole:
-    planner: "openrouter:anthropic/claude-opus-4.6"
-    researcher: "openrouter:anthropic/claude-sonnet-4.6"
-    coder: "openrouter:anthropic/claude-sonnet-4.6"
-    writer: "openrouter:anthropic/claude-haiku-4.5"
+    planner: "qwen/qwen3.6-plus:free"
+    researcher: "qwen/qwen3.6-plus:free"
+    coder: "qwen/qwen3.6-plus:free"
+    writer: "qwen/qwen3.6-plus:free"
 
 reasoner:
   default: "medium"
