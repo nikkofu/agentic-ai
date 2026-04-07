@@ -1,3 +1,14 @@
 .worktrees/
 .env
 config/runtime.local.yaml
+.claude/
+.env.example
+node_modules/
+dist/
+artifacts/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!vitest.config.ts
+!src/**/*.json
