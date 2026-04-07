@@ -67,17 +67,18 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
                     input: openrouterArgs.input
                   });
 
-                  const cost = calculateCost(model, response.usage);
+                  const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+                  const cost = calculateCost(model, usage);
                   
                   // Update Metrics
-                  tokenCounter.add(response.usage.total_tokens, { model });
+                  tokenCounter.add(usage.total_tokens, { model });
                   costCounter.add(cost, { model });
 
                   // Update Span
                   span.setAttributes({
-                    "llm.usage.prompt_tokens": response.usage.prompt_tokens,
-                    "llm.usage.completion_tokens": response.usage.completion_tokens,
-                    "llm.usage.total_tokens": response.usage.total_tokens,
+                    "llm.usage.prompt_tokens": usage.prompt_tokens,
+                    "llm.usage.completion_tokens": usage.completion_tokens,
+                    "llm.usage.total_tokens": usage.total_tokens,
                     "llm.cost_usd": cost
                   });
 
