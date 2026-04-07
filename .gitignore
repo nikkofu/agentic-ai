@@ -12,3 +12,8 @@ artifacts/
 !tsconfig.json
 !vitest.config.ts
 !src/**/*.json
+\n# Prisma\nprisma/*.db\nprisma/*.db-journal
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal

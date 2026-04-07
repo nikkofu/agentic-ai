@@ -1,0 +1,48 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./runtime.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model TaskGraph {
+  task_id      String   @id
+  root_node_id String
+  status       String   
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  nodes        TaskNode[]
+  events       RuntimeEvent[]
+}
+
+model TaskNode {
+  id             Int      @id @default(autoincrement())
+  node_id        String   
+  task_id        String
+  parent_node_id String?
+  role           String   
+  state          String   
+  depth          Int
+  attempt        Int
+  input_summary  String
+  output_summary String?
+  
+  task           TaskGraph @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+
+  @@unique([task_id, node_id])
+}
+
+model RuntimeEvent {
+  id        Int      @id @default(autoincrement())
+  task_id   String
+  node_id   String?
+  type      String   
+  payload   String   
+  ts        BigInt   
+  
+  task      TaskGraph @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+
+  @@index([task_id])
+}
