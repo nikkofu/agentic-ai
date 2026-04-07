@@ -2,10 +2,12 @@ import { createAgentRuntime } from "../agents/agentRuntime";
 import { checkSpawnGuardrails } from "../guardrails/guardrails";
 import type { AgentRole } from "../types/runtime";
 import type { RuntimeEvent } from "./eventBus";
+import { TaskStore } from "./taskStore";
+import { createPersistenceManager } from "./persistenceManager";
 
 type EventBus = {
   publish: (event: RuntimeEvent) => void;
-  subscribe: (fn: (event: RuntimeEvent) => void) => void;
+  subscribe: (pattern: string | ((event: RuntimeEvent) => void), callback?: (event: RuntimeEvent) => void) => void;
 };
 
 type EventLogStore = {
@@ -23,6 +25,7 @@ type GuardrailLimits = {
 type OrchestratorDeps = {
   eventBus: EventBus;
   eventLogStore: EventLogStore;
+  taskStore?: TaskStore;
   guardrails: GuardrailLimits;
   runtime?: ReturnType<typeof createAgentRuntime>;
 };
@@ -49,6 +52,10 @@ type ParallelTaskInput = {
 
 export function createOrchestrator(deps: OrchestratorDeps) {
   deps.eventBus.subscribe((event) => deps.eventLogStore.append(event));
+
+  if (deps.taskStore) {
+    createPersistenceManager(deps.eventBus as any, deps.taskStore);
+  }
 
   const runtime = deps.runtime ?? createAgentRuntime();
 
