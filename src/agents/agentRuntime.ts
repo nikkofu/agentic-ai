@@ -1,5 +1,7 @@
 import { generateWithOpenRouter, type OpenRouterGenerateRequest, type OpenRouterGenerateResponse } from "../model/openrouterClient";
 import { RequestLimiter } from "../core/limiter";
+import { tracer, meter } from "../core/telemetry";
+import { calculateCost } from "../core/costCenter";
 
 type SimulatedRunArgs = {
   forceGuardrailTrip?: boolean;
@@ -22,17 +24,20 @@ type OpenRouterRunArgs = {
 type AgentRuntimeMode = "simulated" | "openrouter";
 
 type AgentRuntimeDeps = {
-  limiter?: RequestLimiter;
   mode?: AgentRuntimeMode;
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
   sleep?: (ms: number) => Promise<void>;
+  limiter?: RequestLimiter;
 };
+
+const tokenCounter = meter.createCounter("llm_tokens_total");
+const costCounter = meter.createCounter("llm_cost_usd");
 
 export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
   const mode = deps.mode ?? "simulated";
   const generate = deps.generate ?? generateWithOpenRouter;
-  const limiter = deps.limiter;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const limiter = deps.limiter;
 
   return {
     async run(args?: SimulatedRunArgs | OpenRouterRunArgs) {
@@ -43,45 +48,69 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
           throw new Error("OPENROUTER_API_KEY is required");
         }
 
-        const retry = openrouterArgs.retry ?? { max_retries: 0, base_delay_ms: 100 };
-        const models = [openrouterArgs.model, ...(openrouterArgs.fallbackModels ?? [])];
+        return tracer.startActiveSpan("agent_run", { attributes: { model: openrouterArgs.model } }, async (span) => {
+          try {
+            const retry = openrouterArgs.retry ?? { max_retries: 0, base_delay_ms: 100 };
+            const models = [openrouterArgs.model, ...(openrouterArgs.fallbackModels ?? [])];
 
-        let lastError: unknown;
+            let lastError: unknown;
 
-        for (const model of models) {
-          for (let attempt = 0; attempt <= retry.max_retries; attempt += 1) {
-            try {
-              if (limiter) await limiter.acquire(); 
-              const response = await generate({
-                apiKey: openrouterArgs.apiKey,
-                model,
-                reasoner: openrouterArgs.reasoner,
-                input: openrouterArgs.input
-              });
+            for (const model of models) {
+              for (let attempt = 0; attempt <= retry.max_retries; attempt += 1) {
+                try {
+                  if (limiter) await limiter.acquire();
 
-              return {
-                usedTool: true,
-                evaluation: "pass",
-                outputText: response.outputText,
-                raw: response.raw
-              } as const;
-            } catch (error) {
-              lastError = error;
-              if (!shouldRetry(error)) {
-                throw error;
+                  const response = await generate({
+                    apiKey: openrouterArgs.apiKey!,
+                    model,
+                    reasoner: openrouterArgs.reasoner,
+                    input: openrouterArgs.input
+                  });
+
+                  const cost = calculateCost(model, response.usage);
+                  
+                  // Update Metrics
+                  tokenCounter.add(response.usage.total_tokens, { model });
+                  costCounter.add(cost, { model });
+
+                  // Update Span
+                  span.setAttributes({
+                    "llm.usage.prompt_tokens": response.usage.prompt_tokens,
+                    "llm.usage.completion_tokens": response.usage.completion_tokens,
+                    "llm.usage.total_tokens": response.usage.total_tokens,
+                    "llm.cost_usd": cost
+                  });
+
+                  return {
+                    usedTool: true,
+                    evaluation: "pass",
+                    outputText: response.outputText,
+                    raw: response.raw
+                  } as const;
+                } catch (error) {
+                  lastError = error;
+                  if (!shouldRetry(error)) {
+                    throw error;
+                  }
+
+                  if (attempt >= retry.max_retries) {
+                    break;
+                  }
+
+                  const backoff = retry.base_delay_ms * 2 ** attempt;
+                  await sleep(backoff);
+                }
               }
-
-              if (attempt >= retry.max_retries) {
-                break;
-              }
-
-              const backoff = retry.base_delay_ms * 2 ** attempt;
-              await sleep(backoff);
             }
-          }
-        }
 
-        throw lastError;
+            throw lastError;
+          } catch (err) {
+            span.recordException(err as Error);
+            throw err;
+          } finally {
+            span.end();
+          }
+        });
       }
 
       return {

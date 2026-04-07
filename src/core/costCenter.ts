@@ -1,11 +1,4 @@
-/**
- * LLM 使用量统计
- */
-export interface LLMUsage {
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-}
+import { LLMUsage } from "../model/openrouterClient";
 
 /**
  * 内置模型价格（价格单位：USD/每百万 Token）
@@ -17,24 +10,19 @@ export const MODEL_PRICING: Record<string, { prompt: number; completion: number 
 };
 
 /**
- * 财务计费核心逻辑
+ * 根据模型和使用量计算费用
+ * @param model 模型标识符
+ * @param usage LLM 使用详情
+ * @returns 估计费用（USD）
  */
-export class CostCenter {
-  /**
-   * 根据模型和使用量计算费用
-   * @param model 模型标识符
-   * @param usage LLM 使用详情
-   * @returns 估计费用（USD）
-   */
-  calculateCost(model: string, usage: LLMUsage): number {
-    const pricing = MODEL_PRICING[model];
-    if (!pricing) {
-      return 0;
-    }
-
-    const promptCost = (usage.prompt_tokens / 1_000_000) * pricing.prompt;
-    const completionCost = (usage.completion_tokens / 1_000_000) * pricing.completion;
-
-    return promptCost + completionCost;
+export function calculateCost(model: string, usage: LLMUsage): number {
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) {
+    return 0;
   }
+
+  const promptCost = (usage.prompt_tokens / 1_000_000) * pricing.prompt;
+  const completionCost = (usage.completion_tokens / 1_000_000) * pricing.completion;
+
+  return promptCost + completionCost;
 }
