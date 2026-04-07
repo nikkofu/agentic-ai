@@ -43,6 +43,7 @@ type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "comple
 type ParallelNodeInput = {
   nodeId: string;
   role: AgentRole;
+  priority?: number;
 };
 
 type ParallelTaskInput = {
@@ -138,7 +139,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
     runParallelTask: async (input: ParallelTaskInput) => {
       const results: { nodeId: string; state: NodeState }[] = [];
-      const queue = [...input.nodes];
+      const queue = [...input.nodes].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
       const activePromises = new Set<Promise<void>>();
 
       const runNext = async () => {
