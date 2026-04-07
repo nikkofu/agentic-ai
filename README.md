@@ -78,7 +78,7 @@ npm run build
 
 - [x] **Phase 1 (MVP)**: 核心调度、护栏、评估器、工具网关及基础 CLI 实现。
 - [x] **Phase 2 (Enhancements)**: 并行编排、自动重试、REPL 模式、事件流增强及 Zod 校验。
-- [ ] **Phase 3 (Scaling)**: 远程 MCP 服务器支持、状态持久化数据库适配、Web Dashboard (规划中)。
+- [x] **Phase 3 (Scaling)**: 远程 MCP 服务器支持、状态持久化数据库适配、Web Dashboard (已完成)。
 
 ## 📄 开源协议
 
