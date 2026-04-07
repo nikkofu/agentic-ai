@@ -5,6 +5,7 @@ import { createAgentRuntime } from "../agents/agentRuntime";
 import { getRuntimeConfig } from "../config/loadRuntimeConfig";
 import { createInMemoryEventBus } from "../core/eventBus";
 import { createInMemoryEventLogStore } from "../core/eventLogStore";
+import { WebHub } from "../core/webHub";
 import { createOrchestrator } from "../core/orchestrator";
 import { resolveModelRoute } from "../model/modelRouter";
 import { PrismaClient } from "@prisma/client";
@@ -99,8 +100,13 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   });
 
   const taskId = randomUUID();
+  const webHub = new WebHub(eventBus);
 
   try {
+    await webHub.start(3001);
+    console.log("Dashboard Real-time Stream: ws://localhost:3001");
+    console.log(`Real-time Dashboard: http://localhost:3000?taskId=${taskId}`);
+
     const result = await orchestrator.runSingleNodeTask({
       taskId,
       nodeId: "node-root",
@@ -147,6 +153,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       }
     };
   } finally {
+    await webHub.stop();
     await mcpHub.closeAll();
     await prisma.$disconnect();
   }

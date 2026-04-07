@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
+    "@types/ws": "^8.18.1",
     "prisma": "^6.19.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
@@ -22,6 +23,7 @@
     "@opentelemetry/sdk-trace-base": "^2.6.1",
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@prisma/client": "^6.19.3",
+    "ws": "^8.20.0",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
   }
