@@ -12,6 +12,7 @@ import { createPrismaTaskStore } from "../core/prismaTaskStore";
 import { McpHub } from "../tools/mcpHub";
 import { createToolGateway } from "../tools/toolGateway";
 import { createLocalToolRegistry } from "../tools/localToolRegistry";
+import { RequestLimiter } from "../core/limiter";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 type RunTaskInput = {
@@ -51,9 +52,19 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const route = resolveModelRoute(config, "planner", process.env);
   const apiKey = args.generate ? "mock-key" : process.env.OPENROUTER_API_KEY;
 
+  // Initialize rate limiter
+  let limiter: RequestLimiter | undefined;
+  if (config.scheduler.rate_limit) {
+    limiter = new RequestLimiter({
+      capacity: config.scheduler.rate_limit.burst_capacity,
+      refillRatePerSecond: config.scheduler.rate_limit.requests_per_minute / 60
+    });
+  }
+
   const runtime = createAgentRuntime({
     mode: "openrouter",
-    generate: args.generate
+    generate: args.generate,
+    limiter
   });
 
   if (args.verbose) {
