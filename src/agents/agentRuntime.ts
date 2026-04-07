@@ -1,4 +1,5 @@
 import { generateWithOpenRouter, type OpenRouterGenerateRequest, type OpenRouterGenerateResponse } from "../model/openrouterClient";
+import { RequestLimiter } from "../core/limiter";
 
 type SimulatedRunArgs = {
   forceGuardrailTrip?: boolean;
@@ -21,6 +22,7 @@ type OpenRouterRunArgs = {
 type AgentRuntimeMode = "simulated" | "openrouter";
 
 type AgentRuntimeDeps = {
+  limiter?: RequestLimiter;
   mode?: AgentRuntimeMode;
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
   sleep?: (ms: number) => Promise<void>;
@@ -29,6 +31,7 @@ type AgentRuntimeDeps = {
 export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
   const mode = deps.mode ?? "simulated";
   const generate = deps.generate ?? generateWithOpenRouter;
+  const limiter = deps.limiter;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   return {
@@ -48,6 +51,7 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
         for (const model of models) {
           for (let attempt = 0; attempt <= retry.max_retries; attempt += 1) {
             try {
+              if (limiter) await limiter.acquire(); 
               const response = await generate({
                 apiKey: openrouterArgs.apiKey,
                 model,
