@@ -1,5 +1,7 @@
 models:
   default: "qwen/qwen3.6-plus:free"
+  fallback:
+    - "qwen/qwen3.6-plus:free"
   byAgentRole:
     planner: "qwen/qwen3.6-plus:free"
     researcher: "qwen/qwen3.6-plus:free"

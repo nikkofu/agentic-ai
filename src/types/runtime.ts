@@ -9,6 +9,7 @@ export type SchedulerPolicy = z.infer<typeof schedulerPolicySchema>;
 export const runtimeConfigSchema = z.object({
   models: z.object({
     default: z.string(),
+    fallback: z.array(z.string()).default([]),
     byAgentRole: z.record(agentRoleSchema, z.string())
   }),
   reasoner: z.object({

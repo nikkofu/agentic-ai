@@ -65,6 +65,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     runtimeInput: {
       apiKey,
       model: route.model,
+      fallbackModels: config.models.fallback,
       reasoner: route.reasoner,
       input: [{ role: "user", content: args.input }]
     }
