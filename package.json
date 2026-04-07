@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "ui:dev": "cd ui && npm run dev",
     "test:watch": "vitest"
   },
   "devDependencies": {
