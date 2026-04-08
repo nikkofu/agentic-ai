@@ -117,7 +117,12 @@ npm run build
 
 - [x] **Phase 1 (MVP)**: 核心调度、护栏、评估器、工具网关及基础 CLI 实现。
 - [x] **Phase 2 (Enhancements)**: 并行编排、自动重试、REPL 模式、事件流增强及 Zod 校验。
-- [x] **Phase 3 (Scaling)**: 远程 MCP 服务器支持、状态持久化数据库适配、Web Dashboard (已完成)。
+- [x] **Phase 3 (Scaling)**: 远程 MCP 服务器支持、状态持久化数据库适配、Web Dashboard。
+- [x] **Phase 4-6 (UX & Adoption)**: Quickstart 2.0（preflight）、模板注入、可解释诊断、Adoption 指标导出、Dashboard 体验增强与审计闭环。
+- [~] **Phase 7 (Ecosystem & Extensibility)**: 生态扩展能力推进中（与后续阶段并行演进）。
+- [~] **Phase 8 (Ultimate DX)**: 开发者体验增强推进中（与后续阶段并行演进）。
+- [~] **Phase 9 (Enterprise Ready)**: 企业级能力规划/实现推进中。
+- [ ] **Phase 10 (Community & Showcase)**: 即将启动（在执行前将按最新方案落地任务清单）。
 
 ## 📄 开源协议
 
