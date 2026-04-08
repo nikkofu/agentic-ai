@@ -54,7 +54,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const config = getRuntimeConfig();
   const eventBus = createInMemoryEventBus();
   const eventLogStore = createInMemoryEventLogStore();
-  
+
   // Initialize Telemetry
   await initTelemetry();
 
@@ -110,9 +110,23 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const webHub = new WebHub(eventBus);
 
   try {
-    await webHub.start(3001);
-    console.log("Dashboard Real-time Stream: ws://localhost:3001");
-    console.log(`Real-time Dashboard: http://localhost:3000?taskId=${taskId}`);
+    try {
+      await webHub.start(3001);
+      console.log("Dashboard Real-time Stream: ws://localhost:3001");
+      console.log(`Real-time Dashboard: http://localhost:3000?taskId=${taskId}`);
+    } catch (error) {
+      const isAddressInUse =
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code?: string }).code === "EADDRINUSE";
+
+      if (isAddressInUse) {
+        console.warn("[WebHub] Port 3001 already in use, skipping dashboard stream startup");
+      } else {
+        throw error;
+      }
+    }
 
     let totalNodes = 0;
     let finalState: "completed" | "aborted" = "completed";
@@ -122,9 +136,9 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       const workflowText = fs.readFileSync(args.workflow, "utf8");
       const workflow = YAML.parse(workflowText) as DagWorkflow;
       const tiers = resolveExecutionTiers(workflow);
-      
+
       for (const tier of tiers) {
-        const nodes = tier.map(n => ({
+        const nodes = tier.map((n) => ({
           nodeId: n.id,
           role: n.role as any,
           priority: 0
@@ -160,12 +174,12 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     }
 
     const events = eventLogStore.getAll();
-    
+
     // Aggregate telemetry data from events
     let totalTokens = 0;
     let totalCost = 0;
-    
-    events.forEach(e => {
+
+    events.forEach((e) => {
       if (e.type === "Evaluated" && e.payload.scores) {
         // payload extraction logic
       }
@@ -201,7 +215,7 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
   const input = inputArgIndex >= 0 ? argv[inputArgIndex + 1] ?? "" : "";
   const verbose = argv.includes("--verbose");
   const repl = argv.includes("--repl");
-  
+
   const workflowArgIndex = argv.findIndex((arg) => arg === "--workflow" || arg === "-w");
   const workflow = workflowArgIndex >= 0 ? argv[workflowArgIndex + 1] ?? undefined : undefined;
 
