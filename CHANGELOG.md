@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-04-08
+### Added
+- **Runtime Executor Core**: Added `src/runtime/executor.ts` and `src/runtime/contracts.ts` so task execution now flows through a dedicated runtime service layer instead of being orchestrated inside the CLI entrypoint.
+- **Capability Routing**: Added `src/runtime/capabilities.ts` to authorize tools through capability families such as `research`, `verification`, and `repository`.
+- **Memory & Retrieval Runtime**: Added `src/runtime/memory.ts` and `src/runtime/retrieval.ts` with provider-driven enrichment, in-memory retrieval, task-scoped memory storage, and tree-wide write-back summaries.
+- **Architecture Handoff Record**: Added `docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md` as a restartable phase handoff artifact for the architecture-upgrade branch.
+
+### Changed
+- **Context-Native Orchestration**: Orchestrator now accepts `ExecutionContext`-driven execution paths, with executor composing contexts and handing them directly to runtime core APIs.
+- **Policy Enforcement**: Planner policy is now enforced at runtime for tool authorization and verification gating instead of existing only as prompt hints.
+- **Evaluator-Led Convergence**: Evaluator and policy now jointly drive `stop / revise / block` decisions inside the orchestration loop.
+- **Task Memory Persistence**: Tree tiers now write node outputs and join summaries back into task-scoped memory for later retrieval and richer follow-up execution.
+
 ## [0.5.1] - 2026-04-08
 ### Added
 - **Runtime Architecture Modules**: Added dedicated `runtime/intent`, `runtime/plan`, `runtime/policy`, and `runtime/context` modules to separate intent classification, planner expansion, policy normalization, and execution context construction from CLI glue.

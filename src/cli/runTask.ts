@@ -47,14 +47,9 @@ import { SlackBot } from "../bots/slackBot";
 import { WhatsAppBot } from "../bots/whatsappBot";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 import { finalizeDelivery } from "../core/deliveryArtifacts";
-
-import { resolveExecutionTiers } from "../core/dagEngine";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
-import { classifyTaskIntent } from "../runtime/intent";
-import { createExecutionContext } from "../runtime/context";
-import { buildWorkflowFromIntent, planWorkflowFromPlanner } from "../runtime/plan";
-import type { PlannerPolicy } from "../runtime/policy";
+import { createTaskExecutor } from "../runtime/executor";
 import YAML from "yaml";
 
 type RunTaskInput = {
@@ -168,6 +163,18 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   }
 
   const taskId = randomUUID();
+  const executor = createTaskExecutor({
+    config,
+    eventBus,
+    eventLogStore,
+    runtime,
+    orchestrator,
+    finalizeDelivery,
+    resolveModelRoute,
+    availableLocalTools,
+    env: process.env,
+    taskIdFactory: () => taskId
+  });
   const webHub = new WebHub(eventBus, eventLogStore);
 
   try {
@@ -186,302 +193,18 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       }
     }
 
-    let totalNodes = 0;
-    let finalState: "completed" | "aborted" = "completed";
-    let stateTrace: string[] = [];
-    let outputText = "";
-    let delivery: DeliveryBundle = {
-      status: "completed",
-      final_result: "",
-      artifacts: [],
-      verification: [],
-      risks: [],
-      next_actions: []
-    };
-    let plannerPolicy: PlannerPolicy | undefined;
-
-    const getRuntimeInput = (
-      role: any,
-      inputContent: any,
-      context?: { task: string; dependsOn?: string[]; plannerPolicy?: PlannerPolicy; promptContext?: string[] }
-    ) => {
-      const nodeRoute = resolveModelRoute(config, role, process.env);
-      const prompt = buildAutonomousPrompt(String(role), String(inputContent), context);
-      return {
-        apiKey: args.generate ? "mock-key" : (nodeRoute.apiKey ?? process.env.OPENROUTER_API_KEY),
-        model: nodeRoute.model,
-        baseUrl: nodeRoute.baseUrl,
-        fallbackModels: config.models.fallback,
-        reasoner: nodeRoute.reasoner,
-        retry: config.retry,
-        input: [
-          { role: "system", content: prompt.system },
-          { role: "user", content: prompt.user }
-        ]
-      };
-    };
-
-    const plannerRoute = resolveModelRoute(config, "planner", process.env);
-    const intent = args.workflow
-      ? null
-      : await classifyTaskIntent({
-          task: finalInput,
-          runtime,
-          runtimeInput: {
-            apiKey: args.generate ? "mock-key" : (plannerRoute.apiKey ?? process.env.OPENROUTER_API_KEY),
-            model: plannerRoute.model,
-            baseUrl: plannerRoute.baseUrl,
-            fallbackModels: config.models.fallback,
-            reasoner: plannerRoute.reasoner,
-            retry: config.retry
-          }
-        });
-
-    if (intent) {
-      eventBus.publish({
-        type: "IntentClassified",
-        payload: {
-          task_id: taskId,
-          task_kind: intent.task_kind,
-          execution_mode: intent.execution_mode,
-          roles: intent.roles,
-          needs_verification: intent.needs_verification,
-          reason: intent.reason
-        },
-        ts: Date.now()
-      });
-    }
-
-    const plannerWorkflow = !args.workflow && intent?.execution_mode === "tree"
-      ? await planWorkflowFromPlanner({
-          task: finalInput,
-          intent,
-          availableTools: availableLocalTools,
-          runtime,
-          runtimeInput: {
-            apiKey: args.generate ? "mock-key" : (plannerRoute.apiKey ?? process.env.OPENROUTER_API_KEY),
-            model: plannerRoute.model,
-            baseUrl: plannerRoute.baseUrl,
-            fallbackModels: config.models.fallback,
-            reasoner: plannerRoute.reasoner,
-            retry: config.retry
-          }
-        })
-      : null;
-
-    if (plannerWorkflow) {
-      plannerPolicy = {
-        recommendedTools: plannerWorkflow.recommendedTools,
-        requiredCapabilities: plannerWorkflow.requiredCapabilities,
-        verificationPolicy: plannerWorkflow.verificationPolicy
-      };
-      eventBus.publish({
-        type: "PlannerExpanded",
-        payload: {
-          task_id: taskId,
-          child_count: Math.max(plannerWorkflow.nodes.length - 1, 0),
-          recommended_tools: plannerWorkflow.recommendedTools,
-          required_capabilities: plannerWorkflow.requiredCapabilities,
-          verification_policy: plannerWorkflow.verificationPolicy
-        },
-        ts: Date.now()
-      });
-    }
-
     const workflow = args.workflow
       ? (YAML.parse(fs.readFileSync(args.workflow, "utf8")) as DagWorkflow)
-      : plannerWorkflow ?? buildWorkflowFromIntent(intent, finalInput);
+      : undefined;
 
-    if (workflow) {
-      const tiers = resolveExecutionTiers(workflow);
-      eventBus.publish({
-        type: "ChildrenSpawned",
-        payload: {
-          task_id: taskId,
-          node_id: "node-root",
-          child_count: Math.max(workflow.nodes.length - 1, 0)
-        },
-        ts: Date.now()
-      });
-
-      for (const [tierIndex, tier] of tiers.entries()) {
-        const nodes = tier.map((n) => ({
-          nodeId: n.id,
-          role: n.role as any,
-          priority: 0,
-          parentNodeId: n.depends_on[0],
-          depth: tierIndex,
-          runtimeInput: getRuntimeInput(n.role as any, n.input, {
-            task: finalInput,
-            dependsOn: n.depends_on,
-            plannerPolicy,
-            promptContext: createExecutionContext({
-              intent,
-              plan: workflow,
-              policy: plannerPolicy,
-              node: n,
-              task: finalInput
-            }).dependencyOutputs
-          })
-        }));
-
-        const tierResult = await orchestrator.runParallelTask({
-          taskId,
-          nodes,
-          maxParallel: 5,
-          runtimeInput: {}
-        });
-        totalNodes += tierResult.completedNodes;
-        if (tierResult.joinDecision === "aborted") {
-          finalState = "aborted";
-          break;
-        }
-      }
-    } else {
-      const result = await orchestrator.runSingleNodeTask({
-        taskId,
-        nodeId: "node-root",
-        role: "planner",
-        runtimeInput: getRuntimeInput("planner", finalInput)
-      });
-      totalNodes = 1;
-      stateTrace = result.stateTrace;
-      delivery = result.delivery;
-      outputText = result.delivery.final_result;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    const events = eventLogStore.getAll();
-    let totalTokens = 0;
-    let totalCost = 0;
-
-    events.forEach((event) => {
-      if (event.type === "Evaluated") {
-        if (args.verbose) {
-          console.log("[DEBUG] Evaluated Payload:", JSON.stringify(event.payload));
-        }
-        if (event.payload.usage) {
-          const usage = event.payload.usage as any;
-          totalTokens += usage.total_tokens || 0;
-          totalCost += (event.payload.cost as number) || 0;
-        }
-        if (event.payload.output_text) {
-          outputText = event.payload.output_text as string;
-        }
-        if (event.payload.delivery) {
-          delivery = event.payload.delivery as DeliveryBundle;
-        }
-      }
+    return await executor.execute({
+      input: finalInput,
+      workflow
     });
-
-    delivery = await finalizeDelivery({
-      taskId,
-      taskInput: finalInput,
-      delivery
-    });
-    finalState = delivery.status === "completed" ? "completed" : "aborted";
-    outputText = delivery.final_result;
-    eventBus.publish({
-      type: "TaskClosed",
-      payload: {
-        task_id: taskId,
-        state: finalState,
-        delivery,
-        final_result: delivery.final_result,
-        artifacts: delivery.artifacts,
-        blocking_reason: delivery.blocking_reason
-      },
-      ts: Date.now()
-    });
-
-    return {
-      taskId,
-      finalState,
-      outputText,
-      delivery,
-      summary: {
-        nodeCount: totalNodes,
-        childSpawns: events
-          .filter((event) => event.type === "ChildrenSpawned")
-          .reduce((sum, event) => sum + Number(event.payload.child_count ?? 0), 0),
-        toolCalls: {
-          localSuccess: events.filter(
-            (event) => event.type === "ToolReturned" && String(event.payload.provider ?? "") === "local"
-          ).length,
-          mcpSuccess: events.filter(
-            (event) => event.type === "ToolReturned" && String(event.payload.provider ?? "") === "mcp"
-          ).length
-        },
-        evaluatorDecisions: events
-          .filter((event) => event.type === "Evaluated")
-          .map((event) => String(event.payload.decision ?? "unknown")),
-        path: stateTrace
-      },
-      telemetry: {
-        total_tokens: totalTokens,
-        total_cost_usd: totalCost
-      }
-    };
   } finally {
     await webHub.stop();
     await mcpHub.closeAll();
     await prisma.$disconnect();
-  }
-}
-
-function buildAutonomousPrompt(
-  role: string,
-  task: string,
-  context?: { task: string; dependsOn?: string[]; plannerPolicy?: PlannerPolicy; promptContext?: string[] }
-): { system: string; user: string } {
-  const dependencyLine =
-    context?.dependsOn && context.dependsOn.length > 0
-      ? `Completed dependency nodes: ${context.dependsOn.join(", ")}. Use their outputs as prior context when available.`
-      : "No dependency nodes are available for this step.";
-  const plannerPolicyLines = context?.plannerPolicy
-    ? [
-        `Planner recommended tools: ${context.plannerPolicy.recommendedTools.join(", ") || "none"}.`,
-        `Planner required capabilities: ${context.plannerPolicy.requiredCapabilities.join(", ") || "none"}.`,
-        `Planner verification policy: ${context.plannerPolicy.verificationPolicy || "default"}`
-      ]
-    : [];
-  const contextLines = context?.promptContext?.length
-    ? context.promptContext.map((entry, index) => `Context[${index + 1}]: ${entry}`)
-    : [];
-
-  return {
-    system: [
-      `You are an autonomous ${role} agent.`,
-      "Use tools when claims require external evidence.",
-      "Available local tools: web_search, page_fetch, github_readme, github_file, verify_sources, echo.",
-      "Research or factual tasks must include verification URLs or evidence strings.",
-      "If you use a tool, respond with JSON only in one of two forms.",
-      "Tool request schema:",
-      '{"tool_calls":[{"transport":"local","tool":"web_search","input":{"query":"..."}}]}',
-      "Final delivery schema:",
-      '{"final_result":"markdown text","verification":["source or evidence"],"artifacts":[],"risks":[],"next_actions":[]}',
-      "Do not claim completion with an empty final_result.",
-      "Do not claim completion for research work without verification.",
-      dependencyLine,
-      ...plannerPolicyLines,
-      ...contextLines,
-      getRoleInstructions(role)
-    ].join("\n"),
-    user: `User task: ${context?.task ?? task}\n\nCurrent node objective: ${task}`
-  };
-}
-
-function getRoleInstructions(role: string) {
-  switch (role) {
-    case "planner":
-      return "Focus on planning and scoping. Avoid spending multiple turns on the same research tool.";
-    case "researcher":
-      return "Prefer tool-driven evidence collection. Return notes only when they are grounded in tool results.";
-    case "writer":
-      return "Produce polished final prose. Do not invent unsupported facts. If evidence is insufficient, say so.";
-    default:
-      return "Complete the assigned objective conservatively and precisely.";
   }
 }
 

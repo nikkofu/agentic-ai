@@ -1,8 +1,4 @@
-export type PlannerPolicy = {
-  recommendedTools: string[];
-  requiredCapabilities: string[];
-  verificationPolicy: string;
-};
+export type { PlannerPolicy } from "./contracts";
 
 export function normalizeStringList(value: unknown): string[] {
   if (!Array.isArray(value)) {

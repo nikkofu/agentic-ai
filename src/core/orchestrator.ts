@@ -1,6 +1,9 @@
 import { createAgentRuntime } from "../agents/agentRuntime";
+import { evaluateDecision } from "../eval/evaluator";
 import { checkSpawnGuardrails } from "../guardrails/guardrails";
+import { allowsToolByCapabilities } from "../runtime/capabilities";
 import type { AgentRole, DeliveryBundle, ToolIntent } from "../types/runtime";
+import type { ExecutionContext, PlannerPolicy } from "../runtime/contracts";
 import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
@@ -39,6 +42,13 @@ type OrchestratorDeps = {
     }>;
   };
   taskQueue?: TaskQueue;
+  evaluator?: (input: {
+    delivery: DeliveryBundle;
+    role: AgentRole;
+    policy: RuntimePolicyMetadata;
+    iteration: number;
+    sawToolStage: boolean;
+  }) => { decision: "stop" | "revise" | "block"; reason: string };
 };
 
 type RunTaskInput = {
@@ -46,6 +56,24 @@ type RunTaskInput = {
   nodeId: string;
   role: AgentRole;
   runtimeInput?: Record<string, unknown>;
+};
+
+type RunContextInput = {
+  taskId: string;
+  context: ExecutionContext;
+  resolveRuntimeInput?: (args: {
+    role: AgentRole;
+    context: ExecutionContext;
+    runtimeInput: Record<string, unknown>;
+  }) => Record<string, unknown>;
+};
+
+type RuntimePolicyMetadata = {
+  recommendedTools?: string[];
+  requiredCapabilities?: string[];
+  verificationPolicy?: string;
+  needsVerification?: boolean;
+  taskKind?: string;
 };
 
 type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "completed" | "aborted";
@@ -65,6 +93,23 @@ type ParallelTaskInput = {
   nodes: ParallelNodeInput[];
   maxParallel: number;
   runtimeInput?: Record<string, unknown>;
+};
+
+type ParallelContextInput = {
+  taskId: string;
+  contexts: ExecutionContext[];
+  maxParallel: number;
+  resolveRuntimeInput?: (args: {
+    role: AgentRole;
+    context: ExecutionContext;
+    runtimeInput: Record<string, unknown>;
+  }) => Record<string, unknown>;
+};
+
+type ParallelNodeResult = {
+  nodeId: string;
+  finalState: NodeState;
+  delivery: DeliveryBundle;
 };
 
 export function createOrchestrator(deps: OrchestratorDeps) {
@@ -128,7 +173,33 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       const runtimeResult = await runtime.run(loopInput);
       const envelope = parseRuntimeEnvelope((runtimeResult as any).outputText);
-      const toolCalls = envelope.tool_calls ?? [];
+      const policy = extractRuntimePolicy(loopInput);
+      const toolCalls = (envelope.tool_calls ?? []).filter((toolCall) => isAllowedToolCall(toolCall, policy));
+
+      if ((envelope.tool_calls?.length ?? 0) > 0 && toolCalls.length === 0) {
+        if (!stateTrace.includes("evaluating")) {
+          stateTrace.push("evaluating");
+        }
+        delivery.status = "blocked";
+        delivery.final_result = "";
+        delivery.artifacts = [];
+        delivery.verification = [];
+        delivery.risks = ["planner policy blocked the requested tool call"];
+        delivery.next_actions = [];
+        delivery.blocking_reason = "policy_tool_not_allowed";
+        publish(deps.eventBus, "Evaluated", {
+          task_id: input.taskId,
+          node_id: input.nodeId,
+          role: input.role,
+          decision: "block",
+          output_text: "",
+          model: typeof loopInput.model === "string" ? loopInput.model : undefined,
+          delivery
+        });
+        evaluated = true;
+        finalState = "aborted";
+        break;
+      }
 
       if (toolCalls.length > 0) {
         if (!sawToolStage) {
@@ -183,11 +254,58 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       delivery.status = envelope.blocking_reason ? "blocked" : "completed";
       delivery.blocking_reason = envelope.blocking_reason;
 
+      if (requiresVerification(policy) && delivery.verification.length === 0) {
+        delivery.status = "blocked";
+        delivery.blocking_reason = "policy_verification_required";
+      }
+
+      const evaluatorDecision = deps.evaluator
+        ? deps.evaluator({
+            delivery,
+            role: input.role,
+            policy,
+            iteration,
+            sawToolStage
+          })
+        : defaultEvaluateNode({
+            delivery,
+            policy,
+            iteration,
+            sawToolStage
+          });
+
+      if (evaluatorDecision.decision === "revise") {
+        publish(deps.eventBus, "Evaluated", {
+          task_id: input.taskId,
+          node_id: input.nodeId,
+          role: input.role,
+          decision: "revise",
+          output_text: outputText,
+          usage: (runtimeResult as any).usage,
+          cost: (runtimeResult as any).cost,
+          model: typeof loopInput.model === "string" ? loopInput.model : undefined,
+          latency_ms: typeof (runtimeResult as any).latencyMs === "number" ? (runtimeResult as any).latencyMs : undefined,
+          delivery
+        });
+        publish(deps.eventBus, "NodeRevised", {
+          task_id: input.taskId,
+          node_id: input.nodeId,
+          reason: evaluatorDecision.reason
+        });
+        loopInput = attachRevisionInstruction(loopInput, evaluatorDecision.reason);
+        continue;
+      }
+
+      if (evaluatorDecision.decision === "block") {
+        delivery.status = "blocked";
+        delivery.blocking_reason = delivery.blocking_reason ?? evaluatorDecision.reason;
+      }
+
       publish(deps.eventBus, "Evaluated", {
         task_id: input.taskId,
         node_id: input.nodeId,
         role: input.role,
-        decision: delivery.status === "completed" ? "stop" : "continue",
+        decision: delivery.status === "completed" ? "stop" : "block",
         output_text: outputText,
         usage: (runtimeResult as any).usage,
         cost: (runtimeResult as any).cost,
@@ -294,6 +412,24 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       return await runNode(input);
     },
 
+    runSingleNodeContext: async (input: RunContextInput): Promise<NodeResult> => {
+      const baseRuntimeInput = buildRuntimeInputFromContext(input.context);
+      const runtimeInput = input.resolveRuntimeInput
+        ? input.resolveRuntimeInput({
+            role: input.context.node.role,
+            context: input.context,
+            runtimeInput: baseRuntimeInput
+          })
+        : baseRuntimeInput;
+
+      return await runNode({
+        taskId: input.taskId,
+        nodeId: input.context.node.id,
+        role: input.context.node.role,
+        runtimeInput: withNodeMetadata(runtimeInput, input.context)
+      });
+    },
+
     runParallelTask: async (input: ParallelTaskInput) => {
       const results: { nodeId: string; state: NodeState }[] = [];
       const queue = [...input.nodes].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
@@ -331,7 +467,64 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       return {
         completedNodes: results.length,
-        joinDecision: "stop"
+        joinDecision: "stop",
+        nodeResults: results.map((result) => ({
+          nodeId: result.nodeId,
+          finalState: result.state,
+          delivery: {
+            status: result.state === "completed" ? "completed" : "blocked",
+            final_result: "",
+            artifacts: [],
+            verification: [],
+            risks: [],
+            next_actions: []
+          }
+        }))
+      };
+    },
+
+    runParallelContexts: async (input: ParallelContextInput) => {
+      const results: ParallelNodeResult[] = [];
+      const queue = [...input.contexts];
+
+      const runNext = async () => {
+        if (queue.length === 0) return;
+        const context = queue.shift()!;
+        const baseRuntimeInput = buildRuntimeInputFromContext(context);
+        const runtimeInput = input.resolveRuntimeInput
+          ? input.resolveRuntimeInput({
+              role: context.node.role,
+              context,
+              runtimeInput: baseRuntimeInput
+            })
+          : baseRuntimeInput;
+        const res = await runNode({
+          taskId: input.taskId,
+          nodeId: context.node.id,
+          role: context.node.role,
+          runtimeInput: withNodeMetadata(runtimeInput, context)
+        });
+        results.push({ nodeId: context.node.id, finalState: res.finalState, delivery: res.delivery });
+      };
+
+      const workers = Array.from({ length: Math.min(input.maxParallel, input.contexts.length) }, async () => {
+        while (queue.length > 0) {
+          await runNext();
+        }
+      });
+
+      await Promise.all(workers);
+
+      publish(deps.eventBus, "JoinEvaluated", {
+        task_id: input.taskId,
+        node_count: results.length,
+        decision: "stop"
+      });
+
+      return {
+        completedNodes: results.length,
+        joinDecision: "stop",
+        nodeResults: results
       };
     },
 
@@ -382,6 +575,189 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "HumanActionResolved", { task_id: taskId, node_id: nodeId, feedback });
     }
   };
+}
+
+function buildRuntimeInputFromContext(context: ExecutionContext): Record<string, unknown> {
+  const prompt = buildAutonomousPrompt(context.node.role, context.node.input, {
+    task: context.task,
+    dependsOn: context.node.depends_on,
+    plannerPolicy: context.policy,
+    promptContext: context.dependencyOutputs,
+    workingMemory: context.workingMemory,
+    retrievalContext: context.retrievalContext
+  });
+
+  return {
+    __policy: {
+      recommendedTools: context.policy?.recommendedTools ?? [],
+      requiredCapabilities: context.policy?.requiredCapabilities ?? [],
+      verificationPolicy: context.policy?.verificationPolicy ?? "",
+      needsVerification: context.intent?.needs_verification ?? false,
+      taskKind: context.intent?.task_kind ?? ""
+    },
+    __memory: {
+      memoryRefs: context.memoryRefs,
+      workingMemory: context.workingMemory,
+      retrievalContext: context.retrievalContext
+    },
+    input: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user }
+    ]
+  };
+}
+
+function withNodeMetadata(runtimeInput: Record<string, unknown>, context: ExecutionContext) {
+  return {
+    ...runtimeInput,
+    parent_node_id: context.node.depends_on[0],
+    depth: context.node.depends_on.length
+  };
+}
+
+function extractRuntimePolicy(runtimeInput: Record<string, unknown>): RuntimePolicyMetadata {
+  const raw = runtimeInput.__policy;
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  return raw as RuntimePolicyMetadata;
+}
+
+function isAllowedToolCall(toolCall: ToolIntent, policy: RuntimePolicyMetadata): boolean {
+  return allowsToolByCapabilities({
+    tool: toolCall.tool,
+    recommendedTools: policy.recommendedTools,
+    requiredCapabilities: policy.requiredCapabilities
+  });
+}
+
+function requiresVerification(policy: RuntimePolicyMetadata): boolean {
+  if (policy.needsVerification) {
+    return true;
+  }
+  return typeof policy.verificationPolicy === "string" && policy.verificationPolicy.trim().length > 0;
+}
+
+function defaultEvaluateNode(args: {
+  delivery: DeliveryBundle;
+  policy: RuntimePolicyMetadata;
+  iteration: number;
+  sawToolStage: boolean;
+}): { decision: "stop" | "revise" | "block"; reason: string } {
+  if (args.delivery.status === "blocked") {
+    return {
+      decision: "block",
+      reason: args.delivery.blocking_reason ?? "delivery_blocked"
+    };
+  }
+
+  const evalDecision = evaluateDecision(
+    {
+      quality: args.delivery.final_result.trim().length > 0 ? 0.9 : 0.2,
+      cost: 0.8,
+      latency: 0.8,
+      consecutiveRevises: args.iteration,
+      qualityDelta: args.iteration === 0 ? 0.1 : 0.01,
+      guardrailTripped: false,
+      unrecoverableToolError: false
+    },
+    {
+      quality: 0.6,
+      cost: 0.2,
+      latency: 0.2
+    }
+  );
+
+  if (evalDecision.decision === "revise") {
+    return {
+      decision: "revise",
+      reason: evalDecision.reason
+    };
+  }
+
+  if (evalDecision.decision === "escalate") {
+    return {
+      decision: "block",
+      reason: evalDecision.reason
+    };
+  }
+
+  return {
+    decision: "stop",
+    reason: "quality_sufficient"
+  };
+}
+
+function buildAutonomousPrompt(
+  role: AgentRole,
+  task: string,
+  context?: {
+    task: string;
+    dependsOn?: string[];
+    plannerPolicy?: PlannerPolicy;
+    promptContext?: string[];
+    workingMemory?: string[];
+    retrievalContext?: Array<{ sourceId: string; content: string; relevance?: number }>;
+  }
+): { system: string; user: string } {
+  const dependencyLine =
+    context?.dependsOn && context.dependsOn.length > 0
+      ? `Completed dependency nodes: ${context.dependsOn.join(", ")}. Use their outputs as prior context when available.`
+      : "No dependency nodes are available for this step.";
+  const plannerPolicyLines = context?.plannerPolicy
+    ? [
+        `Planner recommended tools: ${context.plannerPolicy.recommendedTools.join(", ") || "none"}.`,
+        `Planner required capabilities: ${context.plannerPolicy.requiredCapabilities.join(", ") || "none"}.`,
+        `Planner verification policy: ${context.plannerPolicy.verificationPolicy || "default"}`
+      ]
+    : [];
+  const contextLines = context?.promptContext?.length
+    ? context.promptContext.map((entry, index) => `Context[${index + 1}]: ${entry}`)
+    : [];
+  const memoryLines = context?.workingMemory?.length
+    ? context.workingMemory.map((entry, index) => `WorkingMemory[${index + 1}]: ${entry}`)
+    : [];
+  const retrievalLines = context?.retrievalContext?.length
+    ? context.retrievalContext.map((entry, index) =>
+        `Retrieved[${index + 1}] ${entry.sourceId} (relevance=${String(entry.relevance ?? "")}): ${entry.content}`
+      )
+    : [];
+
+  return {
+    system: [
+      `You are an autonomous ${role} agent.`,
+      "Use tools when claims require external evidence.",
+      "Available local tools: web_search, page_fetch, github_readme, github_file, verify_sources, echo.",
+      "Research or factual tasks must include verification URLs or evidence strings.",
+      "If you use a tool, respond with JSON only in one of two forms.",
+      "Tool request schema:",
+      '{"tool_calls":[{"transport":"local","tool":"web_search","input":{"query":"..."}}]}',
+      "Final delivery schema:",
+      '{"final_result":"markdown text","verification":["source or evidence"],"artifacts":[],"risks":[],"next_actions":[]}',
+      "Do not claim completion with an empty final_result.",
+      "Do not claim completion for research work without verification.",
+      dependencyLine,
+      ...plannerPolicyLines,
+      ...contextLines,
+      ...memoryLines,
+      ...retrievalLines,
+      getRoleInstructions(role)
+    ].join("\n"),
+    user: `User task: ${context?.task ?? task}\n\nCurrent node objective: ${task}`
+  };
+}
+
+function getRoleInstructions(role: AgentRole) {
+  switch (role) {
+    case "planner":
+      return "Focus on planning and scoping. Avoid spending multiple turns on the same research tool.";
+    case "researcher":
+      return "Prefer tool-driven evidence collection. Return notes only when they are grounded in tool results.";
+    case "writer":
+      return "Produce polished final prose. Do not invent unsupported facts. If evidence is insufficient, say so.";
+    default:
+      return "Complete the assigned objective conservatively and precisely.";
+  }
 }
 
 function publish(eventBus: EventBus, type: string, payload: Record<string, unknown>) {
@@ -436,6 +812,19 @@ function attachRepairInstruction(runtimeInput: Record<string, unknown>) {
     role: "user",
     content:
       "Your previous response was empty or invalid. Reply with JSON only. Either return tool_calls or a final_result with verification."
+  });
+
+  return {
+    ...runtimeInput,
+    input: existingInput
+  };
+}
+
+function attachRevisionInstruction(runtimeInput: Record<string, unknown>, reason: string) {
+  const existingInput = Array.isArray(runtimeInput.input) ? [...(runtimeInput.input as unknown[])] : [];
+  existingInput.push({
+    role: "user",
+    content: `Revise your previous response and improve it. Reason: ${reason}. Reply with JSON only.`
   });
 
   return {

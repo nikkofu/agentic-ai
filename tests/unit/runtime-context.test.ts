@@ -31,12 +31,22 @@ describe("execution context", () => {
       },
       task: "调研项目并写文章",
       dependencyOutputs: ["research notes"],
-      memoryRefs: ["mem://task/123"]
+      memoryRefs: ["mem://task/123"],
+      workingMemory: ["keep tone concise", "prefer cited facts"],
+      retrievalContext: [
+        {
+          sourceId: "rag://openclaw/readme",
+          content: "OpenClaw is an open-source project focused on agent runtime orchestration.",
+          relevance: 0.92
+        }
+      ]
     });
 
     expect(context.node.id).toBe("node-write");
     expect(context.policy?.recommendedTools).toEqual(["web_search"]);
     expect(context.dependencyOutputs).toEqual(["research notes"]);
     expect(context.memoryRefs).toEqual(["mem://task/123"]);
+    expect(context.workingMemory).toEqual(["keep tone concise", "prefer cited facts"]);
+    expect(context.retrievalContext?.[0]?.sourceId).toBe("rag://openclaw/readme");
   });
 });

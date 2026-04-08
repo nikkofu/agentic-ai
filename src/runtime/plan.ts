@@ -1,6 +1,5 @@
 import type { DagNode, DagWorkflow } from "../types/dag";
-import type { TaskIntent } from "./intent";
-import type { PlannerPolicy } from "./policy";
+import type { PlannedWorkflow, TaskIntent } from "./contracts";
 import { normalizeStringList } from "./policy";
 
 export type PlannerWorkflowSpec = {
@@ -15,8 +14,6 @@ export type PlannerWorkflowSpec = {
     depends_on?: string[];
   }>;
 };
-
-export type PlannedWorkflow = DagWorkflow & PlannerPolicy;
 
 export function buildWorkflowFromIntent(intent: TaskIntent | null, task: string): DagWorkflow | null {
   if (!intent || intent.execution_mode !== "tree") {

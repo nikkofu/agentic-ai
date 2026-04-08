@@ -1,16 +1,7 @@
 import type { DagNode, DagWorkflow } from "../types/dag";
-import type { TaskIntent } from "./intent";
-import type { PlannerPolicy } from "./policy";
+import type { ExecutionContext, PlannerPolicy, RetrievalSnippet, TaskIntent } from "./contracts";
 
-export type ExecutionContext = {
-  intent: TaskIntent | null;
-  plan: DagWorkflow | null;
-  policy?: PlannerPolicy;
-  node: DagNode;
-  task: string;
-  dependencyOutputs: string[];
-  memoryRefs: string[];
-};
+export type { ExecutionContext };
 
 export function createExecutionContext(args: {
   intent: TaskIntent | null;
@@ -20,6 +11,8 @@ export function createExecutionContext(args: {
   task: string;
   dependencyOutputs?: string[];
   memoryRefs?: string[];
+  workingMemory?: string[];
+  retrievalContext?: RetrievalSnippet[];
 }): ExecutionContext {
   return {
     intent: args.intent,
@@ -28,6 +21,8 @@ export function createExecutionContext(args: {
     node: args.node,
     task: args.task,
     dependencyOutputs: args.dependencyOutputs ?? [],
-    memoryRefs: args.memoryRefs ?? []
+    memoryRefs: args.memoryRefs ?? [],
+    workingMemory: args.workingMemory ?? [],
+    retrievalContext: args.retrievalContext ?? []
   };
 }
