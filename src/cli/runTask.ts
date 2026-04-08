@@ -18,6 +18,7 @@ import { createLocalToolRegistry } from "../tools/localToolRegistry";
 import { RequestLimiter } from "../core/limiter";
 import { initTelemetry } from "../core/telemetry";
 import { SlackBot } from "../bots/slackBot";
+import { WhatsAppBot } from "../bots/whatsappBot";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 import { resolveExecutionTiers } from "../core/dagEngine";
