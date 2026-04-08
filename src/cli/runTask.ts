@@ -2,6 +2,9 @@ import { createInterface } from "node:readline/promises";
 import { randomUUID } from "node:crypto";
 import { installSkillPackage } from "./skillRegistry";
 import { runInitWizard } from "./initWizard";
+import { runPreflightChecks } from "./preflight";
+import { loadTemplate } from "./templateCatalog";
+import { generateAdoptionReport } from "./adoptionReport";
 
 import { createAgentRuntime } from "../agents/agentRuntime";
 import { getRuntimeConfig } from "../config/loadRuntimeConfig";
@@ -31,6 +34,9 @@ type RunTaskInput = {
   repl?: boolean;
   verbose?: boolean;
   workflow?: string;
+  template?: string;
+  report?: boolean;
+  notify?: "slack" | "whatsapp" | "none";
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
 };
 
@@ -57,6 +63,24 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const config = getRuntimeConfig();
   const eventBus = createInMemoryEventBus();
   const eventLogStore = createInMemoryEventLogStore();
+
+  // Run UX Preflight Checks
+  const preflight = await runPreflightChecks(config);
+  if (!preflight.ok) {
+    const errorMsg = "Preflight checks failed: " + (preflight.errors || []).join(", ");
+    if (process.env.NODE_ENV === "test") {
+      throw new Error(errorMsg);
+    }
+    console.error("❌ " + errorMsg);
+    process.exit(1);
+  }
+
+  // Handle template loading
+  let finalInput = args.input;
+  if (args.template) {
+    const template = loadTemplate(args.template);
+    finalInput = template.body.replace("{{input}}", args.input || "default task");
+  }
 
   // Initialize Telemetry
   await initTelemetry();
@@ -105,6 +129,15 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     runtime,
     toolGateway
   });
+
+  // Handle Notifications
+  if (args.notify === "slack" && process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID) {
+    const slackBot = new SlackBot(process.env.SLACK_BOT_TOKEN, process.env.SLACK_CHANNEL_ID, eventBus);
+    await slackBot.init();
+  } else if (args.notify === "whatsapp" && process.env.WHATSAPP_RECIPIENT) {
+    const waBot = new WhatsAppBot(process.env.WHATSAPP_RECIPIENT, eventBus);
+    await waBot.init();
+  }
 
   const taskId = randomUUID();
   const webHub = new WebHub(eventBus);
@@ -157,14 +190,11 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
           priority: 0
         }));
         
-        // Use the first node's info to derive a shared runtimeInput if needed, 
-        // but our orchestrator now supports per-node runtimeInput if we wanted.
-        // For now we just pass a base runtimeInput to runParallelTask
         const tierResult = await orchestrator.runParallelTask({
           taskId,
           nodes,
           maxParallel: 5,
-          runtimeInput: getRuntimeInput("planner", "") // Base input, individual nodes might need more
+          runtimeInput: getRuntimeInput("planner", "")
         });
         totalNodes += tierResult.completedNodes;
         if (tierResult.joinDecision === "aborted") {
@@ -177,7 +207,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         taskId,
         nodeId: "node-root",
         role: "planner",
-        runtimeInput: getRuntimeInput("planner", args.input)
+        runtimeInput: getRuntimeInput("planner", finalInput)
       });
       totalNodes = 1;
       finalState = result.finalState === "aborted" ? "aborted" : "completed";
@@ -185,16 +215,6 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     }
 
     const events = eventLogStore.getAll();
-
-    // Aggregate telemetry data from events
-    let totalTokens = 0;
-    let totalCost = 0;
-
-    events.forEach((e) => {
-      if (e.type === "Evaluated" && e.payload.scores) {
-        // payload extraction logic
-      }
-    });
 
     return {
       taskId,
@@ -210,8 +230,8 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         path: stateTrace
       },
       telemetry: {
-        total_tokens: totalTokens,
-        total_cost_usd: totalCost
+        total_tokens: 0,
+        total_cost_usd: 0
       }
     };
   } finally {
@@ -226,11 +246,19 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
   const input = inputArgIndex >= 0 ? argv[inputArgIndex + 1] ?? "" : "";
   const verbose = argv.includes("--verbose");
   const repl = argv.includes("--repl");
+  const report = argv.includes("--report");
 
   const workflowArgIndex = argv.findIndex((arg) => arg === "--workflow" || arg === "-w");
   const workflow = workflowArgIndex >= 0 ? argv[workflowArgIndex + 1] ?? undefined : undefined;
 
-  return { input, verbose, repl, workflow };
+  const templateArgIndex = argv.findIndex((arg) => arg === "--template" || arg === "-t");
+  const template = templateArgIndex >= 0 ? argv[templateArgIndex + 1] ?? undefined : undefined;
+
+  const notifyArgIndex = argv.findIndex((arg) => arg === "--notify");
+  const notifyValue = notifyArgIndex >= 0 ? argv[notifyArgIndex + 1] : undefined;
+  const notify = (notifyValue === "slack" || notifyValue === "whatsapp") ? notifyValue : "none";
+
+  return { input, verbose, repl, workflow, template, report, notify };
 }
 
 export function processReplCommand(line: string):
@@ -300,31 +328,37 @@ async function runReplSession(verbose: boolean): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
+  
   if (args[0] === "init") {
     runInitWizard().catch(console.error);
   } else if (args[0] === "skill" && args[1] === "install" && args[2]) {
     installSkillPackage(args[2]);
     process.exit(0);
+  } else {
+    const parsed = parseRunTaskArgs(args);
+
+    if (parsed.report) {
+      const prisma = new PrismaClient();
+      generateAdoptionReport(prisma).then(() => process.exit(0)).catch(console.error);
+    } else {
+      const run = parsed.repl ? runReplSession(parsed.verbose ?? false) : runTask(parsed);
+
+      run
+        .then((output) => {
+          if (output) {
+            process.stdout.write(`\n💸 Task Cost Summary\n`);
+            process.stdout.write(`-------------------\n`);
+            process.stdout.write(`Total Tokens: ${output.telemetry.total_tokens}\n`);
+            process.stdout.write(`Total Cost: $${output.telemetry.total_cost_usd.toFixed(6)} USD\n`);
+            process.stdout.write(`-------------------\n\n`);
+            process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+          }
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          process.stderr.write(`${message}\n`);
+          process.exitCode = 1;
+        });
+    }
   }
-
-  const parsed = parseRunTaskArgs(args);
-
-  const run = parsed.repl ? runReplSession(parsed.verbose ?? false) : runTask(parsed);
-
-  run
-    .then((output) => {
-      if (output) {
-        process.stdout.write(`\n💸 Task Cost Summary\n`);
-        process.stdout.write(`-------------------\n`);
-        process.stdout.write(`Total Tokens: ${output.telemetry.total_tokens}\n`);
-        process.stdout.write(`Total Cost: $${output.telemetry.total_cost_usd.toFixed(6)} USD\n`);
-        process.stdout.write(`-------------------\n\n`);
-        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-      }
-    })
-    .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`${message}\n`);
-      process.exitCode = 1;
-    });
 }

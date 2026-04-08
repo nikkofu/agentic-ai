@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Connection, Edge, Node, Position } from 'reactflow';
+import { Edge, Node } from 'reactflow';
 import dagre from '@dagrejs/dagre';
 import { RuntimeEvent, TaskMetrics, NodeData } from '../types/events';
 
@@ -7,23 +7,17 @@ interface TaskState {
   nodes: Node<NodeData>[];
   edges: Edge[];
   metrics: TaskMetrics;
-  selectedNodeId: string | null;
   processEvent: (event: RuntimeEvent) => void;
-  reset: () => void;
-  setSelectedNodeId: (nodeId: string | null) => void;
 }
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-const nodeWidth = 172;
-const nodeHeight = 36;
-
 const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   dagreGraph.setGraph({ rankdir: 'TB' });
 
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    dagreGraph.setNode(node.id, { width: 150, height: 50 });
   });
 
   edges.forEach((edge) => {
@@ -32,142 +26,81 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
   dagre.layout(dagreGraph);
 
-  return nodes.map((node) => {
+  nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    node.targetPosition = Position.Top;
-    node.sourcePosition = Position.Bottom;
-
     node.position = {
-      x: nodeWithPosition.x - nodeWidth / 2,
-      y: nodeWithPosition.y - nodeHeight / 2,
+      x: nodeWithPosition.x - 75,
+      y: nodeWithPosition.y - 25,
     };
-
-    return node;
   });
+
+  return { nodes, edges };
 };
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   nodes: [],
   edges: [],
-  metrics: {
-    totalTokens: 0,
-    totalCost: 0,
-  },
-  selectedNodeId: null,
-
-  reset: () => set({ nodes: [], edges: [], metrics: { totalTokens: 0, totalCost: 0 }, selectedNodeId: null }),
-
-  setSelectedNodeId: (nodeId: string | null) => set({ selectedNodeId: nodeId }),
+  metrics: { totalTokens: 0, totalCost: 0 },
 
   processEvent: (event: RuntimeEvent) => {
     const { type, payload } = event;
-    const { nodes, edges, metrics } = get();
 
-    let newNodes = [...nodes];
-    let newEdges = [...edges];
-    let newMetrics = { ...metrics };
+    set((state) => {
+      let newNodes = [...state.nodes];
+      let newEdges = [...state.edges];
+      let newMetrics = { ...state.metrics };
 
-    switch (type) {
-      case 'NodeScheduled': {
-        const nodeId = payload.node_id;
-        const parentId = payload.parent_node_id;
+      switch (type) {
+        case 'TaskSubmitted':
+          // Reset or init for new task? For now let's assume one task per session
+          break;
 
-        if (!newNodes.find((n) => n.id === nodeId)) {
-          newNodes.push({
-            id: nodeId,
-            data: { label: nodeId, role: 'unknown', status: 'pending' },
-            position: { x: 0, y: 0 },
-            type: 'default',
-          });
-
-          if (parentId) {
-            newEdges.push({
-              id: `e-${parentId}-${nodeId}`,
-              source: parentId,
-              target: nodeId,
-              animated: true,
+        case 'NodeScheduled':
+          const nodeId = payload.node_id;
+          if (!newNodes.find((n) => n.id === nodeId)) {
+            newNodes.push({
+              id: nodeId,
+              data: { 
+                label: nodeId, 
+                role: payload.role || 'unknown', 
+                status: 'pending',
+                children: [] // 补全缺失字段
+              },
+              position: { x: 0, y: 0 },
             });
-          }
-        }
-        break;
-      }
-
-      case 'AgentStarted': {
-        const { node_id, role } = payload;
-        newNodes = newNodes.map((node) =>
-          node.id === node_id
-            ? { ...node, data: { ...node.data, role, status: 'running' as const } }
-            : node
-        );
-        break;
-      }
-
-      case 'ToolInvoked': {
-        const { node_id } = payload;
-        newNodes = newNodes.map((node) =>
-          node.id === node_id
-            ? { ...node, data: { ...node.data, status: 'waiting_tool' as const } }
-            : node
-        );
-        break;
-      }
-
-      case 'ToolReturned': {
-        const { node_id } = payload;
-        newNodes = newNodes.map((node) =>
-          node.id === node_id
-            ? { ...node, data: { ...node.data, status: 'running' as const } }
-            : node
-        );
-        break;
-      }
-
-      case 'Evaluated': {
-        const { node_id, decision, metrics: evalMetrics } = payload;
-        newNodes = newNodes.map((node) =>
-          node.id === node_id
-            ? { ...node, data: { ...node.data, decision, status: 'evaluating' as const } }
-            : node
-        );
-        if (evalMetrics?.costUsd) {
-          newMetrics.totalCost += evalMetrics.costUsd;
-        }
-        break;
-      }
-
-      case 'NodeCompleted': {
-        const { node_id } = payload;
-        newNodes = newNodes.map((node) =>
-          node.id === node_id
-            ? { ...node, data: { ...node.data, status: 'completed' as const } }
-            : node
-        );
-        break;
-      }
-
-      case 'NodeFailed':
-      case 'NodeAborted': {
-        const { node_id } = payload;
-        newNodes = newNodes.map((node) =>
-          node.id === node_id
-            ? { ...node, data: { ...node.data, status: type === 'NodeFailed' ? 'failed' : 'aborted' as const } }
-            : node
-        );
-        break;
-      }
-
-      case 'ModelCalled': {
-          // Tokens might be here in some implementations, but for now we update metrics in Evaluated or separate usage events
-          if (payload.usage?.total_tokens) {
-              newMetrics.totalTokens += payload.usage.total_tokens;
+            if (payload.parent_node_id) {
+              newEdges.push({
+                id: `e-\${payload.parent_node_id}-\${nodeId}`,
+                source: payload.parent_node_id,
+                target: nodeId,
+              });
+            }
           }
           break;
+
+        case 'AgentStarted':
+          newNodes = newNodes.map((n) =>
+            n.id === payload.node_id ? { ...n, data: { ...n.data, status: 'running' as const } } : n
+          );
+          break;
+
+        case 'Evaluated':
+          newNodes = newNodes.map((n) =>
+            n.id === payload.node_id ? { 
+              ...n, 
+              data: { 
+                ...n.data, 
+                status: payload.decision === 'stop' ? 'completed' : 'evaluating' as any,
+                decision: payload.decision,
+                outputSummary: JSON.stringify(payload.scores)
+              } 
+            } : n
+          );
+          break;
       }
-    }
 
-    // Recalculate layout
-    const layoutedNodes = getLayoutedElements(newNodes, newEdges);
-
-    set({ nodes: layoutedNodes, edges: newEdges, metrics: newMetrics });
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(newNodes, newEdges);
+      return { nodes: layoutedNodes, edges: layoutedEdges, metrics: newMetrics };
+    });
   },
 }));

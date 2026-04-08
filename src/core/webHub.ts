@@ -21,7 +21,7 @@ export class WebHub {
     }
 
     this.wss.on("connection", (ws: WebSocket, req) => {
-      // Basic token check simulation
+      // Basic token check simulation for enterprise RBAC
       const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
       const token = url.searchParams.get("token");
       
