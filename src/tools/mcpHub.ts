@@ -1,6 +1,15 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
+export type McpErrorMode = "timeout" | "auth" | "protocol";
+
+export class McpError extends Error {
+  constructor(public readonly code: McpErrorMode, message: string) {
+    super(message);
+    this.name = "McpError";
+  }
+}
+
 export type McpServerConfig = {
   command: string;
   args?: string[];
@@ -16,7 +25,6 @@ export class McpHub {
   async initialize() {
     const initPromises = Object.entries(this.configs).map(async ([name, config]) => {
       try {
-        // Filter out undefined env vars to satisfy TS
         const filteredProcessEnv: Record<string, string> = {};
         for (const [k, v] of Object.entries(process.env)) {
           if (v !== undefined) {
@@ -35,10 +43,9 @@ export class McpHub {
           { capabilities: {} }
         );
 
-        // Add 5s timeout for individual server connection
         const connectPromise = client.connect(transport);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Connection timeout for server "${name}"`)), 5000)
+          setTimeout(() => reject(new McpError("timeout", `Connection timeout for server "${name}"`)), 5000)
         );
 
         await Promise.race([connectPromise, timeoutPromise]);
@@ -48,7 +55,6 @@ export class McpHub {
         console.log(`✅ MCP server "${name}" initialized`);
       } catch (error) {
         console.error(`❌ Failed to initialize MCP server "${name}":`, error instanceof Error ? error.message : error);
-        // Continue with other servers
       }
     });
 
@@ -58,7 +64,7 @@ export class McpHub {
   async callTool(fullToolName: string, args: unknown) {
     const parts = fullToolName.split("/");
     if (parts.length < 2) {
-      throw new Error(`Invalid tool name format: ${fullToolName}. Expected "server/tool"`);
+      throw new McpError("protocol", `Invalid tool name format: ${fullToolName}. Expected "server/tool"`);
     }
 
     const serverName = parts[0];
@@ -66,7 +72,7 @@ export class McpHub {
 
     const client = this.clients.get(serverName);
     if (!client) {
-      throw new Error(`MCP server "${serverName}" not found or failed to initialize`);
+      throw new McpError("protocol", `MCP server "${serverName}" not found or failed to initialize`);
     }
 
     const result = await client.callTool({
@@ -81,9 +87,7 @@ export class McpHub {
     for (const transport of this.transports) {
       try {
         await transport.close();
-      } catch (err) {
-        // Ignore close errors
-      }
+      } catch (err) {}
     }
     this.clients.clear();
     this.transports = [];
