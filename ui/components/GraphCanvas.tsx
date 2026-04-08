@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import ReactFlow, { 
   Background, 
   Controls, 
@@ -10,6 +10,11 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { useTaskStore } from '@/store/useTaskStore';
 import { NodeInspector } from './NodeInspector';
+
+// Define static objects outside the component to avoid React Flow warnings
+const nodeTypes = {};
+const edgeTypes = {};
+const minimapStyle = { background: '#111' };
 
 export function GraphCanvas() {
   const { nodes, edges } = useTaskStore();
@@ -31,11 +36,13 @@ export function GraphCanvas() {
           edges={edges}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
         >
           <Background color="#222" gap={20} />
           <Controls />
-          <MiniMap style={{ background: '#111' }} nodeColor={() => '#333'} />
+          <MiniMap style={minimapStyle} nodeColor={() => '#333'} />
         </ReactFlow>
       </div>
       <NodeInspector nodeId={selectedNodeId} />

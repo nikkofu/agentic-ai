@@ -10,7 +10,7 @@ describe("Init Wizard", () => {
     });
 
     expect(envContent).toContain("OPENROUTER_API_KEY=");
-    expect(yamlContent).toContain("default: \"qwen/qwen3.6-plus:free\"");
+    expect(yamlContent).toContain("default: \"nvidia/nemotron-3-super-120b-a12b:free\"");
   });
 
   it("generates correct config for Generic OpenAI", () => {

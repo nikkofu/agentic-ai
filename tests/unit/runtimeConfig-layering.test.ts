@@ -5,48 +5,137 @@ import path from "node:path";
 
 import { getRuntimeConfig } from "../../src/config/loadRuntimeConfig";
 
-describe("layered runtime config", () => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "runtime-config-test-"));
+describe("runtimeConfig layering", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentic-test-"));
+  const basePath = path.join(tempDir, "runtime.yaml");
+  const localPath = path.join(tempDir, "runtime.local.yaml");
 
   afterEach(() => {
-    delete process.env.OPENROUTER_DEFAULT_MODEL;
+    if (fs.existsSync(basePath)) fs.unlinkSync(basePath);
+    if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
     delete process.env.RUNTIME_CONFIG_LOCAL_PATH;
+    delete process.env.OPENROUTER_DEFAULT_MODEL;
   });
 
-  it("loads defaults from runtime.yaml", () => {
-    const basePath = path.join(tempRoot, "base-runtime.yaml");
-
+  it("loads base config when no local exists", () => {
     fs.writeFileSync(
       basePath,
-      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  by_agent_role:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  by_agent_role:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  default_policy: \"bfs\"\n  policy_overrides: {}\nguardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\nretry:\n  max_retries: 3\n  base_delay_ms: 1000\n`
+      `models:
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
+  by_agent_role:
+    planner: "nvidia/nemotron-3-super-120b-a12b:free"
+    researcher: "nvidia/nemotron-3-super-120b-a12b:free"
+    coder: "nvidia/nemotron-3-super-120b-a12b:free"
+    writer: "nvidia/nemotron-3-super-120b-a12b:free"
+reasoner:
+  default: "medium"
+  by_agent_role:
+    planner: "high"
+    researcher: "high"
+    coder: "medium"
+    writer: "low"
+scheduler:
+  default_policy: "bfs"
+  policy_overrides: {}
+guardrails:
+  max_depth: 4
+  max_branch: 3
+  max_steps: 60
+  max_budget: 5
+evaluator:
+  weights:
+    quality: 0.6
+    cost: 0.2
+    latency: 0.2
+retry:
+  max_retries: 3
+  base_delay_ms: 1000
+`
     );
 
     const config = getRuntimeConfig(basePath);
-    expect(config.models.default).toBe("qwen/qwen3.6-plus:free");
+    expect(config.models.default).toBe("nvidia/nemotron-3-super-120b-a12b:free");
   });
 
-  it("overrides defaults with local override yaml", () => {
-    const basePath = path.join(tempRoot, "base-runtime-2.yaml");
-    const localPath = path.join(tempRoot, "runtime.local.yaml");
-
+  it("layers local config over base", () => {
     fs.writeFileSync(
       basePath,
-      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  by_agent_role:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  by_agent_role:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  default_policy: \"bfs\"\n  policy_overrides: {}\nguardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\nretry:\n  max_retries: 3\n  base_delay_ms: 1000\n`
+      `models:
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
+  by_agent_role:
+    planner: "nvidia/nemotron-3-super-120b-a12b:free"
+    researcher: "nvidia/nemotron-3-super-120b-a12b:free"
+    coder: "nvidia/nemotron-3-super-120b-a12b:free"
+    writer: "nvidia/nemotron-3-super-120b-a12b:free"
+reasoner:
+  default: "medium"
+  by_agent_role:
+    planner: "high"
+    researcher: "high"
+    coder: "medium"
+    writer: "low"
+scheduler:
+  default_policy: "bfs"
+  policy_overrides: {}
+guardrails:
+  max_depth: 4
+  max_branch: 3
+  max_steps: 60
+  max_budget: 5
+evaluator:
+  weights:
+    quality: 0.6
+    cost: 0.2
+    latency: 0.2
+retry:
+  max_retries: 3
+  base_delay_ms: 1000
+`
     );
 
-    fs.writeFileSync(localPath, `models:\n  default: \"minimax/minimax-m2.5:free\"\n`);
+    fs.writeFileSync(localPath, `models:\n  default: "openai/gpt-4o-mini"`);
     process.env.RUNTIME_CONFIG_LOCAL_PATH = localPath;
 
     const config = getRuntimeConfig(basePath);
-    expect(config.models.default).toBe("minimax/minimax-m2.5:free");
+    expect(config.models.default).toBe("openai/gpt-4o-mini");
+    // Ensure nested unchanged values persist
+    expect(config.reasoner.default).toBe("medium");
   });
 
-  it("applies env override on top of yaml layers", () => {
-    const basePath = path.join(tempRoot, "base-runtime-3.yaml");
-
+  it("applies environment variable override over everything", () => {
     fs.writeFileSync(
       basePath,
-      `models:\n  default: \"qwen/qwen3.6-plus:free\"\n  by_agent_role:\n    planner: \"qwen/qwen3.6-plus:free\"\n    researcher: \"qwen/qwen3.6-plus:free\"\n    coder: \"qwen/qwen3.6-plus:free\"\n    writer: \"qwen/qwen3.6-plus:free\"\nreasoner:\n  default: \"medium\"\n  by_agent_role:\n    planner: \"high\"\n    researcher: \"high\"\n    coder: \"medium\"\n    writer: \"low\"\nscheduler:\n  default_policy: \"bfs\"\n  policy_overrides: {}\nguardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5\nevaluator:\n  weights:\n    quality: 0.6\n    cost: 0.2\n    latency: 0.2\nretry:\n  max_retries: 3\n  base_delay_ms: 1000\n`
+      `models:
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
+  by_agent_role:
+    planner: "nvidia/nemotron-3-super-120b-a12b:free"
+    researcher: "nvidia/nemotron-3-super-120b-a12b:free"
+    coder: "nvidia/nemotron-3-super-120b-a12b:free"
+    writer: "nvidia/nemotron-3-super-120b-a12b:free"
+reasoner:
+  default: "medium"
+  by_agent_role:
+    planner: "high"
+    researcher: "high"
+    coder: "medium"
+    writer: "low"
+scheduler:
+  default_policy: "bfs"
+  policy_overrides: {}
+guardrails:
+  max_depth: 4
+  max_branch: 3
+  max_steps: 60
+  max_budget: 5
+evaluator:
+  weights:
+    quality: 0.6
+    cost: 0.2
+    latency: 0.2
+retry:
+  max_retries: 3
+  base_delay_ms: 1000
+`
     );
 
     process.env.OPENROUTER_DEFAULT_MODEL = "openai/gpt-4.1-mini";

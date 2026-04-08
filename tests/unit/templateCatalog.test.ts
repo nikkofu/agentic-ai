@@ -1,21 +1,20 @@
-import { describe, expect, it } from "vitest";
-
-import { getTemplateByName } from "../../src/cli/templateCatalog";
+import { describe, it, expect } from "vitest";
+import { loadTemplate } from "../../src/cli/templateCatalog";
 
 describe("template catalog", () => {
   it("returns built-in research template", () => {
-    const tpl = getTemplateByName("research");
+    const tpl = loadTemplate("research");
     expect(tpl.name).toBe("research");
-    expect(tpl.content).toContain("Goal");
+    expect(tpl.body).toContain("Goal");
   });
 
   it("returns built-in execution template", () => {
-    const tpl = getTemplateByName("execution");
+    const tpl = loadTemplate("execution");
     expect(tpl.name).toBe("execution");
-    expect(tpl.content).toContain("Expected Output");
+    expect(tpl.body).toContain("Expected Output");
   });
 
   it("throws for unknown template", () => {
-    expect(() => getTemplateByName("unknown")).toThrow(/Unknown template/);
+    expect(() => loadTemplate("unknown")).toThrow(/Unknown template/);
   });
 });

@@ -1,12 +1,12 @@
 models:
-  default: "qwen/qwen3.6-plus:free"
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
   fallback:
-    - "qwen/qwen3.6-plus:free"
+    - "nvidia/nemotron-3-super-120b-a12b:free"
   by_agent_role:
-    planner: "qwen/qwen3.6-plus:free"
-    researcher: "qwen/qwen3.6-plus:free"
-    coder: "qwen/qwen3.6-plus:free"
-    writer: "qwen/qwen3.6-plus:free"
+    planner: "nvidia/nemotron-3-super-120b-a12b:free"
+    researcher: "nvidia/nemotron-3-super-120b-a12b:free"
+    coder: "nvidia/nemotron-3-super-120b-a12b:free"
+    writer: "nvidia/nemotron-3-super-120b-a12b:free"
 
 reasoner:
   default: "medium"

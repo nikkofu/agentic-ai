@@ -1,8 +1,8 @@
 # Local-only runtime overrides (do not commit real secrets)
 models:
-  default: "qwen/qwen3.6-plus:free"
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
   by_agent_role:
-    planner: "qwen/qwen3.6-plus:free"
+    planner: "nvidia/nemotron-3-super-120b-a12b:free"
 
 reasoner:
   default: "medium"

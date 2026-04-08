@@ -8,6 +8,7 @@ interface TaskState {
   edges: Edge[];
   metrics: TaskMetrics;
   processEvent: (event: RuntimeEvent) => void;
+  reset: () => void; // 新增：重置方法定义
 }
 
 const dagreGraph = new dagre.graphlib.Graph();
@@ -42,6 +43,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   edges: [],
   metrics: { totalTokens: 0, totalCost: 0 },
 
+  reset: () => set({
+    nodes: [],
+    edges: [],
+    metrics: { totalTokens: 0, totalCost: 0 }
+  }),
+
   processEvent: (event: RuntimeEvent) => {
     const { type, payload } = event;
 
@@ -52,8 +59,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       switch (type) {
         case 'TaskSubmitted':
-          // Reset or init for new task? For now let's assume one task per session
-          break;
+          // 提交新任务时自动重置
+          return {
+            nodes: [],
+            edges: [],
+            metrics: { totalTokens: 0, totalCost: 0 }
+          };
 
         case 'NodeScheduled':
           const nodeId = payload.node_id;
@@ -64,7 +75,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
                 label: nodeId, 
                 role: payload.role || 'unknown', 
                 status: 'pending',
-                children: [] // 补全缺失字段
+                children: []
               },
               position: { x: 0, y: 0 },
             });
@@ -85,6 +96,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           break;
 
         case 'Evaluated':
+          // 更新指标
+          if (payload.usage) {
+            newMetrics.totalTokens += (payload.usage as any).total_tokens || 0;
+            newMetrics.totalCost += (payload.cost as number) || 0;
+          }
+
           newNodes = newNodes.map((n) =>
             n.id === payload.node_id ? { 
               ...n, 

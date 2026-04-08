@@ -12,7 +12,7 @@ export type WizardOptions = {
 
 export function generateConfigContent(options: WizardOptions) {
   let envContent = "";
-  let yamlContent = `models:\n  default: "qwen/qwen3.6-plus:free"\n  fallback: []\n`;
+  let yamlContent = `models:\n  default: "nvidia/nemotron-3-super-120b-a12b:free"\n  fallback: []\n`;
   
   if (options.provider === "generic" && options.baseUrl) {
     yamlContent += `  base_url: "${options.baseUrl}"\n  api_key_env: "OPENAI_API_KEY"\n`;
@@ -21,7 +21,7 @@ export function generateConfigContent(options: WizardOptions) {
     envContent += "OPENROUTER_API_KEY=your_openrouter_api_key_here\n";
   }
 
-  yamlContent += `  by_agent_role:\n    planner: "qwen/qwen3.6-plus:free"\n    researcher: "qwen/qwen3.6-plus:free"\n    coder: "qwen/qwen3.6-plus:free"\n    writer: "qwen/qwen3.6-plus:free"\n\n`;
+  yamlContent += `  by_agent_role:\n    planner: "nvidia/nemotron-3-super-120b-a12b:free"\n    researcher: "nvidia/nemotron-3-super-120b-a12b:free"\n    coder: "nvidia/nemotron-3-super-120b-a12b:free"\n    writer: "nvidia/nemotron-3-super-120b-a12b:free"\n\n`;
   yamlContent += `reasoner:\n  default: "medium"\n  by_agent_role:\n    planner: "high"\n    researcher: "high"\n    coder: "medium"\n    writer: "low"\n\n`;
   yamlContent += `scheduler:\n  default_policy: "bfs"\n  policy_overrides: {}\n  rate_limit:\n    requests_per_minute: 60\n    burst_capacity: 5\n\n`;
   yamlContent += `guardrails:\n  max_depth: 4\n  max_branch: 3\n  max_steps: 60\n  max_budget: 5.0\n\n`;

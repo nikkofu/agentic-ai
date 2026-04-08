@@ -4,7 +4,7 @@ import { LLMUsage } from "../model/openrouterClient";
  * 内置模型价格（价格单位：USD/每百万 Token）
  */
 export const MODEL_PRICING: Record<string, { prompt: number; completion: number }> = {
-  'qwen/qwen3.6-plus:free': { prompt: 0, completion: 0 },
+  'nvidia/nemotron-3-super-120b-a12b:free': { prompt: 0, completion: 0 },
   'openai/gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
   'anthropic/claude-3-5-sonnet': { prompt: 3, completion: 15 },
 };

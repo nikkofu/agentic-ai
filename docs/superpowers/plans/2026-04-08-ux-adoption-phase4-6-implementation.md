@@ -1,6 +1,6 @@
 # UX & Adoption First (Phase M4-M6) Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 在 3 个月内把现有 Runtime 从“功能已具备”推进到“高采用率、低学习成本、团队可运营”的产品形态。
 
@@ -53,7 +53,7 @@
 - Test: `tests/unit/runTask-args.test.ts`
 - Test: `tests/unit/repl-session.test.ts`
 
-- [ ] **Step 1: 写失败测试（命令契约）**
+- [x] **Step 1: 写失败测试（命令契约）**
 ```ts
 it("parses --input/-p, --verbose, --repl consistently", () => {
   const parsed = parseRunTaskArgs(["--repl", "--verbose", "-p", "hello"]);
@@ -61,19 +61,19 @@ it("parses --input/-p, --verbose, --repl consistently", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/runTask-args.test.ts tests/unit/repl-session.test.ts`
 Expected: FAIL（新增契约断言尚未实现）。
 
-- [ ] **Step 3: 最小实现命令契约统一**
+- [x] **Step 3: 最小实现命令契约统一**
 - 在 `parseRunTaskArgs` 中统一 flag 优先级与默认值。
 - 在 `processReplCommand` 中保证 `/approve|/reject|/exit` 与 CLI 命令语义一致。
 
-- [ ] **Step 4: 重新运行测试确认通过**
+- [x] **Step 4: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/runTask-args.test.ts tests/unit/repl-session.test.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add src/cli/runTask.ts tests/unit/runTask-args.test.ts tests/unit/repl-session.test.ts
 git commit -m "feat: unify CLI and REPL command contract"
@@ -91,34 +91,34 @@ git commit -m "feat: unify CLI and REPL command contract"
 - Create: `tests/unit/webHub-task-filter.test.ts`
 - Create: `tests/unit/runTask-dashboard-link.test.ts`
 
-- [ ] **Step 1: 写失败测试（WebHub task 过滤）**
+- [x] **Step 1: 写失败测试（WebHub task 过滤）**
 ```ts
 it("only broadcasts events matching client task_id filter", async () => {
   // client subscribes task-a; publish task-a + task-b; expect only task-a received
 });
 ```
 
-- [ ] **Step 2: 写失败测试（CLI dashboard link）**
+- [x] **Step 2: 写失败测试（CLI dashboard link）**
 ```ts
 it("prints dashboard URL containing taskId", async () => {
   // spy console.log and assert http://localhost:3000/dashboard?taskId=...
 });
 ```
 
-- [ ] **Step 3: 运行测试确认失败**
+- [x] **Step 3: 运行测试确认失败**
 Run: `npm test -- tests/unit/webHub.test.ts tests/unit/webHub-task-filter.test.ts tests/unit/runTask-dashboard-link.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 4: 最小实现过滤与跳转链路**
+- [x] **Step 4: 最小实现过滤与跳转链路**
 - `webHub.ts` 解析连接 query 参数中的 `taskId`，仅推送匹配事件。
 - `runTask.ts` 输出统一 dashboard URL（含 taskId）。
 - `useEventStream.ts` 仅在存在 `taskId` 时连接并消费。
 
-- [ ] **Step 5: 重新运行测试确认通过**
+- [x] **Step 5: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/webHub.test.ts tests/unit/webHub-task-filter.test.ts tests/unit/runTask-dashboard-link.test.ts`
 Expected: PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 ```bash
 git add src/core/webHub.ts src/cli/runTask.ts ui/hooks/useEventStream.ts tests/unit/webHub.test.ts tests/unit/webHub-task-filter.test.ts tests/unit/runTask-dashboard-link.test.ts
 git commit -m "feat: add dashboard deep-link and task-scoped websocket stream"
@@ -135,7 +135,7 @@ git commit -m "feat: add dashboard deep-link and task-scoped websocket stream"
 - Modify: `ui/components/MetricsSummary.tsx`
 - Modify: `ui/types/events.ts`
 
-- [ ] **Step 1: 写失败测试（事件到状态映射）**
+- [x] **Step 1: 写失败测试（事件到状态映射）**
 > 将映射逻辑从 store 中抽到纯函数（如 `mapRuntimeEventToNodeState`）并在 `tests/unit` 编写测试。
 ```ts
 it("marks node as degraded on retry/fallback/guardrail events", () => {
@@ -143,20 +143,20 @@ it("marks node as degraded on retry/fallback/guardrail events", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/orchestrator-state.test.ts`
 Expected: FAIL（新增状态映射断言未满足）。
 
-- [ ] **Step 3: 最小实现异常高亮状态**
+- [x] **Step 3: 最小实现异常高亮状态**
 - `useTaskStore.ts` 维护 `degraded_reason` / `last_error` 视图字段。
 - `GraphCanvas.tsx` 为异常节点应用显式样式。
 - `NodeInspector.tsx` 展示最近一次关键异常上下文。
 
-- [ ] **Step 4: 重新运行测试确认通过**
+- [x] **Step 4: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/orchestrator-state.test.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add ui/store/useTaskStore.ts ui/components/GraphCanvas.tsx ui/components/NodeInspector.tsx ui/components/MetricsSummary.tsx ui/types/events.ts tests/unit/orchestrator-state.test.ts
 git commit -m "feat: highlight degraded nodes and expose debug context in dashboard"
@@ -172,29 +172,29 @@ git commit -m "feat: highlight degraded nodes and expose debug context in dashbo
 - Create: `tests/unit/preflight.test.ts`
 - Modify: `README.md`
 
-- [ ] **Step 1: 写失败测试（preflight 检查）**
+- [x] **Step 1: 写失败测试（preflight 检查）**
 ```ts
 it("fails with actionable message when OPENROUTER_API_KEY missing", async () => {
   // expect status=failed and fix command hint
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/preflight.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 最小实现 preflight**
+- [x] **Step 3: 最小实现 preflight**
 - 实现 env/config/mcp 关键检查。
 - `runTask.ts` 支持 `--preflight` 并输出可执行修复提示。
 
-- [ ] **Step 4: 更新 README Quickstart 2.0**
+- [x] **Step 4: 更新 README Quickstart 2.0**
 - 新增“10 分钟首跑”路径：`install -> preflight -> run -> dashboard`。
 
-- [ ] **Step 5: 重新运行测试确认通过**
+- [x] **Step 5: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/preflight.test.ts`
 Expected: PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 ```bash
 git add src/cli/preflight.ts src/cli/runTask.ts tests/unit/preflight.test.ts README.md
 git commit -m "feat: add preflight checks and quickstart 2.0 flow"
@@ -213,29 +213,29 @@ git commit -m "feat: add preflight checks and quickstart 2.0 flow"
 - Create: `docs/templates/multi-agent-template.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: 写失败测试（模板目录）**
+- [x] **Step 1: 写失败测试（模板目录）**
 ```ts
 it("returns built-in template by key", () => {
   expect(getTemplate("research")).toContain("Goal");
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/templateCatalog.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 最小实现模板加载**
+- [x] **Step 3: 最小实现模板加载**
 - `templateCatalog.ts` 支持 `research|execution|multi-agent`。
 - `runTask.ts` 支持 `--template <name>` 并把模板注入输入。
 
-- [ ] **Step 4: 补充模板文档**
+- [x] **Step 4: 补充模板文档**
 - 每个模板包含示例输入、预期输出、常见陷阱。
 
-- [ ] **Step 5: 重新运行测试确认通过**
+- [x] **Step 5: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/templateCatalog.test.ts`
 Expected: PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 ```bash
 git add src/cli/templateCatalog.ts src/cli/runTask.ts tests/unit/templateCatalog.test.ts docs/templates/research-template.md docs/templates/execution-template.md docs/templates/multi-agent-template.md README.md
 git commit -m "feat: add built-in task templates and CLI template flag"
@@ -251,26 +251,26 @@ git commit -m "feat: add built-in task templates and CLI template flag"
 - Modify: `README.md`
 - Test: `tests/integration/e2e-runtime.test.ts`
 
-- [ ] **Step 1: 写失败测试（错误输出含修复建议）**
+- [x] **Step 1: 写失败测试（错误输出含修复建议）**
 ```ts
 it("prints cause + fix command + verify command on known failures", async () => {
   // force known error path; assert structured guidance output
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/integration/e2e-runtime.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 最小实现错误诊断结构**
+- [x] **Step 3: 最小实现错误诊断结构**
 - 标准字段：`reason`, `fix`, `verify`。
 - 对常见错误（缺 key、模型不可达、MCP 连接失败）输出统一格式。
 
-- [ ] **Step 4: 重新运行测试确认通过**
+- [x] **Step 4: 重新运行测试确认通过**
 Run: `npm test -- tests/integration/e2e-runtime.test.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add src/cli/runTask.ts src/core/eventSchemas.ts tests/integration/e2e-runtime.test.ts README.md
 git commit -m "feat: standardize actionable diagnostics for common runtime failures"
@@ -287,29 +287,29 @@ git commit -m "feat: standardize actionable diagnostics for common runtime failu
 - Create: `tests/unit/teamViewProjector.test.ts`
 - Modify: `ui/README.md`
 
-- [ ] **Step 1: 写失败测试（团队聚合投影）**
+- [x] **Step 1: 写失败测试（团队聚合投影）**
 ```ts
 it("aggregates success rate and failure buckets per actor", () => {
   // feed synthetic events and assert per-actor stats
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/teamViewProjector.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 最小实现 team view projector**
+- [x] **Step 3: 最小实现 team view projector**
 - 将事件流投影为团队维度统计结构（成员/任务组/时间窗）。
 - `webHub.ts` 增加 team-view 频道广播。
 
-- [ ] **Step 4: 接入 dashboard 入口**
+- [x] **Step 4: 接入 dashboard 入口**
 - `page.tsx` 增加 `view=task|team` 查询参数分支。
 
-- [ ] **Step 5: 重新运行测试确认通过**
+- [x] **Step 5: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/teamViewProjector.test.ts`
 Expected: PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 ```bash
 git add src/core/teamViewProjector.ts src/core/webHub.ts ui/app/dashboard/page.tsx tests/unit/teamViewProjector.test.ts ui/README.md
 git commit -m "feat: add team-level dashboard projection and view mode"
@@ -325,27 +325,27 @@ git commit -m "feat: add team-level dashboard projection and view mode"
 - Modify: `src/cli/runTask.ts`
 - Create: `tests/unit/auditTrail.test.ts`
 
-- [ ] **Step 1: 写失败测试（审计记录）**
+- [x] **Step 1: 写失败测试（审计记录）**
 ```ts
 it("writes audit records for high-risk tool actions", async () => {
   // invoke tool action tagged high-risk; assert audit log entry
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/auditTrail.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 最小实现审计写入接口**
+- [x] **Step 3: 最小实现审计写入接口**
 - `auditTrail.ts` 定义 `write(record)`。
 - `toolGateway.ts` 在高风险调用前后写入审计事件。
 - `runTask.ts` 可配置确认策略。
 
-- [ ] **Step 4: 重新运行测试确认通过**
+- [x] **Step 4: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/auditTrail.test.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add src/core/auditTrail.ts src/tools/toolGateway.ts src/cli/runTask.ts tests/unit/auditTrail.test.ts
 git commit -m "feat: add configurable audit trail for high-risk actions"
@@ -361,30 +361,30 @@ git commit -m "feat: add configurable audit trail for high-risk actions"
 - Create: `tests/unit/adoptionReport.test.ts`
 - Modify: `README.md`
 
-- [ ] **Step 1: 写失败测试（指标聚合）**
+- [x] **Step 1: 写失败测试（指标聚合）**
 ```ts
 it("calculates WAU, success rate, MTTR, and template usage", () => {
   // feed event history; assert computed metrics
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 Run: `npm test -- tests/unit/adoptionReport.test.ts`
 Expected: FAIL。
 
-- [ ] **Step 3: 最小实现 adoption report 命令**
+- [x] **Step 3: 最小实现 adoption report 命令**
 - 新增 `--report adoption --since <date>`。
 - 输出结构化 JSON + 人类可读摘要。
 
-- [ ] **Step 4: 重新运行测试确认通过**
+- [x] **Step 4: 重新运行测试确认通过**
 Run: `npm test -- tests/unit/adoptionReport.test.ts`
 Expected: PASS。
 
-- [ ] **Step 5: 运行全量测试与构建**
+- [x] **Step 5: 运行全量测试与构建**
 Run: `npm run build && npm test`
 Expected: PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 ```bash
 git add src/cli/adoptionReport.ts src/core/eventLogStore.ts tests/unit/adoptionReport.test.ts README.md
 git commit -m "feat: add adoption report command and monthly metrics baseline"
@@ -398,13 +398,13 @@ git commit -m "feat: add adoption report command and monthly metrics baseline"
 - Modify: `README.md`
 - Modify: `ui/README.md`
 
-- [ ] **Step 1: 运行 M4-M6 关键冒烟路径**
+- [x] **Step 1: 运行 M4-M6 关键冒烟路径**
 Run:
 - `npm test -- tests/unit/runTask-args.test.ts tests/unit/preflight.test.ts tests/unit/templateCatalog.test.ts tests/unit/teamViewProjector.test.ts tests/unit/auditTrail.test.ts tests/unit/adoptionReport.test.ts`
 - `npm run build`
 Expected: PASS。
 
-- [ ] **Step 2: 运行端到端体验冒烟**
+- [x] **Step 2: 运行端到端体验冒烟**
 Run:
 - `npm run ui:dev`（单独终端）
 - `npx tsx src/cli/runTask.ts --preflight`
@@ -414,11 +414,11 @@ Expected:
 - CLI 输出 dashboard 深链。
 - Dashboard 能按 taskId 展示事件。
 
-- [ ] **Step 3: 文档对齐**
+- [x] **Step 3: 文档对齐**
 - README 增补：Quickstart 2.0、模板、诊断、report 命令。
 - UI README 增补：task/team 视图与过滤参数。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 ```bash
 git add README.md ui/README.md
 git commit -m "docs: finalize UX and adoption workflow documentation"

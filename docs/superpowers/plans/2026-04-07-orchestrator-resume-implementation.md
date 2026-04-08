@@ -1,6 +1,6 @@
 # Orchestrator Resume Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Implement `resumeTask(taskId: string)` in `Orchestrator` to recover and complete interrupted tasks.
 
@@ -19,7 +19,7 @@
 **Files:**
 - Modify: `src/core/orchestrator.ts`
 
-- [ ] **Step 1: Update the return type of `createOrchestrator`**
+- [x] **Step 1: Update the return type of `createOrchestrator`**
 
 ```typescript
 export function createOrchestrator(deps: OrchestratorDeps) {
@@ -83,7 +83,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 **Files:**
 - Create: `tests/integration/orchestrator-resume.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 import { describe, it, expect, vi } from "vitest";
@@ -163,16 +163,16 @@ describe("Orchestrator Resume Integration", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails (before implementation if we hadn't already added the method)**
+- [x] **Step 2: Run test to verify it fails (before implementation if we hadn't already added the method)**
 
-- [ ] **Step 3: Implement the logic in `orchestrator.ts`**
+- [x] **Step 3: Implement the logic in `orchestrator.ts`**
 
-- [ ] **Step 4: Run all tests to verify they pass**
+- [x] **Step 4: Run all tests to verify they pass**
 
 Run: `npx vitest tests/integration/orchestrator-resume.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Verify all existing tests still pass**
+- [x] **Step 5: Verify all existing tests still pass**
 
 Run: `npx vitest`
 Expected: PASS

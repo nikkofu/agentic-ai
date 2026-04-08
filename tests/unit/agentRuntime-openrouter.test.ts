@@ -9,7 +9,7 @@ describe("agentRuntime openrouter mode", () => {
 
     const result = await runtime.run({
       apiKey: "k-test",
-      model: "qwen/qwen3.6-plus:free",
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
       reasoner: "high",
       input: [{ role: "user", content: "hello" }]
     });
@@ -17,7 +17,7 @@ describe("agentRuntime openrouter mode", () => {
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate).toHaveBeenCalledWith({
       apiKey: "k-test",
-      model: "qwen/qwen3.6-plus:free",
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
       reasoner: "high",
       input: [{ role: "user", content: "hello" }]
     });
@@ -29,7 +29,7 @@ describe("agentRuntime openrouter mode", () => {
     const runtime = createAgentRuntime({ mode: "openrouter", generate: async () => ({ outputText: "x", raw: {} }) });
 
     await expect(
-      runtime.run({ model: "qwen/qwen3.6-plus:free", reasoner: "high", input: [] })
+      runtime.run({ model: "nvidia/nemotron-3-super-120b-a12b:free", reasoner: "high", input: [] })
     ).rejects.toThrow("OPENROUTER_API_KEY is required");
   });
 });

@@ -43,6 +43,7 @@ type RunTaskInput = {
 type RunTaskResult = {
   taskId: string;
   finalState: "completed" | "aborted";
+  outputText?: string;
   summary: {
     nodeCount: number;
     childSpawns: number;
@@ -145,8 +146,10 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   try {
     try {
       await webHub.start(3001);
-      console.log("Dashboard Real-time Stream: ws://localhost:3001");
-      console.log(`Real-time Dashboard: http://localhost:3000?taskId=${taskId}`);
+      if (args.verbose) {
+        console.log("Dashboard Real-time Stream: ws://localhost:3001");
+        console.log(`Real-time Dashboard: http://localhost:3000/dashboard?taskId=${taskId}&token=valid-session`);
+      }
     } catch (error) {
       const isAddressInUse =
         error &&
@@ -164,6 +167,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     let totalNodes = 0;
     let finalState: "completed" | "aborted" = "completed";
     let stateTrace: string[] = [];
+    let outputText = "";
 
     const getRuntimeInput = (role: any, inputContent: any) => {
       const nodeRoute = resolveModelRoute(config, role, process.env);
@@ -214,11 +218,35 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       stateTrace = result.stateTrace;
     }
 
+    // Small delay to ensure all async events are captured in the store
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const events = eventLogStore.getAll();
+    
+    // Aggregate telemetry data and output from events
+    let totalTokens = 0;
+    let totalCost = 0;
+    
+    events.forEach(e => {
+      if (e.type === "Evaluated") {
+        if (args.verbose) {
+          console.log(`[DEBUG] Evaluated Payload:`, JSON.stringify(e.payload));
+        }
+        if (e.payload.usage) {
+          const usage = e.payload.usage as any;
+          totalTokens += usage.total_tokens || 0;
+          totalCost += (e.payload.cost as number) || 0;
+        }
+        if (e.payload.output_text) {
+          outputText = e.payload.output_text as string;
+        }
+      }
+    });
 
     return {
       taskId,
       finalState,
+      outputText,
       summary: {
         nodeCount: totalNodes,
         childSpawns: totalNodes,
@@ -230,8 +258,8 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         path: stateTrace
       },
       telemetry: {
-        total_tokens: 0,
-        total_cost_usd: 0
+        total_tokens: totalTokens,
+        total_cost_usd: totalCost
       }
     };
   } finally {
@@ -351,6 +379,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             process.stdout.write(`Total Tokens: ${output.telemetry.total_tokens}\n`);
             process.stdout.write(`Total Cost: $${output.telemetry.total_cost_usd.toFixed(6)} USD\n`);
             process.stdout.write(`-------------------\n\n`);
+            
+            if (output.outputText) {
+              process.stdout.write(`📝 Agent Output:\n`);
+              process.stdout.write(`${output.outputText}\n`);
+              process.stdout.write(`-------------------\n\n`);
+            }
+
             process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
           }
         })

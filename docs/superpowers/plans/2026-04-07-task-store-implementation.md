@@ -1,6 +1,6 @@
 # TaskStore Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Define `TaskStore` interface and in-memory implementation to manage task graphs and event logs.
 
@@ -15,7 +15,7 @@
 **Files:**
 - Create: `src/core/taskStore.ts`
 
-- [ ] **Step 1: Write the TaskStore interface and RuntimeEvent type**
+- [x] **Step 1: Write the TaskStore interface and RuntimeEvent type**
 
 ```typescript
 import { TaskGraph, TaskNode } from "../types/runtime";
@@ -31,7 +31,7 @@ export interface TaskStore {
 }
 ```
 
-- [ ] **Step 2: Implement createInMemoryTaskStore**
+- [x] **Step 2: Implement createInMemoryTaskStore**
 
 ```typescript
 export function createInMemoryTaskStore(): TaskStore {
@@ -73,7 +73,7 @@ export function createInMemoryTaskStore(): TaskStore {
 **Files:**
 - Create: `tests/unit/taskStore-memory.test.ts`
 
-- [ ] **Step 1: Write tests for TaskStore in-memory implementation**
+- [x] **Step 1: Write tests for TaskStore in-memory implementation**
 
 ```typescript
 import { describe, it, expect } from "vitest";
@@ -165,14 +165,14 @@ describe("InMemoryTaskStore", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify they pass**
+- [x] **Step 2: Run tests and verify they pass**
 
 Run: `npx vitest tests/unit/taskStore-memory.test.ts`
 Expected: PASS
 
 ### Task 3: Commit Changes
 
-- [ ] **Step 1: Commit the implementation and tests**
+- [x] **Step 1: Commit the implementation and tests**
 
 ```bash
 git add src/core/taskStore.ts tests/unit/taskStore-memory.test.ts

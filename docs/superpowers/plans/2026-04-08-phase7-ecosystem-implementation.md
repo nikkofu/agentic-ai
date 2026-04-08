@@ -1,6 +1,6 @@
 # Phase 7: Ecosystem & Extensibility Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 构建基于 SKILL 的社区扩展生态系统，打破系统封闭性，同时支持声明式 DAG 工作流引擎以应对复杂的依赖流转。
 

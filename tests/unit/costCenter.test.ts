@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { calculateCost } from '../../src/core/costCenter.js';
 
 describe('CostCenter', () => {
-  it('应该能正确计算免费模型的费用 (qwen/qwen3.6-plus:free)', () => {
+  it('应该能正确计算免费模型的费用 (nvidia/nemotron-3-super-120b-a12b:free)', () => {
     const usage = { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 };
-    const cost = calculateCost('qwen/qwen3.6-plus:free', usage);
+    const cost = calculateCost('nvidia/nemotron-3-super-120b-a12b:free', usage);
     expect(cost).toBe(0);
   });
 

@@ -1,6 +1,6 @@
 # Phase 8: Ultimate Developer Experience Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 提供交互式项目脚手架、支持泛用的 OpenAI 兼容接口（以支持本地 LM Studio/vLLM 等零成本沙盒），以及时间旅行调试器底层支持，极大降低新用户的上手与调试成本。
 

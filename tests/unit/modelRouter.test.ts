@@ -5,13 +5,13 @@ import type { RuntimeConfig } from "../../src/types/runtime";
 
 const baseConfig: RuntimeConfig = {
   models: {
-    default: "qwen/qwen3.6-plus:free",
+    default: "nvidia/nemotron-3-super-120b-a12b:free",
     fallback: [],
     by_agent_role: {
-      planner: "qwen/qwen3.6-plus:free",
-      researcher: "qwen/qwen3.6-plus:free",
-      coder: "qwen/qwen3.6-plus:free",
-      writer: "qwen/qwen3.6-plus:free"
+      planner: "nvidia/nemotron-3-super-120b-a12b:free",
+      researcher: "nvidia/nemotron-3-super-120b-a12b:free",
+      coder: "nvidia/nemotron-3-super-120b-a12b:free",
+      writer: "nvidia/nemotron-3-super-120b-a12b:free"
     }
   },
   reasoner: {
@@ -57,7 +57,7 @@ describe("resolveModelRoute", () => {
   it("uses role-specific reasoner and model", () => {
     const route = resolveModelRoute(baseConfig, "planner", {});
 
-    expect(route.model).toBe("qwen/qwen3.6-plus:free");
+    expect(route.model).toBe("nvidia/nemotron-3-super-120b-a12b:free");
     expect(route.reasoner).toBe("high");
   });
 
@@ -90,9 +90,9 @@ describe("resolveModelRoute", () => {
 
   it("applies runtime environment override for default model", () => {
     const route = resolveModelRoute(baseConfig, "writer", {
-      OPENROUTER_DEFAULT_MODEL: "qwen/qwen3.6-plus:free"
+      OPENROUTER_DEFAULT_MODEL: "nvidia/nemotron-3-super-120b-a12b:free"
     });
 
-    expect(route.model).toBe("qwen/qwen3.6-plus:free");
+    expect(route.model).toBe("nvidia/nemotron-3-super-120b-a12b:free");
   });
 });

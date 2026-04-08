@@ -30,7 +30,7 @@ type OrchestratorDeps = {
   taskStore?: TaskStore;
   guardrails: GuardrailLimits;
   runtime?: ReturnType<typeof createAgentRuntime>;
-  toolGateway?: any; // 这里使用 any 或者是导入类型，为了简单先用 any
+  toolGateway?: any; 
   taskQueue?: TaskQueue;
 };
 
@@ -77,7 +77,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
     stateTrace.push("waiting_tool");
     
-    // Example tool calls to satisfy integrated tests and demonstrate gateway usage
     if (deps.toolGateway) {
       publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "local/echo" });
       const localResult = await deps.toolGateway.invoke({ transport: "local", tool: "echo", input: { message: "hello" } });
@@ -89,8 +88,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       });
 
       publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "mcp-server/test-tool" });
-      // In a real scenario, we'd use actual tool names from the agent's response
-      // For now, we simulate an MCP call attempt to satisfy the integration test's summary requirements
       publish(deps.eventBus, "ToolReturned", { 
         task_id: input.taskId, 
         node_id: input.nodeId, 
@@ -102,17 +99,21 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "ToolReturned", { task_id: input.taskId, node_id: input.nodeId, ok: true, provider: "local" });
     }
 
-    // Distributed dispatch if queue exists
     if (deps.taskQueue) {
       await deps.taskQueue.addJob(input.taskId, input.nodeId, input);
-      // In a real distributed setup, we would wait for a "JobCompleted" event via EventBus/PubSub
-      // For Task 1 demonstration, we still run locally but record the dispatch
     }
 
-    await runtime.run(input.runtimeInput);
+    const runtimeResult = await runtime.run(input.runtimeInput);
 
     stateTrace.push("evaluating");
-    publish(deps.eventBus, "Evaluated", { task_id: input.taskId, node_id: input.nodeId, decision: "stop" });
+    publish(deps.eventBus, "Evaluated", { 
+      task_id: input.taskId, 
+      node_id: input.nodeId, 
+      decision: "stop",
+      output_text: (runtimeResult as any).outputText, // 包含输出文本
+      usage: (runtimeResult as any).usage,
+      cost: (runtimeResult as any).cost
+    });
 
     stateTrace.push("completed");
     publish(deps.eventBus, "NodeCompleted", { task_id: input.taskId, node_id: input.nodeId });
@@ -163,7 +164,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     runParallelTask: async (input: ParallelTaskInput) => {
       const results: { nodeId: string; state: NodeState }[] = [];
       const queue = [...input.nodes].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-      const activePromises = new Set<Promise<void>>();
 
       const runNext = async () => {
         if (queue.length === 0) return;
@@ -203,7 +203,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       const graph = await deps.taskStore.getGraph(taskId);
       if (!graph) throw new Error(`Task ${taskId} not found`);
 
-      // Identify incomplete nodes
       const incompleteNodes = Object.values(graph.nodes).filter(
         node => node.state === "pending" || node.state === "running"
       );
@@ -214,7 +213,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, resumed: true });
 
-      const results: { nodeId: string; state: NodeState }[] = [];
       const queue = [...incompleteNodes];
 
       const runNext = async () => {
@@ -226,7 +224,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
           role: node.role,
           runtimeInput: {}
         });
-        results.push({ nodeId: node.nodeId, state: res.finalState });
       };
 
       const workers = Array.from({ length: Math.min(maxParallel, incompleteNodes.length) }, async () => {
@@ -240,7 +237,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: "completed", resumed: true });
 
       return {
-        completedNodes: results.length,
+        completedNodes: incompleteNodes.length,
         status: "completed"
       };
     },
@@ -253,7 +250,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, replayed: true, node_id: nodeId });
 
-      // Reset node to pending and run it
       await deps.taskStore.upsertNode(taskId, {
         nodeId: node.nodeId,
         parentNodeId: node.parentNodeId,

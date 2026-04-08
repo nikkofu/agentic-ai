@@ -19,7 +19,7 @@ export type OpenRouterGenerateResponse = {
 };
 
 export async function generateWithOpenRouter(request: OpenRouterGenerateRequest): Promise<OpenRouterGenerateResponse> {
-  const response = await fetch(request.baseUrl ?? "https://openrouter.ai/api/v1/responses", {
+  const response = await fetch(request.baseUrl ?? "https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -27,7 +27,7 @@ export async function generateWithOpenRouter(request: OpenRouterGenerateRequest)
     },
     body: JSON.stringify({
       model: request.model,
-      input: request.input,
+      messages: request.input, // Standard OpenAI format uses 'messages'
       reasoner: request.reasoner
     })
   });
@@ -38,7 +38,9 @@ export async function generateWithOpenRouter(request: OpenRouterGenerateRequest)
   }
 
   const raw = await response.json();
-  const outputText = typeof raw?.output_text === "string" ? raw.output_text : "";
+  
+  // Handle standard OpenAI / OpenRouter response format
+  const outputText = raw?.choices?.[0]?.message?.content ?? "";
   
   const usage: LLMUsage = {
     prompt_tokens: raw?.usage?.prompt_tokens ?? 0,

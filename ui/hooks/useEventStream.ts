@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTaskStore } from '../store/useTaskStore';
 
 export function useEventStream(taskId: string | null) {
@@ -8,6 +9,7 @@ export function useEventStream(taskId: string | null) {
   const reset = useTaskStore((state) => state.reset);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!taskId) return;
@@ -15,7 +17,8 @@ export function useEventStream(taskId: string | null) {
     reset();
     setStatus('connecting');
 
-    const ws = new WebSocket(`ws://localhost:3001?taskId=${taskId}`);
+    const token = searchParams.get('token') || 'valid-default';
+    const ws = new WebSocket(`ws://localhost:3001?taskId=${taskId}&token=${token}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -46,7 +49,7 @@ export function useEventStream(taskId: string | null) {
       ws.close();
       wsRef.current = null;
     };
-  }, [taskId, processEvent, reset]);
+  }, [taskId, processEvent, reset, searchParams]);
 
   return { status };
 }

@@ -2,6 +2,9 @@
   "name": "agentic-ai",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "ui"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
