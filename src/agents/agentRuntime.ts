@@ -2,6 +2,7 @@ import { generateWithOpenRouter, type OpenRouterGenerateRequest, type OpenRouter
 import { RequestLimiter } from "../core/limiter";
 import { tracer, meter } from "../core/telemetry";
 import { calculateCost } from "../core/costCenter";
+import { SecretProvider } from "../core/secretProvider";
 
 type SimulatedRunArgs = {
   forceGuardrailTrip?: boolean;
@@ -25,6 +26,7 @@ type OpenRouterRunArgs = {
 type AgentRuntimeMode = "simulated" | "openrouter";
 
 type AgentRuntimeDeps = {
+  secretProvider?: SecretProvider;
   mode?: AgentRuntimeMode;
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
   sleep?: (ms: number) => Promise<void>;
@@ -38,6 +40,7 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
   const mode = deps.mode ?? "simulated";
   const generate = deps.generate ?? generateWithOpenRouter;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const secretProvider = deps.secretProvider;
   const limiter = deps.limiter;
 
   return {
