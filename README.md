@@ -51,7 +51,9 @@ npx tsx src/cli/runTask.ts --repl
 ## 📄 路线图
 
 - [x] **Phase 1-3**: 核心运行时、持久化、多 MCP、高级调度、基础 UI。
-- [x] **Phase M4-M6**: UX 优化、预检校验、模板系统、团队视图、审计追踪。
+- [x] **Phase 4**: UX 优化、入口统一、可视化状态高亮。
+- [x] **Phase 5**: 预检校验、模板系统、标准化诊断输出。
+- [x] **Phase 6**: 团队协作视图、高风险审计追踪、Adoption 报告。
 - [x] **Phase 7**: 生态插件、SKILL Registry、DAG 引擎。
 - [x] **Phase 8**: 极致 DX、交互脚手架、OpenAI 兼容本地沙盒。
 - [x] **Phase 9**: 分布式架构基建、凭证保险箱、RBAC 管控。
