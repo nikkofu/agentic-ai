@@ -55,6 +55,9 @@ type ParallelNodeInput = {
   nodeId: string;
   role: AgentRole;
   priority?: number;
+  parentNodeId?: string;
+  runtimeInput?: Record<string, unknown>;
+  depth?: number;
 };
 
 type ParallelTaskInput = {
@@ -86,17 +89,38 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       next_actions: []
     };
 
-    publish(deps.eventBus, "NodeScheduled", { task_id: input.taskId, node_id: input.nodeId, role: input.role });
+    publish(deps.eventBus, "NodeScheduled", {
+      task_id: input.taskId,
+      node_id: input.nodeId,
+      role: input.role,
+      parent_node_id: typeof input.runtimeInput?.parent_node_id === "string" ? input.runtimeInput.parent_node_id : undefined,
+      depth: typeof input.runtimeInput?.depth === "number" ? input.runtimeInput.depth : undefined,
+      input_summary: summarizeInput(input.runtimeInput)
+    });
     stateTrace.push("running");
-    publish(deps.eventBus, "AgentStarted", { task_id: input.taskId, node_id: input.nodeId, role: input.role });
+    publish(deps.eventBus, "AgentStarted", {
+      task_id: input.taskId,
+      node_id: input.nodeId,
+      role: input.role,
+      parent_node_id: typeof input.runtimeInput?.parent_node_id === "string" ? input.runtimeInput.parent_node_id : undefined,
+      depth: typeof input.runtimeInput?.depth === "number" ? input.runtimeInput.depth : undefined,
+      input_summary: summarizeInput(input.runtimeInput)
+    });
     publish(deps.eventBus, "PromptComposed", { task_id: input.taskId, node_id: input.nodeId });
 
     let finalState: NodeState = "completed";
     let loopInput = baseRuntimeInput;
     let sawToolStage = false;
+    let evaluated = false;
 
     for (let iteration = 0; iteration < 5; iteration += 1) {
-      publish(deps.eventBus, "ModelCalled", { task_id: input.taskId, node_id: input.nodeId, iteration });
+      publish(deps.eventBus, "ModelCalled", {
+        task_id: input.taskId,
+        node_id: input.nodeId,
+        role: input.role,
+        iteration,
+        model: typeof loopInput.model === "string" ? loopInput.model : undefined
+      });
 
       if (deps.taskQueue) {
         await deps.taskQueue.addJob(input.taskId, input.nodeId, input);
@@ -129,7 +153,9 @@ export function createOrchestrator(deps: OrchestratorDeps) {
             node_id: input.nodeId,
             tool: toolCall.tool,
             ok: result.ok,
-            provider: result.costMeta.provider
+            provider: result.costMeta.provider,
+            latency_ms: result.latencyMs,
+            tokens: result.costMeta.tokens
           });
         }
 
@@ -137,10 +163,9 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         continue;
       }
 
-      if (!sawToolStage) {
-        stateTrace.push("waiting_tool");
-        publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "noop" });
-        publish(deps.eventBus, "ToolReturned", { task_id: input.taskId, node_id: input.nodeId, ok: true, provider: "system" });
+      if (envelope.invalid_tool_call_text) {
+        loopInput = attachRepairInstruction(loopInput);
+        continue;
       }
 
       if (isEmptyEnvelope(envelope, runtimeResult)) {
@@ -161,15 +186,42 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "Evaluated", {
         task_id: input.taskId,
         node_id: input.nodeId,
+        role: input.role,
         decision: delivery.status === "completed" ? "stop" : "continue",
         output_text: outputText,
         usage: (runtimeResult as any).usage,
         cost: (runtimeResult as any).cost,
+        model: typeof loopInput.model === "string" ? loopInput.model : undefined,
+        latency_ms: typeof (runtimeResult as any).latencyMs === "number" ? (runtimeResult as any).latencyMs : undefined,
         delivery
       });
 
+      evaluated = true;
       finalState = delivery.status === "blocked" ? "aborted" : "completed";
       break;
+    }
+
+    if (!evaluated) {
+      if (!stateTrace.includes("evaluating")) {
+        stateTrace.push("evaluating");
+      }
+      delivery.status = "blocked";
+      delivery.final_result = "";
+      delivery.artifacts = [];
+      delivery.verification = [];
+      delivery.risks = [];
+      delivery.next_actions = [];
+      delivery.blocking_reason = sawToolStage ? "tool_loop_exhausted" : "empty_delivery";
+      finalState = "aborted";
+      publish(deps.eventBus, "Evaluated", {
+        task_id: input.taskId,
+        node_id: input.nodeId,
+        role: input.role,
+        decision: "continue",
+        output_text: "",
+        model: typeof loopInput.model === "string" ? loopInput.model : undefined,
+        delivery
+      });
     }
 
     stateTrace.push(finalState === "completed" ? "completed" : "aborted");
@@ -224,7 +276,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
           node_id: input.nodeId,
           reason: guardrail.reason
         });
-        publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: "aborted" });
         return {
           finalState: "aborted",
           stateTrace: ["pending", "aborted"],
@@ -240,9 +291,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         };
       }
 
-      const result = await runNode(input);
-      publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: result.finalState === "aborted" ? "aborted" : "completed" });
-      return result;
+      return await runNode(input);
     },
 
     runParallelTask: async (input: ParallelTaskInput) => {
@@ -256,7 +305,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
           taskId: input.taskId,
           nodeId: node.nodeId,
           role: node.role,
-          runtimeInput: input.runtimeInput
+          runtimeInput: {
+            ...(input.runtimeInput ?? {}),
+            ...(node.runtimeInput ?? {}),
+            parent_node_id: node.parentNodeId,
+            depth: node.depth
+          }
         });
         results.push({ nodeId: node.nodeId, state: res.finalState });
       };
@@ -338,6 +392,7 @@ function parseRuntimeEnvelope(outputText: string | undefined): {
   status?: string;
   output_text?: string;
   final_result?: string;
+  invalid_tool_call_text?: boolean;
   verification?: string[];
   risks?: string[];
   artifacts?: string[];
@@ -352,6 +407,12 @@ function parseRuntimeEnvelope(outputText: string | undefined): {
   try {
     return normalizeParsedEnvelope(JSON.parse(stripCodeFence(outputText)));
   } catch {
+    if (looksLikePseudoToolCallText(outputText)) {
+      return {
+        output_text: outputText,
+        invalid_tool_call_text: true
+      };
+    }
     return { output_text: outputText, final_result: outputText };
   }
 }
@@ -389,6 +450,7 @@ function normalizeParsedEnvelope(parsed: unknown) {
       status?: string;
       output_text?: string;
       final_result?: string;
+      invalid_tool_call_text?: boolean;
       verification?: string[];
       risks?: string[];
       artifacts?: string[];
@@ -402,6 +464,7 @@ function normalizeParsedEnvelope(parsed: unknown) {
     status?: string;
     output_text?: string;
     final_result?: string;
+    invalid_tool_call_text?: boolean;
     verification?: string[];
     risks?: string[];
     artifacts?: string[];
@@ -421,6 +484,7 @@ function isEmptyEnvelope(
   envelope: {
     output_text?: string;
     final_result?: string;
+    invalid_tool_call_text?: boolean;
     artifacts?: string[];
     tool_calls?: ToolIntent[];
     blocking_reason?: string;
@@ -436,10 +500,35 @@ function isEmptyEnvelope(
   return (
     hasExplicitOutputText &&
     !envelope.blocking_reason &&
+    envelope.invalid_tool_call_text !== true &&
     (envelope.tool_calls?.length ?? 0) === 0 &&
     (envelope.artifacts?.length ?? 0) === 0 &&
     (envelope.final_result ?? "").trim().length === 0 &&
     (envelope.output_text ?? "").trim().length === 0 &&
     rawOutput.trim().length === 0
   );
+}
+
+function looksLikePseudoToolCallText(outputText: string): boolean {
+  return /<tool_call>|<function=|<parameter=|<\/tool_call>|<\/function>|<\/parameter>/i.test(outputText);
+}
+
+function summarizeInput(runtimeInput?: Record<string, unknown>) {
+  const input = runtimeInput?.input;
+  if (!Array.isArray(input)) {
+    return "";
+  }
+
+  const lastUserMessage = [...input]
+    .reverse()
+    .find(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        "role" in entry &&
+        (entry as { role?: unknown }).role === "user" &&
+        typeof (entry as { content?: unknown }).content === "string"
+    ) as { content?: string } | undefined;
+
+  return typeof lastUserMessage?.content === "string" ? lastUserMessage.content.slice(0, 280) : "";
 }

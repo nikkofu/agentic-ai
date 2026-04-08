@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2026-04-08
+### Added
+- **Runtime Architecture Modules**: Added dedicated `runtime/intent`, `runtime/plan`, `runtime/policy`, and `runtime/context` modules to separate intent classification, planner expansion, policy normalization, and execution context construction from CLI glue.
+- **Architecture Roadmap**: Added a phased architecture upgrade roadmap in `docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md`.
+- **Planner Policy Signals**: Planner expansion now emits `recommended_tools`, `required_capabilities`, and `verification_policy` through runtime events.
+
+### Changed
+- **Intent-Driven Execution**: Replaced keyword/regex workflow branching with model-driven intent classification plus planner-generated child workflow expansion.
+- **Dashboard Observability**: Improved real-time dashboard state handling for task closure, tool phases, node abort/completion, and connection diagnostics.
+- **Execution Structuring**: Introduced `ExecutionContext` into the runtime path and reduced direct planning logic embedded in the CLI entrypoint.
+
 ## [0.5.0] - 2026-04-08
 ### Added
 - **Autonomous Research Tools**: Added `web_search`, `page_fetch`, `github_readme`, `github_file`, and `verify_sources` local tools for evidence-driven research loops.

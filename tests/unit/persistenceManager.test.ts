@@ -1,7 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { createPersistenceManager } from "../../src/core/persistenceManager";
 import { createInMemoryTaskStore } from "../../src/core/taskStore";
 import { createInMemoryEventBus } from "../../src/core/eventBus";
+
+afterEach(() => {
+  fs.rmSync("audit_trail.jsonl", { force: true });
+});
 
 describe("PersistenceManager", () => {
   it("should sync TaskSubmitted to createGraph", async () => {
@@ -111,5 +116,65 @@ describe("PersistenceManager", () => {
     process.off("unhandledRejection", onUnhandled);
 
     expect(unhandled).toHaveLength(0);
+  });
+
+  it("should write model, tool, evaluation, and final close events to audit trail", async () => {
+    const eventBus = createInMemoryEventBus();
+    const taskStore = createInMemoryTaskStore();
+    createPersistenceManager(eventBus as any, taskStore);
+
+    const taskId = "task-audit";
+    eventBus.publish({ type: "TaskSubmitted", payload: { task_id: taskId, node_id: "root" }, ts: Date.now() });
+    eventBus.publish({ type: "NodeScheduled", payload: { task_id: taskId, node_id: "node-1" }, ts: Date.now() });
+    eventBus.publish({ type: "AgentStarted", payload: { task_id: taskId, node_id: "node-1", role: "planner" }, ts: Date.now() });
+    eventBus.publish({ type: "PromptComposed", payload: { task_id: taskId, node_id: "node-1" }, ts: Date.now() });
+    eventBus.publish({ type: "ModelCalled", payload: { task_id: taskId, node_id: "node-1" }, ts: Date.now() });
+    eventBus.publish({ type: "ToolInvoked", payload: { task_id: taskId, node_id: "node-1", tool: "web_search" }, ts: Date.now() });
+    eventBus.publish({ type: "ToolReturned", payload: { task_id: taskId, node_id: "node-1", ok: true }, ts: Date.now() });
+    eventBus.publish({ type: "Evaluated", payload: { task_id: taskId, node_id: "node-1", decision: "stop" }, ts: Date.now() });
+    eventBus.publish({ type: "TaskClosed", payload: { task_id: taskId, state: "completed" }, ts: Date.now() });
+
+    const auditLines = fs
+      .readFileSync("audit_trail.jsonl", "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const eventTypes = auditLines
+      .filter((record) => record.taskId === taskId)
+      .map((record) => record.type);
+
+    expect(eventTypes).toEqual(
+      expect.arrayContaining(["NodeScheduled", "AgentStarted", "PromptComposed", "ModelCalled", "ToolInvoked", "ToolReturned", "Evaluated", "TaskClosed"])
+    );
+  });
+
+  it("should preserve role, depth, attempt, and parent metadata from events", async () => {
+    const eventBus = createInMemoryEventBus();
+    const taskStore = createInMemoryTaskStore();
+    createPersistenceManager(eventBus as any, taskStore);
+
+    const taskId = "task-node-meta";
+    await taskStore.createGraph({ taskId, rootNodeId: "node-root" });
+
+    eventBus.publish({
+      type: "NodeScheduled",
+      payload: {
+        task_id: taskId,
+        node_id: "node-child",
+        role: "writer",
+        parent_node_id: "node-root",
+        depth: 2,
+        attempt: 3,
+        input_summary: "draft the final answer"
+      },
+      ts: Date.now()
+    });
+
+    const node = await taskStore.getNode(taskId, "node-child");
+    expect(node?.role).toBe("writer");
+    expect(node?.depth).toBe(2);
+    expect(node?.attempt).toBe(3);
+    expect(node?.parentNodeId).toBe("node-root");
+    expect(node?.inputSummary).toBe("draft the final answer");
   });
 });

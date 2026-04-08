@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`0.5.0`
+当前版本：`0.5.1`
 
 ## 🚀 核心特性
 
@@ -15,6 +15,7 @@
 - **多端 ChatOps**：支持通过 **Slack** 和 **WhatsApp** 实时推送任务状态。
 - **产品化打磨**：内置 **Preflight 诊断**、**交互式 init 向导**、**模板系统** 及 **Adoption 报告** 生成。
 - **真实交付约束**：空交付不会判定完成；研究型任务缺少 verification 证据会被阻断。
+- **架构升级基线**：已引入 `intent / plan / policy / execution context` runtime 抽象，为后续彻底架构升级做准备。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -53,6 +54,8 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
 - 运行日志与阻断任务记录写入 `logs/runs/<taskId>/delivery.json`。
 - 若交付物是文件，runtime 会在退出前校验文件真实存在且非空。
 - 调研类任务如果没有来源验证信息，不会被标记为完成。
+- 当前阶段的架构升级路线图见：
+  [`docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md`](docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md)
 
 ### 进入交互式 REPL
 ```bash

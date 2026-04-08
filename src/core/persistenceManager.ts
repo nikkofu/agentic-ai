@@ -7,11 +7,7 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
   // 1. 全量记录事件日志
   eventBus.subscribe("*", (event: RuntimeEvent) => {
     taskStore.appendEvent(event);
-    
-    // 集成审计追踪
-    if (["NodeScheduled", "AgentStarted", "TaskClosed", "GuardrailTripped"].includes(event.type)) {
-      logAuditEvent(event);
-    }
+    logAuditEvent(event);
   });
 
   // 2. 根据关键事件同步任务状态
@@ -25,33 +21,36 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
   eventBus.subscribe("NodeScheduled", (event: RuntimeEvent) => {
     taskStore.upsertNode(event.payload.task_id as string, {
       nodeId: event.payload.node_id as string,
-      role: "planner", // Default role
+      parentNodeId: event.payload.parent_node_id as string | undefined,
+      role: (event.payload.role as any) || "planner",
       state: "pending",
-      depth: 0,
-      attempt: 1,
-      inputSummary: ""
+      depth: Number(event.payload.depth ?? 0),
+      attempt: Number(event.payload.attempt ?? 1),
+      inputSummary: String(event.payload.input_summary ?? "")
     });
   });
 
   eventBus.subscribe("AgentStarted", (event: RuntimeEvent) => {
     taskStore.upsertNode(event.payload.task_id as string, {
       nodeId: event.payload.node_id as string,
+      parentNodeId: event.payload.parent_node_id as string | undefined,
       role: event.payload.role as any,
       state: "running",
-      depth: 0,
-      attempt: 1,
-      inputSummary: ""
+      depth: Number(event.payload.depth ?? 0),
+      attempt: Number(event.payload.attempt ?? 1),
+      inputSummary: String(event.payload.input_summary ?? "")
     });
   });
 
   eventBus.subscribe("Evaluated", (event: RuntimeEvent) => {
     taskStore.upsertNode(event.payload.task_id as string, {
       nodeId: event.payload.node_id as string,
-      role: "planner", 
+      parentNodeId: event.payload.parent_node_id as string | undefined,
+      role: (event.payload.role as any) || "planner",
       state: event.payload.decision === "stop" ? "completed" : "evaluating",
-      depth: 0,
-      attempt: 1,
-      inputSummary: "",
+      depth: Number(event.payload.depth ?? 0),
+      attempt: Number(event.payload.attempt ?? 1),
+      inputSummary: String(event.payload.input_summary ?? ""),
       outputSummary: JSON.stringify(event.payload)
     });
   });

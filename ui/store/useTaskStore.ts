@@ -11,6 +11,32 @@ interface TaskState {
   reset: () => void;
 }
 
+function summarizeDelivery(payload: Record<string, unknown>) {
+  const delivery = payload.delivery as Record<string, unknown> | undefined;
+  const finalResult =
+    typeof payload.final_result === 'string'
+      ? payload.final_result
+      : typeof delivery?.final_result === 'string'
+        ? delivery.final_result
+        : '';
+  const blockingReason =
+    typeof payload.blocking_reason === 'string'
+      ? payload.blocking_reason
+      : typeof delivery?.blocking_reason === 'string'
+        ? delivery.blocking_reason
+        : '';
+
+  if (finalResult.trim()) {
+    return finalResult;
+  }
+
+  if (blockingReason.trim()) {
+    return `blocked: ${blockingReason}`;
+  }
+
+  return '';
+}
+
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
@@ -111,6 +137,18 @@ export const useTaskStore = create<TaskState>((set) => ({
           );
           break;
 
+        case 'ToolInvoked':
+          newNodes = newNodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, status: 'waiting_tool' } } : n
+          );
+          break;
+
+        case 'ToolReturned':
+          newNodes = newNodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, status: 'running' } } : n
+          );
+          break;
+
         case 'Evaluated':
           if (payload.usage) {
             newMetrics.totalTokens += (payload.usage as any).total_tokens || 0;
@@ -121,11 +159,23 @@ export const useTaskStore = create<TaskState>((set) => ({
               ...n, 
               data: { 
                 ...n.data, 
-                status: 'completed',
+                status: payload.decision === 'stop' ? 'completed' : 'evaluating',
                 thought: payload.thought as string,
                 outputSummary: (payload.output_text as string)
               } 
             } : n
+          );
+          break;
+
+        case 'NodeCompleted':
+          newNodes = newNodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, status: 'completed' } } : n
+          );
+          break;
+
+        case 'NodeAborted':
+          newNodes = newNodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, status: 'failed' } } : n
           );
           break;
           
@@ -133,6 +183,25 @@ export const useTaskStore = create<TaskState>((set) => ({
           newNodes = newNodes.map((n) =>
             n.id === nodeId ? { ...n, data: { ...n.data, status: 'waiting_hitl' } } : n
           );
+          break;
+
+        case 'TaskClosed':
+          if (newNodes.length > 0) {
+            const targetId = newNodes.find((n) => n.id === 'node-root')?.id ?? newNodes[0].id;
+            const outputSummary = summarizeDelivery(payload);
+            newNodes = newNodes.map((n) =>
+              n.id === targetId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      status: payload.state === 'completed' ? 'completed' : 'failed',
+                      outputSummary: outputSummary || n.data.outputSummary
+                    }
+                  }
+                : n
+            );
+          }
           break;
       }
 

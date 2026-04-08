@@ -11,9 +11,6 @@ import 'reactflow/dist/style.css';
 import { useTaskStore } from '@/store/useTaskStore';
 import { NodeInspector } from './NodeInspector';
 
-// CRITICAL: MUST BE OUTSIDE TO PREVENT RE-CREATION WARNINGS
-const nodeTypes = {}; 
-const edgeTypes = {};
 const minimapStyle = { background: '#111' };
 const flowDefaultViewport = { x: 0, y: 0, zoom: 1 };
 
@@ -37,8 +34,6 @@ export function GraphCanvas() {
           edges={edges}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
           defaultViewport={flowDefaultViewport}
           fitView
           minZoom={0.1}
