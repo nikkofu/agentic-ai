@@ -94,13 +94,15 @@ export const useTaskStore = create<TaskState>((set) => ({
       let newMetrics = { ...state.metrics };
 
       const nodeId = (payload.node_id as string);
-      if (!nodeId && type !== 'TaskSubmitted') return state;
+      const taskLevelEvents = new Set(['TaskSubmitted', 'TaskClosed', 'AsyncTaskSettled', 'AsyncTaskFailed']);
+      if (!nodeId && !taskLevelEvents.has(type)) return state;
 
       switch (type) {
         case 'TaskSubmitted':
           return { nodes: [], edges: [], metrics: { totalTokens: 0, totalCost: 0 } };
 
         case 'NodeScheduled':
+        case 'AsyncNodeQueued':
           if (!newNodes.find((n) => n.id === nodeId)) {
             const parentId = payload.parent_node_id as string;
             const nodeType = payload.type as string;
@@ -168,14 +170,44 @@ export const useTaskStore = create<TaskState>((set) => ({
           break;
 
         case 'NodeCompleted':
+        case 'AsyncNodeSettled':
           newNodes = newNodes.map((n) =>
-            n.id === nodeId ? { ...n, data: { ...n.data, status: 'completed' } } : n
+            n.id === nodeId ? {
+              ...n,
+              data: {
+                ...n.data,
+                status: payload.final_state === 'aborted' ? 'aborted' : 'completed',
+                outputSummary: summarizeDelivery(payload) || (payload.final_result as string) || n.data.outputSummary
+              }
+            } : n
           );
           break;
 
         case 'NodeAborted':
+        case 'AsyncNodeFailed':
+          if (type === 'AsyncNodeFailed' && !newNodes.find((n) => n.id === nodeId)) {
+            newNodes.push({
+              id: nodeId,
+              data: {
+                label: nodeId,
+                role: (payload.role as string) || 'planner',
+                status: 'failed',
+                outputSummary: (payload.error as string) || '',
+                children: []
+              },
+              position: { x: 0, y: 0 },
+            });
+            break;
+          }
           newNodes = newNodes.map((n) =>
-            n.id === nodeId ? { ...n, data: { ...n.data, status: 'failed' } } : n
+            n.id === nodeId ? {
+              ...n,
+              data: {
+                ...n.data,
+                status: 'failed',
+                outputSummary: (payload.error as string) || n.data.outputSummary
+              }
+            } : n
           );
           break;
           
@@ -186,16 +218,24 @@ export const useTaskStore = create<TaskState>((set) => ({
           break;
 
         case 'TaskClosed':
+        case 'AsyncTaskSettled':
+        case 'AsyncTaskFailed':
           if (newNodes.length > 0) {
             const targetId = newNodes.find((n) => n.id === 'node-root')?.id ?? newNodes[0].id;
-            const outputSummary = summarizeDelivery(payload);
+            const outputSummary =
+              type === 'AsyncTaskFailed'
+                ? String(payload.error ?? '')
+                : summarizeDelivery(payload);
             newNodes = newNodes.map((n) =>
               n.id === targetId
                 ? {
                     ...n,
                     data: {
                       ...n.data,
-                      status: payload.state === 'completed' ? 'completed' : 'failed',
+                      status:
+                        type === 'AsyncTaskFailed'
+                          ? 'failed'
+                          : (payload.state === 'completed' || payload.final_state === 'completed') ? 'completed' : 'failed',
                       outputSummary: outputSummary || n.data.outputSummary
                     }
                   }

@@ -5,6 +5,7 @@ import { useEventStream } from "@/hooks/useEventStream";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { MetricsSummary } from "@/components/MetricsSummary";
+import { TaskLifecyclePanel } from "@/components/TaskLifecyclePanel";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -14,6 +15,7 @@ function DashboardContent() {
   return (
     <div className="flex flex-col h-screen w-full bg-black overflow-hidden">
       <ConnectionBanner taskId={taskId} status={status} details={details} onReconnect={reconnect} />
+      <TaskLifecyclePanel taskId={taskId} />
       <MetricsSummary />
       <div className="flex-1 relative">
         <GraphCanvas />

@@ -507,4 +507,218 @@ describe("runtime executor", () => {
     expect(entries.map((entry) => entry.sourceId)).toContain("mem://task-executor-4/node-write");
     expect(entries.map((entry) => entry.sourceId)).toContain("mem://task-executor-4/join/tier-1");
   });
+
+  it("publishes task memory persistence events for replayable resume", async () => {
+    const eventBus = {
+      publish: vi.fn(),
+      subscribe: vi.fn()
+    };
+    const eventLogStore = {
+      append: vi.fn(),
+      getAll: vi.fn().mockReturnValue([
+        {
+          type: "Evaluated",
+          payload: {
+            decision: "stop",
+            output_text: "ok",
+            delivery: {
+              status: "completed",
+              final_result: "Persist me",
+              artifacts: [],
+              verification: ["source-a"],
+              risks: [],
+              next_actions: []
+            }
+          }
+        }
+      ])
+    };
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          task_kind: "general",
+          execution_mode: "single_node",
+          roles: ["planner"],
+          needs_verification: false,
+          reason: "single step"
+        })
+      })
+    };
+    const orchestrator = {
+      runSingleNodeContext: vi.fn().mockResolvedValue({
+        finalState: "completed",
+        stateTrace: ["pending", "running", "evaluating", "completed"],
+        delivery: {
+          status: "completed",
+          final_result: "Persist me",
+          artifacts: [],
+          verification: ["source-a"],
+          risks: [],
+          next_actions: []
+        }
+      })
+    };
+    const memoryStore = createTaskMemoryStore();
+
+    const executor = createTaskExecutor({
+      config: {
+        models: {
+          default: "test-model",
+          fallback: [],
+          by_agent_role: {
+            planner: "test-model",
+            researcher: "test-model",
+            coder: "test-model",
+            writer: "test-model"
+          },
+          embeddings: { default: "embed-model" }
+        },
+        reasoner: {
+          default: "medium",
+          by_agent_role: {
+            planner: "medium",
+            researcher: "medium",
+            coder: "medium",
+            writer: "medium"
+          }
+        },
+        scheduler: { default_policy: "bfs", policy_overrides: {} },
+        guardrails: { max_depth: 4, max_branch: 3, max_steps: 60, max_budget: 5 },
+        evaluator: { weights: { quality: 0.6, cost: 0.2, latency: 0.2 } },
+        retry: { max_retries: 3, base_delay_ms: 1000 },
+        mcp_servers: {}
+      } as any,
+      runtime: runtime as any,
+      eventBus: eventBus as any,
+      eventLogStore: eventLogStore as any,
+      orchestrator: orchestrator as any,
+      finalizeDelivery: vi.fn().mockImplementation(async ({ delivery }) => delivery),
+      resolveModelRoute: vi.fn().mockReturnValue({
+        model: "test-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      }),
+      taskIdFactory: () => "task-executor-5",
+      memoryStore
+    });
+
+    await executor.execute({
+      input: "persist memory"
+    });
+
+    expect(eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "TaskMemoryStored",
+        payload: expect.objectContaining({
+          task_id: "task-executor-5",
+          source_id: "mem://task-executor-5/node-root",
+          content: "Persist me"
+        })
+      })
+    );
+  });
+
+  it("resumes a task through the executor and returns finalized delivery", async () => {
+    const eventBus = {
+      publish: vi.fn(),
+      subscribe: vi.fn()
+    };
+    const persistedEvents = [
+      {
+        type: "ExecutionContextPrepared",
+        payload: {
+          task_id: "task-resume-1",
+          node_id: "node-root",
+          context: {
+            task: "Resume this research task"
+          }
+        }
+      },
+      {
+        type: "Evaluated",
+        payload: {
+          task_id: "task-resume-1",
+          node_id: "node-root",
+          decision: "stop",
+          delivery: {
+            status: "completed",
+            final_result: "resumed output",
+            artifacts: [],
+            verification: ["source-a"],
+            risks: [],
+            next_actions: []
+          }
+        }
+      }
+    ];
+    const taskStore = {
+      getEvents: vi
+        .fn()
+        .mockResolvedValueOnce(persistedEvents)
+        .mockResolvedValueOnce(persistedEvents)
+    };
+    const orchestrator = {
+      resumeTask: vi.fn().mockResolvedValue({
+        completedNodes: 1,
+        status: "completed"
+      })
+    };
+
+    const executor = createTaskExecutor({
+      config: {
+        models: {
+          default: "test-model",
+          fallback: [],
+          by_agent_role: {
+            planner: "test-model",
+            researcher: "test-model",
+            coder: "test-model",
+            writer: "test-model"
+          },
+          embeddings: { default: "embed-model" }
+        },
+        reasoner: {
+          default: "medium",
+          by_agent_role: {
+            planner: "medium",
+            researcher: "medium",
+            coder: "medium",
+            writer: "medium"
+          }
+        },
+        scheduler: { default_policy: "bfs", policy_overrides: {} },
+        guardrails: { max_depth: 4, max_branch: 3, max_steps: 60, max_budget: 5 },
+        evaluator: { weights: { quality: 0.6, cost: 0.2, latency: 0.2 } },
+        retry: { max_retries: 3, base_delay_ms: 1000 },
+        mcp_servers: {}
+      } as any,
+      eventBus: eventBus as any,
+      eventLogStore: { getAll: vi.fn().mockReturnValue([]) } as any,
+      orchestrator: orchestrator as any,
+      taskStore: taskStore as any,
+      finalizeDelivery: vi.fn().mockImplementation(async ({ delivery }) => delivery),
+      resolveModelRoute: vi.fn().mockReturnValue({
+        model: "test-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      })
+    });
+
+    const result = await executor.resume({
+      taskId: "task-resume-1"
+    });
+
+    expect(orchestrator.resumeTask).toHaveBeenCalledWith("task-resume-1", 2);
+    expect(result.finalState).toBe("completed");
+    expect(result.delivery.final_result).toBe("resumed output");
+    expect(eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "TaskClosed",
+        payload: expect.objectContaining({
+          task_id: "task-resume-1",
+          resumed: true
+        })
+      })
+    );
+  });
 });

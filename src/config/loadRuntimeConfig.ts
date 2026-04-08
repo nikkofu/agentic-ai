@@ -23,7 +23,7 @@ export function getRuntimeConfig(configPath = path.resolve(process.cwd(), "confi
 
   // Hard safety check: OpenRouter models MUST end with :free
   // This is a strict requirement from the user.
-  if (!config.models.base_url) { // If it's using OpenRouter (no generic base_url)
+  if (!config.providers || Object.keys(config.providers).length === 0) {
     const validateModel = (model: string) => {
       if (!model.endsWith(":free")) {
         throw new Error(`SECURITY ALERT: Model "${model}" must end with ":free" when using OpenRouter. Non-free models are forbidden by system policy.`);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createOrchestrator } from "../../src/core/orchestrator";
 import { createInMemoryEventBus } from "../../src/core/eventBus";
@@ -35,5 +35,58 @@ describe("orchestrator bounded parallel", () => {
 
     const events = eventLogStore.getAll().map((e) => e.type);
     expect(events).toContain("JoinEvaluated");
+  });
+
+  it("can queue parallel execution contexts through the shared task queue", async () => {
+    const eventBus = createInMemoryEventBus();
+    const eventLogStore = createInMemoryEventLogStore();
+    const taskQueue = {
+      addJob: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const orchestrator = createOrchestrator({
+      eventBus,
+      eventLogStore,
+      taskQueue: taskQueue as any,
+      guardrails: {
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
+      }
+    });
+
+    const result = await orchestrator.runParallelContexts({
+      taskId: "task-par-queue",
+      contexts: [
+        {
+          intent: null,
+          plan: null,
+          node: { id: "n1", role: "planner", input: "plan", depends_on: [] },
+          task: "queued work",
+          dependencyOutputs: [],
+          memoryRefs: [],
+          workingMemory: [],
+          retrievalContext: []
+        },
+        {
+          intent: null,
+          plan: null,
+          node: { id: "n2", role: "researcher", input: "research", depends_on: [] },
+          task: "queued work",
+          dependencyOutputs: [],
+          memoryRefs: [],
+          workingMemory: [],
+          retrievalContext: []
+        }
+      ],
+      maxParallel: 2,
+      dispatchMode: "queue"
+    });
+
+    expect(result.completedNodes).toBe(0);
+    expect(result.joinDecision).toBe("queued");
+    expect(taskQueue.addJob).toHaveBeenCalledTimes(2);
+    expect(eventLogStore.getAll().map((event) => event.type)).toContain("AsyncNodeQueued");
   });
 });

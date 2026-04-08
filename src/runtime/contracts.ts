@@ -1,6 +1,5 @@
 import type { DagNode, DagWorkflow } from "../types/dag";
-
-export type AgentRole = DagNode["role"];
+import type { AgentRole } from "../types/runtime";
 
 export type TaskIntent = {
   task_kind: string;
@@ -28,7 +27,7 @@ export type ExecutionContext = {
   intent: TaskIntent | null;
   plan: DagWorkflow | null;
   policy?: PlannerPolicy;
-  node: DagNode;
+  node: Omit<DagNode, "role"> & { role: AgentRole };
   task: string;
   dependencyOutputs: string[];
   memoryRefs: string[];

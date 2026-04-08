@@ -2,6 +2,7 @@ import { createAgentRuntime } from "../agents/agentRuntime";
 import { evaluateDecision } from "../eval/evaluator";
 import { checkSpawnGuardrails } from "../guardrails/guardrails";
 import { allowsToolByCapabilities } from "../runtime/capabilities";
+import { enrichExecutionContext, replayTaskMemoryFromEvents, type MemoryStore, type RetrievalProvider } from "../runtime/memory";
 import type { AgentRole, DeliveryBundle, ToolIntent } from "../types/runtime";
 import type { ExecutionContext, PlannerPolicy } from "../runtime/contracts";
 import type { RuntimeEvent } from "./eventBus";
@@ -49,6 +50,8 @@ type OrchestratorDeps = {
     iteration: number;
     sawToolStage: boolean;
   }) => { decision: "stop" | "revise" | "block"; reason: string };
+  memoryStore?: MemoryStore;
+  retrievalProvider?: RetrievalProvider;
 };
 
 type RunTaskInput = {
@@ -77,7 +80,7 @@ type RuntimePolicyMetadata = {
 };
 
 type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "completed" | "aborted";
-type NodeResult = { finalState: NodeState; stateTrace: NodeState[]; delivery: DeliveryBundle };
+type NodeResult = { finalState: "completed" | "aborted"; stateTrace: NodeState[]; delivery: DeliveryBundle };
 
 type ParallelNodeInput = {
   nodeId: string;
@@ -99,6 +102,7 @@ type ParallelContextInput = {
   taskId: string;
   contexts: ExecutionContext[];
   maxParallel: number;
+  dispatchMode?: "local" | "queue";
   resolveRuntimeInput?: (args: {
     role: AgentRole;
     context: ExecutionContext;
@@ -108,7 +112,7 @@ type ParallelContextInput = {
 
 type ParallelNodeResult = {
   nodeId: string;
-  finalState: NodeState;
+  finalState: "completed" | "aborted";
   delivery: DeliveryBundle;
 };
 
@@ -413,6 +417,11 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     },
 
     runSingleNodeContext: async (input: RunContextInput): Promise<NodeResult> => {
+      publish(deps.eventBus, "ExecutionContextPrepared", {
+        task_id: input.taskId,
+        node_id: input.context.node.id,
+        context: input.context
+      });
       const baseRuntimeInput = buildRuntimeInputFromContext(input.context);
       const runtimeInput = input.resolveRuntimeInput
         ? input.resolveRuntimeInput({
@@ -484,12 +493,56 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     },
 
     runParallelContexts: async (input: ParallelContextInput) => {
+      if (input.dispatchMode === "queue" && deps.taskQueue) {
+        for (const context of input.contexts) {
+          publish(deps.eventBus, "ExecutionContextPrepared", {
+            task_id: input.taskId,
+            node_id: context.node.id,
+            context
+          });
+          const baseRuntimeInput = buildRuntimeInputFromContext(context);
+          const runtimeInput = input.resolveRuntimeInput
+            ? input.resolveRuntimeInput({
+                role: context.node.role,
+                context,
+                runtimeInput: baseRuntimeInput
+              })
+            : baseRuntimeInput;
+          await deps.taskQueue.addJob(input.taskId, context.node.id, {
+            role: context.node.role,
+            runtimeInput: withNodeMetadata(runtimeInput, context)
+          });
+          publish(deps.eventBus, "AsyncNodeQueued", {
+            task_id: input.taskId,
+            node_id: context.node.id,
+            role: context.node.role
+          });
+        }
+
+        publish(deps.eventBus, "JoinEvaluated", {
+          task_id: input.taskId,
+          node_count: input.contexts.length,
+          decision: "queued"
+        });
+
+        return {
+          completedNodes: 0,
+          joinDecision: "queued",
+          nodeResults: []
+        };
+      }
+
       const results: ParallelNodeResult[] = [];
       const queue = [...input.contexts];
 
       const runNext = async () => {
         if (queue.length === 0) return;
         const context = queue.shift()!;
+        publish(deps.eventBus, "ExecutionContextPrepared", {
+          task_id: input.taskId,
+          node_id: context.node.id,
+          context
+        });
         const baseRuntimeInput = buildRuntimeInputFromContext(context);
         const runtimeInput = input.resolveRuntimeInput
           ? input.resolveRuntimeInput({
@@ -528,11 +581,16 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       };
     },
 
-    resumeTask: async (taskId: string, maxParallel: number = 2) => {
+    resumeTask: async (taskId: string, maxParallel: number = 2): Promise<{
+      completedNodes: number;
+      status: "completed" | "aborted";
+      message?: string;
+    }> => {
       if (!deps.taskStore) throw new Error("TaskStore is required for resumeTask");
 
       const graph = await deps.taskStore.getGraph(taskId);
       if (!graph) throw new Error(`Task ${taskId} not found`);
+      const events = await deps.taskStore.getEvents(taskId);
 
       const incompleteNodes = Object.values(graph.nodes).filter(
         (node) => node.state === "pending" || node.state === "running"
@@ -543,17 +601,40 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       }
 
       publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, resumed: true });
+      await replayTaskMemoryFromEvents({
+        taskId,
+        events,
+        memoryStore: deps.memoryStore
+      });
+      const restoredContexts = restoreExecutionContexts(events);
 
       const queue = [...incompleteNodes];
+      const results: NodeResult[] = [];
       const runNext = async () => {
         if (queue.length === 0) return;
         const node = queue.shift()!;
-        await runNode({
+        const restoredContext = restoredContexts.get(node.nodeId);
+        if (restoredContext) {
+          const enrichedContext = await enrichExecutionContext({
+            taskId,
+            context: restoredContext,
+            memoryStore: deps.memoryStore,
+            retrievalProvider: deps.retrievalProvider
+          });
+          results.push(await runNode({
+            taskId,
+            nodeId: enrichedContext.node.id,
+            role: enrichedContext.node.role,
+            runtimeInput: withNodeMetadata(buildRuntimeInputFromContext(enrichedContext), enrichedContext)
+          }));
+          return;
+        }
+        results.push(await runNode({
           taskId,
           nodeId: node.nodeId,
           role: node.role,
           runtimeInput: {}
-        });
+        }));
       };
 
       const workers = Array.from({ length: Math.min(maxParallel, incompleteNodes.length) }, async () => {
@@ -564,10 +645,11 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       await Promise.all(workers);
 
-      publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: "completed", resumed: true });
+      const status = results.some((result) => result.finalState === "aborted") ? "aborted" : "completed";
+      publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: status, resumed: true });
       return {
         completedNodes: incompleteNodes.length,
-        status: "completed"
+        status
       };
     },
 
@@ -575,6 +657,22 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "HumanActionResolved", { task_id: taskId, node_id: nodeId, feedback });
     }
   };
+}
+
+function restoreExecutionContexts(events: RuntimeEvent[]): Map<string, ExecutionContext> {
+  const contexts = new Map<string, ExecutionContext>();
+  for (const event of events) {
+    if (event.type !== "ExecutionContextPrepared") {
+      continue;
+    }
+    const nodeId = typeof event.payload.node_id === "string" ? event.payload.node_id : "";
+    const rawContext = event.payload.context;
+    if (!nodeId || !rawContext || typeof rawContext !== "object") {
+      continue;
+    }
+    contexts.set(nodeId, rawContext as ExecutionContext);
+  }
+  return contexts;
 }
 
 function buildRuntimeInputFromContext(context: ExecutionContext): Record<string, unknown> {

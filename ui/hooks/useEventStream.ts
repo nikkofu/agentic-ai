@@ -4,53 +4,16 @@ import { startTransition } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTaskStore } from '../store/useTaskStore';
+import { applyRuntimeEventToStreamState, createInitialEventStreamDetails, type EventStreamDetails } from './eventStreamState';
 
 type EventStreamStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
-
-type EventStreamDetails = {
-  url: string;
-  readyState: string;
-  lastError: string;
-  lastCloseCode: number | null;
-  lastCloseReason: string;
-  lastEventAt: string | null;
-  lastEventType: string;
-  lastNodeId: string;
-  lastRole: string;
-  lastModel: string;
-  lastTool: string;
-  lastDecision: string;
-  lastLatencyMs: number | null;
-  lastTotalTokens: number | null;
-  currentPath: string;
-  finalResult: string;
-  blockingReason: string;
-};
 
 export function useEventStream(taskId: string | null) {
   const processEvent = useTaskStore((state) => state.processEvent);
   const reset = useTaskStore((state) => state.reset);
   const [status, setStatus] = useState<EventStreamStatus>('disconnected');
   const [reconnectNonce, setReconnectNonce] = useState(0);
-  const [details, setDetails] = useState<EventStreamDetails>({
-    url: '',
-    readyState: 'CLOSED',
-    lastError: '',
-    lastCloseCode: null,
-    lastCloseReason: '',
-    lastEventAt: null,
-    lastEventType: '',
-    lastNodeId: '',
-    lastRole: '',
-    lastModel: '',
-    lastTool: '',
-    lastDecision: '',
-    lastLatencyMs: null,
-    lastTotalTokens: null,
-    currentPath: '',
-    finalResult: '',
-    blockingReason: ''
-  });
+  const [details, setDetails] = useState<EventStreamDetails>(createInitialEventStreamDetails());
   const wsRef = useRef<WebSocket | null>(null);
   const isClosingRef = useRef(false);
   const searchParams = useSearchParams();
@@ -59,25 +22,7 @@ export function useEventStream(taskId: string | null) {
     if (!taskId) {
       startTransition(() => {
         setStatus('disconnected');
-        setDetails({
-          url: '',
-          readyState: 'CLOSED',
-          lastError: '',
-          lastCloseCode: null,
-          lastCloseReason: '',
-          lastEventAt: null,
-          lastEventType: '',
-          lastNodeId: '',
-          lastRole: '',
-          lastModel: '',
-          lastTool: '',
-          lastDecision: '',
-          lastLatencyMs: null,
-          lastTotalTokens: null,
-          currentPath: '',
-          finalResult: '',
-          blockingReason: ''
-        });
+        setDetails(createInitialEventStreamDetails());
       });
       return;
     }
@@ -122,21 +67,18 @@ export function useEventStream(taskId: string | null) {
         console.log('[WS] Received:', data.type);
         processEvent(data);
         setDetails((current) => ({
-          ...current,
-          lastEventAt: new Date().toISOString(),
+          ...applyRuntimeEventToStreamState({
+            taskId,
+            current,
+            event: data
+          }),
           readyState: describeReadyState(ws.readyState),
-          lastEventType: readString(data?.type),
-          lastNodeId: readString(data?.payload?.node_id),
-          lastRole: readString(data?.payload?.role),
-          lastModel: readString(data?.payload?.model),
-          lastTool: readString(data?.payload?.tool),
-          lastDecision: readString(data?.payload?.decision),
-          lastLatencyMs: readNumber(data?.payload?.latency_ms),
-          lastTotalTokens: readNumber(data?.payload?.usage?.total_tokens) ?? readNumber(data?.payload?.tokens),
-          currentPath: buildPath(taskId, readString(data?.payload?.node_id)),
-          finalResult: readTaskClosedFinalResult(data?.payload),
-          blockingReason: readTaskClosedBlockingReason(data?.payload)
         }));
+        if (data?.type === 'AsyncTaskFailed') {
+          startTransition(() => {
+            setStatus('error');
+          });
+        }
       } catch (err) {
         console.error('[WS] Failed to parse event data:', err);
       }
@@ -220,54 +162,4 @@ function describeReadyState(readyState: number) {
     default:
       return `UNKNOWN(${readyState})`;
   }
-}
-
-function readString(value: unknown) {
-  return typeof value === 'string' ? value : '';
-}
-
-function readNumber(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function buildPath(taskId: string, nodeId: string) {
-  return nodeId ? `${taskId} > ${nodeId}` : taskId;
-}
-
-function readTaskClosedFinalResult(payload: unknown) {
-  if (!payload || typeof payload !== 'object') {
-    return '';
-  }
-
-  const candidate = (payload as Record<string, unknown>).final_result;
-  if (typeof candidate === 'string' && candidate.trim()) {
-    return candidate;
-  }
-
-  const delivery = (payload as Record<string, unknown>).delivery;
-  if (delivery && typeof delivery === 'object') {
-    const nested = (delivery as Record<string, unknown>).final_result;
-    return typeof nested === 'string' ? nested : '';
-  }
-
-  return '';
-}
-
-function readTaskClosedBlockingReason(payload: unknown) {
-  if (!payload || typeof payload !== 'object') {
-    return '';
-  }
-
-  const candidate = (payload as Record<string, unknown>).blocking_reason;
-  if (typeof candidate === 'string' && candidate.trim()) {
-    return candidate;
-  }
-
-  const delivery = (payload as Record<string, unknown>).delivery;
-  if (delivery && typeof delivery === 'object') {
-    const nested = (delivery as Record<string, unknown>).blocking_reason;
-    return typeof nested === 'string' ? nested : '';
-  }
-
-  return '';
 }

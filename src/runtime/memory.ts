@@ -36,6 +36,11 @@ export type MemoryStore = {
   }>>;
 };
 
+type RuntimeEventLike = {
+  type: string;
+  payload: Record<string, unknown>;
+};
+
 export async function enrichExecutionContext(args: {
   taskId: string;
   context: ExecutionContext;
@@ -101,4 +106,40 @@ export function createTaskMemoryStore(): MemoryStore & {
       return [...(entries.get(taskId) ?? [])];
     }
   };
+}
+
+export async function replayTaskMemoryFromEvents(args: {
+  taskId: string;
+  events: RuntimeEventLike[];
+  memoryStore?: MemoryStore;
+}) {
+  if (!args.memoryStore?.appendEntry) {
+    return;
+  }
+
+  const seen = new Set<string>();
+  for (const event of args.events) {
+    if (event.type !== "TaskMemoryStored") {
+      continue;
+    }
+    if (event.payload.task_id !== args.taskId) {
+      continue;
+    }
+    const sourceId = typeof event.payload.source_id === "string" ? event.payload.source_id : "";
+    const content = typeof event.payload.content === "string" ? event.payload.content : "";
+    if (!sourceId || !content) {
+      continue;
+    }
+    const key = `${sourceId}\u0000${content}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    await args.memoryStore.appendEntry({
+      taskId: args.taskId,
+      sourceId,
+      content,
+      tags: Array.isArray(event.payload.tags) ? event.payload.tags.filter((tag): tag is string => typeof tag === "string") : []
+    });
+  }
 }

@@ -12,4 +12,9 @@ describe("parseRunTaskArgs", () => {
     const parsed = parseRunTaskArgs(["-p", "hello short"]);
     expect(parsed.input).toBe("hello short");
   });
+
+  it("reads --resume task id", () => {
+    const parsed = parseRunTaskArgs(["--resume", "task-123"]);
+    expect(parsed.resumeTaskId).toBe("task-123");
+  });
 });

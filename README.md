@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`0.6.0`
+当前版本：`0.7.0`
 
 ## 🚀 核心特性
 
@@ -18,6 +18,8 @@
 - **上下文原生 Runtime Core**：执行入口已经下沉到 `runtime executor + context-native orchestrator`，CLI 只负责适配输入输出。
 - **策略驱动收敛**：`planner policy` 已进入 runtime enforcement，`evaluator + policy` 联合决定 `stop / revise / block`。
 - **能力与记忆底座**：已接入 capability routing、retrieval provider、task-scoped memory write-back 和 tree-wide summary persistence。
+- **任务控制面闭环**：已提供统一 `task lifecycle` 服务，支持 `start / resume / inspect / close`，并通过 CLI、queue worker 与 Dashboard API 共享同一条控制链。
+- **异步执行可视化**：queue-backed parallel node execution、worker 回流事件、Dashboard 生命周期面板与异步任务状态展示已经打通。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -60,6 +62,8 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md`](docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md)
 - 当前阶段的可恢复架构升级交接记录见：
   [`docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md`](docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md)
+- 发版个人日记会归档到：
+  [`diary/`](diary/)
 
 ### 进入交互式 REPL
 ```bash

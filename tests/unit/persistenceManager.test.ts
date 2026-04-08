@@ -27,6 +27,33 @@ describe("PersistenceManager", () => {
     expect(graph?.status).toBe("running");
   });
 
+  it("should not recreate graph when TaskSubmitted is emitted for resume", async () => {
+    const eventBus = createInMemoryEventBus();
+    const taskStore = createInMemoryTaskStore();
+    createPersistenceManager(eventBus as any, taskStore);
+
+    const taskId = "task-resume";
+    await taskStore.createGraph({ taskId, rootNodeId: "root" });
+    await taskStore.upsertNode(taskId, {
+      nodeId: "node-1",
+      role: "planner",
+      state: "completed",
+      depth: 0,
+      attempt: 1,
+      inputSummary: "existing state"
+    });
+
+    eventBus.publish({
+      type: "TaskSubmitted",
+      payload: { task_id: taskId, resumed: true },
+      ts: Date.now()
+    });
+
+    const graph = await taskStore.getGraph(taskId);
+    expect(graph?.nodes["node-1"]).toBeDefined();
+    expect(graph?.nodes["node-1"].state).toBe("completed");
+  });
+
   it("should sync NodeScheduled to upsertNode", async () => {
     const eventBus = createInMemoryEventBus();
     const taskStore = createInMemoryTaskStore();
@@ -176,5 +203,66 @@ describe("PersistenceManager", () => {
     expect(node?.attempt).toBe(3);
     expect(node?.parentNodeId).toBe("node-root");
     expect(node?.inputSummary).toBe("draft the final answer");
+  });
+
+  it("should persist queued async nodes and settle them with final output", async () => {
+    const eventBus = createInMemoryEventBus();
+    const taskStore = createInMemoryTaskStore();
+    createPersistenceManager(eventBus as any, taskStore);
+
+    const taskId = "task-async-node";
+    await taskStore.createGraph({ taskId, rootNodeId: "node-root" });
+
+    eventBus.publish({
+      type: "AsyncNodeQueued",
+      payload: {
+        task_id: taskId,
+        node_id: "node-worker",
+        role: "researcher"
+      },
+      ts: Date.now()
+    });
+
+    let node = await taskStore.getNode(taskId, "node-worker");
+    expect(node?.state).toBe("pending");
+    expect(node?.role).toBe("researcher");
+
+    eventBus.publish({
+      type: "AsyncNodeSettled",
+      payload: {
+        task_id: taskId,
+        node_id: "node-worker",
+        final_state: "completed",
+        final_result: "verified research summary"
+      },
+      ts: Date.now()
+    });
+
+    node = await taskStore.getNode(taskId, "node-worker");
+    expect(node?.state).toBe("completed");
+    expect(node?.outputSummary).toContain("verified research summary");
+  });
+
+  it("should mark failed async nodes with the failure reason", async () => {
+    const eventBus = createInMemoryEventBus();
+    const taskStore = createInMemoryTaskStore();
+    createPersistenceManager(eventBus as any, taskStore);
+
+    const taskId = "task-async-failed";
+    await taskStore.createGraph({ taskId, rootNodeId: "node-root" });
+
+    eventBus.publish({
+      type: "AsyncNodeFailed",
+      payload: {
+        task_id: taskId,
+        node_id: "node-worker",
+        error: "redis timeout"
+      },
+      ts: Date.now()
+    });
+
+    const node = await taskStore.getNode(taskId, "node-worker");
+    expect(node?.state).toBe("failed");
+    expect(node?.outputSummary).toContain("redis timeout");
   });
 });

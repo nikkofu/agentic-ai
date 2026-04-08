@@ -1,4 +1,5 @@
 import type { DagNode, DagWorkflow } from "../types/dag";
+import type { AgentRole } from "../types/runtime";
 import type { ExecutionContext, PlannerPolicy, RetrievalSnippet, TaskIntent } from "./contracts";
 
 export type { ExecutionContext };
@@ -7,7 +8,7 @@ export function createExecutionContext(args: {
   intent: TaskIntent | null;
   plan: DagWorkflow | null;
   policy?: PlannerPolicy;
-  node: DagNode;
+  node: Omit<DagNode, "role"> & { role: AgentRole };
   task: string;
   dependencyOutputs?: string[];
   memoryRefs?: string[];

@@ -169,7 +169,7 @@ function flattenDuckDuckGoTopics(
     if ("Topics" in topic && Array.isArray(topic.Topics)) {
       flattened.push(...topic.Topics);
     } else {
-      flattened.push(topic);
+      flattened.push(topic as { Text?: string; FirstURL?: string });
     }
   }
   return flattened;

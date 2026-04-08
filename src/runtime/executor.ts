@@ -1,17 +1,14 @@
 import type { RuntimeConfig } from "../types/runtime";
+import type { AgentRole } from "../types/runtime";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
+import type { RuntimeEvent } from "../core/eventBus";
 import { buildWorkflowFromIntent, planWorkflowFromPlanner } from "./plan";
 import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
-import type { AgentRole, ExecutionContext, PlannerPolicy } from "./contracts";
+import type { ExecutionContext, PlannerPolicy } from "./contracts";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
-
-type RuntimeEvent = {
-  type: string;
-  payload: Record<string, unknown>;
-  ts?: number;
-};
+import type { TaskStore } from "../core/taskStore";
 
 type EventBus = {
   publish: (event: RuntimeEvent) => void;
@@ -35,6 +32,11 @@ type ResolveModelRoute = (
 type ExecuteInput = {
   input: string;
   workflow?: DagWorkflow;
+};
+
+type ResumeInput = {
+  taskId: string;
+  maxParallel?: number;
 };
 
 type ExecuteResult = {
@@ -83,6 +85,7 @@ type TaskExecutorDeps = {
       taskId: string;
       contexts: ExecutionContext[];
       maxParallel: number;
+      dispatchMode?: "local" | "queue";
       resolveRuntimeInput?: (args: {
         role: AgentRole;
         context: ExecutionContext;
@@ -97,6 +100,11 @@ type TaskExecutorDeps = {
         delivery: DeliveryBundle;
       }>;
     }>;
+    resumeTask: (taskId: string, maxParallel?: number) => Promise<{
+      completedNodes: number;
+      status: "completed" | "aborted";
+      message?: string;
+    }>;
   };
   finalizeDelivery: (args: {
     taskId: string;
@@ -109,15 +117,48 @@ type TaskExecutorDeps = {
   env?: Record<string, string | undefined>;
   retrievalProvider?: RetrievalProvider;
   memoryStore?: MemoryStore;
+  taskStore?: TaskStore;
 };
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
   const env = deps.env ?? process.env;
 
+  const persistTaskMemory = async (entry: {
+    taskId: string;
+    sourceId: string;
+    content: string;
+    tags?: string[];
+  }) => {
+    if (!entry.content.trim()) {
+      return;
+    }
+
+    await deps.memoryStore?.appendEntry?.(entry);
+    deps.eventBus.publish({
+      type: "TaskMemoryStored",
+      payload: {
+        task_id: entry.taskId,
+        source_id: entry.sourceId,
+        content: entry.content,
+        tags: entry.tags ?? []
+      },
+      ts: Date.now()
+    });
+  };
+
   return {
     async execute(input: ExecuteInput): Promise<ExecuteResult> {
       const taskId = deps.taskIdFactory?.() ?? crypto.randomUUID();
       const availableLocalTools = deps.availableLocalTools ?? [];
+
+      deps.eventBus.publish({
+        type: "TaskSubmitted",
+        payload: {
+          task_id: taskId,
+          node_id: "node-root"
+        },
+        ts: Date.now()
+      });
 
       let totalNodes = 0;
       let finalState: "completed" | "aborted" = "completed";
@@ -240,7 +281,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
                 intent,
                 plan: workflow,
                 policy: plannerPolicy,
-                node,
+                node: normalizeExecutionNode(node),
                 task: input.input,
                 dependencyOutputs: []
               })
@@ -256,7 +297,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           totalNodes += tierResult.completedNodes;
           for (const nodeResult of tierResult.nodeResults ?? []) {
             if (nodeResult.delivery.final_result.trim().length > 0) {
-              await deps.memoryStore?.appendEntry?.({
+              await persistTaskMemory({
                 taskId,
                 sourceId: `mem://${taskId}/${nodeResult.nodeId}`,
                 content: nodeResult.delivery.final_result,
@@ -264,13 +305,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
               });
             }
           }
-          await deps.memoryStore?.appendEntry?.({
+          await persistTaskMemory({
             taskId,
             sourceId: `mem://${taskId}/join/tier-${tierIndex}`,
-            content: (tierResult.nodeResults ?? [])
-              .map((result) => `${result.nodeId}: ${result.delivery.final_result}`.trim())
-              .filter((line) => line.length > 0)
-              .join("\n"),
+            content: formatJoinSummary(tierIndex, tierResult.nodeResults ?? []),
             tags: ["join-summary", `tier:${tierIndex}`]
           });
           if (tierResult.joinDecision === "aborted") {
@@ -304,7 +342,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         stateTrace = result.stateTrace;
         delivery = result.delivery;
         outputText = result.delivery.final_result;
-        await deps.memoryStore?.appendEntry?.({
+        await persistTaskMemory({
           taskId,
           sourceId: `mem://${taskId}/node-root`,
           content: result.delivery.final_result,
@@ -381,8 +419,142 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           total_cost_usd: totalCost
         }
       };
+    },
+
+    async resume(input: ResumeInput): Promise<ExecuteResult> {
+      if (!deps.taskStore) {
+        throw new Error("TaskStore is required for executor.resume");
+      }
+
+      const beforeEvents = await deps.taskStore.getEvents(input.taskId);
+      const taskInput = restoreTaskInput(beforeEvents) ?? `resumed task ${input.taskId}`;
+      const resumeResult = await deps.orchestrator.resumeTask(input.taskId, input.maxParallel ?? 2);
+      const afterEvents = await deps.taskStore.getEvents(input.taskId);
+      const resumedEvents = afterEvents.slice(beforeEvents.length);
+      const restoredDelivery = restoreLatestDelivery(afterEvents) ?? {
+        status: resumeResult.status === "completed" ? "completed" : "blocked",
+        final_result: "",
+        artifacts: [],
+        verification: [],
+        risks: [],
+        blocking_reason: resumeResult.status === "completed" ? undefined : "resume_incomplete",
+        next_actions: []
+      };
+
+      const delivery = await deps.finalizeDelivery({
+        taskId: input.taskId,
+        taskInput,
+        delivery: restoredDelivery
+      });
+      const finalState = delivery.status === "completed" ? "completed" : "aborted";
+
+      deps.eventBus.publish({
+        type: "TaskClosed",
+        payload: {
+          task_id: input.taskId,
+          state: finalState,
+          resumed: true,
+          delivery,
+          final_result: delivery.final_result,
+          artifacts: delivery.artifacts,
+          blocking_reason: delivery.blocking_reason
+        },
+        ts: Date.now()
+      });
+
+      return {
+        taskId: input.taskId,
+        finalState,
+        outputText: delivery.final_result,
+        delivery,
+        summary: {
+          nodeCount: resumedEvents.filter((event) => event.type === "NodeScheduled").length,
+          childSpawns: resumedEvents
+            .filter((event) => event.type === "ChildrenSpawned")
+            .reduce((sum, event) => sum + Number(event.payload.child_count ?? 0), 0),
+          toolCalls: {
+            localSuccess: resumedEvents.filter(
+              (event) => event.type === "ToolReturned" && String(event.payload.provider ?? "") === "local"
+            ).length,
+            mcpSuccess: resumedEvents.filter(
+              (event) => event.type === "ToolReturned" && String(event.payload.provider ?? "") === "mcp"
+            ).length
+          },
+          evaluatorDecisions: resumedEvents
+            .filter((event) => event.type === "Evaluated")
+            .map((event) => String(event.payload.decision ?? "unknown")),
+          path: ["running", finalState]
+        },
+        telemetry: {
+          total_tokens: resumedEvents
+            .filter((event) => event.type === "Evaluated")
+            .reduce((sum, event) => sum + Number((event.payload.usage as any)?.total_tokens ?? 0), 0),
+          total_cost_usd: resumedEvents
+            .filter((event) => event.type === "Evaluated")
+            .reduce((sum, event) => sum + Number(event.payload.cost ?? 0), 0)
+        }
+      };
     }
   };
+}
+
+function normalizeExecutionNode(node: DagWorkflow["nodes"][number]) {
+  return {
+    ...node,
+    role: node.role as AgentRole
+  };
+}
+
+function restoreTaskInput(events: RuntimeEvent[]): string | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type !== "ExecutionContextPrepared") {
+      continue;
+    }
+    const context = event.payload.context as { task?: unknown } | undefined;
+    if (typeof context?.task === "string" && context.task.trim().length > 0) {
+      return context.task;
+    }
+  }
+  return undefined;
+}
+
+function restoreLatestDelivery(events: RuntimeEvent[]): DeliveryBundle | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === "TaskClosed" && event.payload.delivery && typeof event.payload.delivery === "object") {
+      return event.payload.delivery as DeliveryBundle;
+    }
+    if (event.type === "Evaluated" && event.payload.delivery && typeof event.payload.delivery === "object") {
+      return event.payload.delivery as DeliveryBundle;
+    }
+  }
+  return undefined;
+}
+
+function formatJoinSummary(
+  tierIndex: number,
+  nodeResults: Array<{
+    nodeId: string;
+    finalState: "completed" | "aborted";
+    delivery: DeliveryBundle;
+  }>
+) {
+  return JSON.stringify(
+    {
+      tier: tierIndex,
+      node_count: nodeResults.length,
+      nodes: nodeResults.map((result) => ({
+        node_id: result.nodeId,
+        state: result.finalState,
+        verification_count: result.delivery.verification.length,
+        artifact_count: result.delivery.artifacts.length,
+        final_result_preview: result.delivery.final_result.slice(0, 240)
+      }))
+    },
+    null,
+    2
+  );
 }
 
 function resolveExecutionTiers(workflow: DagWorkflow) {

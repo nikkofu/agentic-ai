@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-04-08
+### Added
+- **Task Lifecycle Control Plane**: Added `src/runtime/taskLifecycle.ts` and `src/runtime/runtimeServices.ts`, giving the runtime a shared `start / resume / inspect / close` control surface that CLI, workers, and API routes can reuse.
+- **Dashboard Task APIs**: Added Next.js lifecycle endpoints under `ui/app/api/tasks/` and a dashboard control surface in `ui/components/TaskLifecyclePanel.tsx`.
+- **Async Runtime Feedback**: Added async node/task event propagation for queued node execution, plus UI state handling for `AsyncNode*` and `AsyncTask*` events.
+- **Release Diary Archive**: Added `diary/` as the home for per-release personal work journals.
+
+### Changed
+- **Queue-Backed Parallel Execution**: Parallel execution can now dispatch execution contexts through the shared task queue while preserving runtime events and shared task graph state.
+- **Resume with Context Restore**: Resume flow now replays task memory, restores prepared execution contexts, and continues work with recovered retrieval and working-memory state.
+- **Dashboard Observability**: Connection banner and graph state now reflect async task results, queue failures, and lifecycle inspection data instead of only synchronous close events.
+
 ## [0.6.0] - 2026-04-08
 ### Added
 - **Runtime Executor Core**: Added `src/runtime/executor.ts` and `src/runtime/contracts.ts` so task execution now flows through a dedicated runtime service layer instead of being orchestrated inside the CLI entrypoint.

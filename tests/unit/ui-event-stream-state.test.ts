@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  applyRuntimeEventToStreamState,
+  createInitialEventStreamDetails
+} from "../../ui/hooks/eventStreamState";
+
+describe("event stream state", () => {
+  it("captures async task settled results for the banner", () => {
+    const details = applyRuntimeEventToStreamState({
+      taskId: "task-stream-1",
+      current: createInitialEventStreamDetails(),
+      event: {
+        type: "AsyncTaskSettled",
+        payload: {
+          task_id: "task-stream-1",
+          job_kind: "resume",
+          final_state: "completed",
+          delivery: {
+            status: "completed",
+            final_result: "async final answer"
+          }
+        }
+      }
+    });
+
+    expect(details.lastEventType).toBe("AsyncTaskSettled");
+    expect(details.finalResult).toBe("async final answer");
+    expect(details.blockingReason).toBe("");
+  });
+
+  it("captures async task failures as banner errors", () => {
+    const details = applyRuntimeEventToStreamState({
+      taskId: "task-stream-2",
+      current: createInitialEventStreamDetails(),
+      event: {
+        type: "AsyncTaskFailed",
+        payload: {
+          task_id: "task-stream-2",
+          job_kind: "resume",
+          error: "queue worker offline"
+        }
+      }
+    });
+
+    expect(details.lastEventType).toBe("AsyncTaskFailed");
+    expect(details.lastError).toContain("queue worker offline");
+    expect(details.currentPath).toBe("task-stream-2");
+  });
+});

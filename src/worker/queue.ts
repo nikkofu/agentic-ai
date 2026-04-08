@@ -1,6 +1,19 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
+export type TaskLifecycleJob =
+  | {
+      kind: "start";
+      taskId?: string;
+      input: string;
+      workflow?: unknown;
+    }
+  | {
+      kind: "resume";
+      taskId: string;
+      maxParallel?: number;
+    };
+
 export class TaskQueue {
   private queue: Queue;
 
@@ -13,6 +26,14 @@ export class TaskQueue {
     return this.queue.add("execute-node", { taskId, nodeId, ...payload }, {
       jobId: `${taskId}-${nodeId}`
     });
+  }
+
+  async addLifecycleJob(job: TaskLifecycleJob) {
+    const jobId = job.kind === "resume"
+      ? `resume-${job.taskId}`
+      : `start-${job.taskId ?? "pending"}-${Date.now()}`;
+
+    return this.queue.add("task-lifecycle", job, { jobId });
   }
 
   async close() {

@@ -28,28 +28,15 @@ import { runPreflightChecks } from "./preflight";
 import { loadTemplate } from "./templateCatalog";
 import { generateAdoptionReport } from "./adoptionReport";
 
-import { createAgentRuntime } from "../agents/agentRuntime";
 import { getRuntimeConfig } from "../config/loadRuntimeConfig";
-import { createInMemoryEventBus } from "../core/eventBus";
-import { createInMemoryEventLogStore } from "../core/eventLogStore";
 import { WebHub } from "../core/webHub";
-import { createOrchestrator } from "../core/orchestrator";
-import { resolveModelRoute } from "../model/modelRouter";
-import { PrismaClient } from "@prisma/client";
-import { createPrismaTaskStore } from "../core/prismaTaskStore";
-import { McpHub } from "../tools/mcpHub";
-import { createToolGateway } from "../tools/toolGateway";
-import { createLocalToolRegistry } from "../tools/localToolRegistry";
-import { createResearchTools } from "../tools/researchTools";
-import { RequestLimiter } from "../core/limiter";
 import { initTelemetry } from "../core/telemetry";
 import { SlackBot } from "../bots/slackBot";
 import { WhatsAppBot } from "../bots/whatsappBot";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
-import { finalizeDelivery } from "../core/deliveryArtifacts";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
-import { createTaskExecutor } from "../runtime/executor";
+import { createRuntimeServices } from "../runtime/runtimeServices";
 import YAML from "yaml";
 
 type RunTaskInput = {
@@ -57,6 +44,7 @@ type RunTaskInput = {
   repl?: boolean;
   verbose?: boolean;
   workflow?: string;
+  resumeTaskId?: string;
   template?: string;
   report?: boolean;
   notify?: "slack" | "whatsapp" | "none";
@@ -86,8 +74,6 @@ type RunTaskResult = {
 
 export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const config = getRuntimeConfig();
-  const eventBus = createInMemoryEventBus();
-  const eventLogStore = createInMemoryEventLogStore();
 
   const preflight = await runPreflightChecks(config);
   if (!preflight.ok) {
@@ -106,76 +92,25 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   }
 
   await initTelemetry();
-  const prisma = new PrismaClient();
-  const taskStore = createPrismaTaskStore(prisma);
-  const mcpHub = new McpHub(config.mcp_servers);
-
-  let limiter: RequestLimiter | undefined;
-  if (config.scheduler.rate_limit) {
-    limiter = new RequestLimiter({
-      capacity: config.scheduler.rate_limit.burst_capacity,
-      refillRatePerSecond: config.scheduler.rate_limit.requests_per_minute / 60
-    });
-  }
-
-  const runtime = createAgentRuntime({
-    mode: "openrouter",
-    generate: args.generate,
-    limiter
+  const services = await createRuntimeServices({
+    generate: args.generate
   });
 
+  if (args.notify === "slack" && process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID) {
+    const slackBot = new SlackBot(process.env.SLACK_BOT_TOKEN, process.env.SLACK_CHANNEL_ID, services.eventBus);
+    await slackBot.init();
+  } else if (args.notify === "whatsapp" && process.env.WHATSAPP_RECIPIENT) {
+    const waBot = new WhatsAppBot(process.env.WHATSAPP_RECIPIENT, services.eventBus);
+    await waBot.init();
+  }
+  const taskId = randomUUID();
   if (args.verbose) {
-    eventBus.subscribe("*", (event) => {
+    services.eventBus.subscribe("*", (event) => {
       const key = event.payload.task_id ?? event.payload.node_id ?? "-";
       console.log(`[${new Date(event.ts).toISOString()}] ${event.type} key=${String(key)}`);
     });
   }
-
-  if (Object.keys(config.mcp_servers).length > 0) {
-    await mcpHub.initialize();
-  }
-
-  const localRegistry = createLocalToolRegistry([
-    {
-      name: "echo",
-      run: (input) => input
-    },
-    ...createResearchTools()
-  ]);
-  const availableLocalTools = ["echo", ...createResearchTools().map((tool) => tool.name)];
-  const toolGateway = createToolGateway(localRegistry, mcpHub);
-
-  const orchestrator = createOrchestrator({
-    eventBus,
-    eventLogStore,
-    taskStore,
-    guardrails: config.guardrails,
-    runtime,
-    toolGateway
-  });
-
-  if (args.notify === "slack" && process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID) {
-    const slackBot = new SlackBot(process.env.SLACK_BOT_TOKEN, process.env.SLACK_CHANNEL_ID, eventBus);
-    await slackBot.init();
-  } else if (args.notify === "whatsapp" && process.env.WHATSAPP_RECIPIENT) {
-    const waBot = new WhatsAppBot(process.env.WHATSAPP_RECIPIENT, eventBus);
-    await waBot.init();
-  }
-
-  const taskId = randomUUID();
-  const executor = createTaskExecutor({
-    config,
-    eventBus,
-    eventLogStore,
-    runtime,
-    orchestrator,
-    finalizeDelivery,
-    resolveModelRoute,
-    availableLocalTools,
-    env: process.env,
-    taskIdFactory: () => taskId
-  });
-  const webHub = new WebHub(eventBus, eventLogStore);
+  const webHub = new WebHub(services.eventBus, services.eventLogStore);
 
   try {
     try {
@@ -197,14 +132,17 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
       ? (YAML.parse(fs.readFileSync(args.workflow, "utf8")) as DagWorkflow)
       : undefined;
 
-    return await executor.execute({
-      input: finalInput,
-      workflow
-    });
+    return args.resumeTaskId
+      ? await services.taskLifecycle.resumeTask({
+          taskId: args.resumeTaskId
+        })
+      : await services.taskLifecycle.startTask({
+          input: finalInput,
+          workflow
+        });
   } finally {
     await webHub.stop();
-    await mcpHub.closeAll();
-    await prisma.$disconnect();
+    await services.close();
   }
 }
 
@@ -218,6 +156,9 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
   const workflowArgIndex = argv.findIndex((arg) => arg === "--workflow" || arg === "-w");
   const workflow = workflowArgIndex >= 0 ? argv[workflowArgIndex + 1] ?? undefined : undefined;
 
+  const resumeArgIndex = argv.findIndex((arg) => arg === "--resume" || arg === "-r");
+  const resumeTaskId = resumeArgIndex >= 0 ? argv[resumeArgIndex + 1] ?? undefined : undefined;
+
   const templateArgIndex = argv.findIndex((arg) => arg === "--template" || arg === "-t");
   const template = templateArgIndex >= 0 ? argv[templateArgIndex + 1] ?? undefined : undefined;
 
@@ -225,7 +166,7 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
   const notifyValue = notifyArgIndex >= 0 ? argv[notifyArgIndex + 1] : undefined;
   const notify = notifyValue === "slack" || notifyValue === "whatsapp" ? notifyValue : "none";
 
-  return { input, verbose, repl, workflow, template, report, notify };
+  return { input, verbose, repl, workflow, resumeTaskId, template, report, notify };
 }
 
 export function processReplCommand(line: string):
