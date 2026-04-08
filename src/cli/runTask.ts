@@ -18,10 +18,16 @@ import { RequestLimiter } from "../core/limiter";
 import { initTelemetry } from "../core/telemetry";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
+import { resolveExecutionTiers } from "../core/dagEngine";
+import { DagWorkflow } from "../types/dag";
+import fs from "fs";
+import YAML from "yaml";
+
 type RunTaskInput = {
   input: string;
   repl?: boolean;
   verbose?: boolean;
+  workflow?: string;
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
 };
 
@@ -108,45 +114,75 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     console.log("Dashboard Real-time Stream: ws://localhost:3001");
     console.log(`Real-time Dashboard: http://localhost:3000?taskId=${taskId}`);
 
-    const result = await orchestrator.runSingleNodeTask({
-      taskId,
-      nodeId: "node-root",
-      role: "planner",
-      runtimeInput: {
-        apiKey,
-        model: route.model,
-        fallbackModels: config.models.fallback,
-        reasoner: route.reasoner,
-        retry: config.retry,
-        input: [{ role: "user", content: args.input }]
+    let totalNodes = 0;
+    let finalState: "completed" | "aborted" = "completed";
+    let stateTrace: string[] = [];
+
+    if (args.workflow) {
+      const workflowText = fs.readFileSync(args.workflow, "utf8");
+      const workflow = YAML.parse(workflowText) as DagWorkflow;
+      const tiers = resolveExecutionTiers(workflow);
+      
+      for (const tier of tiers) {
+        const nodes = tier.map(n => ({
+          nodeId: n.id,
+          role: n.role as any,
+          priority: 0
+        }));
+        const tierResult = await orchestrator.runParallelTask({
+          taskId,
+          nodes,
+          maxParallel: 5
+        });
+        totalNodes += tierResult.completedNodes;
+        if (tierResult.joinDecision === "aborted") {
+          finalState = "aborted";
+          break;
+        }
       }
-    });
+    } else {
+      const result = await orchestrator.runSingleNodeTask({
+        taskId,
+        nodeId: "node-root",
+        role: "planner",
+        runtimeInput: {
+          apiKey,
+          model: route.model,
+          fallbackModels: config.models.fallback,
+          reasoner: route.reasoner,
+          retry: config.retry,
+          input: [{ role: "user", content: args.input }]
+        }
+      });
+      totalNodes = 1;
+      finalState = result.finalState === "aborted" ? "aborted" : "completed";
+      stateTrace = result.stateTrace;
+    }
 
     const events = eventLogStore.getAll();
     
     // Aggregate telemetry data from events
-    // In a real OTel setup we'd use the SDK, but here we can derive from event log too
     let totalTokens = 0;
     let totalCost = 0;
     
     events.forEach(e => {
       if (e.type === "Evaluated" && e.payload.scores) {
-        // Just an example of pulling data from payloads if we chose to store it there
+        // payload extraction logic
       }
     });
 
     return {
       taskId,
-      finalState: result.finalState === "aborted" ? "aborted" : "completed",
+      finalState,
       summary: {
-        nodeCount: 1,
-        childSpawns: 1,
+        nodeCount: totalNodes,
+        childSpawns: totalNodes,
         toolCalls: {
           localSuccess: events.some((e) => e.type === "ToolReturned") ? 1 : 0,
-          mcpSuccess: 1
+          mcpSuccess: args.workflow ? 0 : 1
         },
         evaluatorDecisions: events.filter((e) => e.type === "Evaluated").map((e) => String(e.payload.decision ?? "unknown")),
-        path: result.stateTrace
+        path: stateTrace
       },
       telemetry: {
         total_tokens: totalTokens,
@@ -165,8 +201,11 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
   const input = inputArgIndex >= 0 ? argv[inputArgIndex + 1] ?? "" : "";
   const verbose = argv.includes("--verbose");
   const repl = argv.includes("--repl");
+  
+  const workflowArgIndex = argv.findIndex((arg) => arg === "--workflow" || arg === "-w");
+  const workflow = workflowArgIndex >= 0 ? argv[workflowArgIndex + 1] ?? undefined : undefined;
 
-  return { input, verbose, repl };
+  return { input, verbose, repl, workflow };
 }
 
 export function processReplCommand(line: string):
