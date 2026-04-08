@@ -25,6 +25,7 @@ export interface TaskStore {
   getGraph(taskId: string): Promise<TaskGraph | null>;
   getNode(taskId: string, nodeId: string): Promise<TaskNode | null>;
   getEvents(taskId: string): Promise<RuntimeEvent[]>;
+  cloneNode(taskId: string, sourceNodeId: string, newNodeId: string): Promise<void>;
 }
 
 export function createInMemoryTaskStore(): TaskStore {
@@ -73,6 +74,21 @@ export function createInMemoryTaskStore(): TaskStore {
     },
     async getEvents(taskId: string) {
       return [...(events.get(taskId) || [])];
+    },
+    async cloneNode(taskId: string, sourceNodeId: string, newNodeId: string) {
+      const graph = graphs.get(taskId);
+      if (!graph) throw new Error(`Graph ${taskId} not found`);
+      const sourceNode = graph.nodes[sourceNodeId];
+      if (!sourceNode) throw new Error(`Node ${sourceNodeId} not found in graph ${taskId}`);
+      
+      graph.nodes[newNodeId] = {
+        ...sourceNode,
+        nodeId: newNodeId,
+        state: "pending",
+        children: [],
+        metrics: undefined,
+        outputSummary: undefined
+      };
     }
   };
 }
