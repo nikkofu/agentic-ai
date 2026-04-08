@@ -41,6 +41,10 @@ export const runtimeConfigSchema = z.object({
     max_retries: z.number().int().nonnegative().default(3),
     base_delay_ms: z.number().int().nonnegative().default(1000)
   }),
+  providers: z.record(z.string(), z.object({
+    base_url: z.string().url(),
+    api_key_env: z.string()
+  })).optional(),
   mcp_servers: z.record(z.string(), z.object({
     command: z.string(),
     args: z.array(z.string()).default([]),

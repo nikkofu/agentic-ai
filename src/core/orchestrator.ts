@@ -51,6 +51,7 @@ type ParallelTaskInput = {
   taskId: string;
   nodes: ParallelNodeInput[];
   maxParallel: number;
+  runtimeInput?: Record<string, unknown>;
 };
 
 export function createOrchestrator(deps: OrchestratorDeps) {
@@ -162,7 +163,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
           taskId: input.taskId,
           nodeId: node.nodeId,
           role: node.role,
-          runtimeInput: {}
+          runtimeInput: input.runtimeInput
         });
         results.push({ nodeId: node.nodeId, state: res.finalState });
       };
