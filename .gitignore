@@ -1,4 +1,3 @@
-.worktrees/
 .env
 config/runtime.local.yaml
 .claude/
@@ -6,6 +5,7 @@ config/runtime.local.yaml
 node_modules/
 dist/
 artifacts/
+.worktrees/
 *.json
 !package.json
 !package-lock.json

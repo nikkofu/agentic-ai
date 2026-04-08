@@ -30,7 +30,18 @@ npm install
 cp .env.example .env
 ```
 
-### 3. 配置文件
+### 3. 运行 Preflight（Quickstart 2.0）
+先执行启动前检查，确认关键环境可用：
+```bash
+npx tsx src/cli/runTask.ts --preflight
+```
+
+若失败，输出会包含：
+- `reason`: 失败原因
+- `fix`: 可执行修复步骤
+- `verify`: 修复后验证命令
+
+### 4. 配置文件
 编辑 `config/runtime.yaml` 设置默认模型、调度策略和护栏限制：
 ```yaml
 models:
@@ -61,6 +72,34 @@ npx tsx src/cli/runTask.ts --repl
 - `/approve`: 批准修正建议。
 - `/reject`: 拒绝修正建议。
 - `/exit`: 退出会话。
+
+### 模板驱动任务输入
+可通过 `--template` 为输入注入内置模板前缀：
+```bash
+npx tsx src/cli/runTask.ts --template research -p "分析这个需求的关键风险"
+```
+
+内置模板：
+- `research`
+- `execution`
+- `multi-agent`
+
+### 常见失败的可解释诊断
+当关键条件不满足（如缺少 API Key）时，CLI 将返回结构化诊断：
+- `reason`: 失败原因
+- `fix`: 建议修复步骤
+- `verify`: 修复后验证命令
+
+例如可先执行：
+```bash
+npx tsx src/cli/runTask.ts --preflight
+```
+
+### Adoption 指标导出
+可导出 adoption 基线报告（当前返回结构化 JSON）：
+```bash
+npx tsx src/cli/runTask.ts --report adoption --since 2026-04-01
+```
 
 ## 🧪 开发与测试
 
