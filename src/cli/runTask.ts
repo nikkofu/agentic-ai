@@ -17,6 +17,7 @@ import { createToolGateway } from "../tools/toolGateway";
 import { createLocalToolRegistry } from "../tools/localToolRegistry";
 import { RequestLimiter } from "../core/limiter";
 import { initTelemetry } from "../core/telemetry";
+import { SlackBot } from "../bots/slackBot";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 import { resolveExecutionTiers } from "../core/dagEngine";
