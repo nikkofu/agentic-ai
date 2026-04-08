@@ -17,9 +17,14 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
     },
 
     async updateGraphStatus(taskId: string, status: string) {
-      await prisma.taskGraph.update({
+      await prisma.taskGraph.upsert({
         where: { task_id: taskId },
-        data: { status }
+        update: { status },
+        create: {
+          task_id: taskId,
+          root_node_id: "root",
+          status
+        }
       });
     },
 

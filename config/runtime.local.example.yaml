@@ -1,8 +1,10 @@
 # Local-only runtime overrides (do not commit real secrets)
 models:
-  default: "nvidia/nemotron-3-super-120b-a12b:free"
+  default: "stepfun/step-3.5-flash:free"
   by_agent_role:
-    planner: "nvidia/nemotron-3-super-120b-a12b:free"
+    planner: "openai/gpt-oss-120b:free"
+  embeddings:
+    default: "nvidia/llama-nemotron-embed-vl-1b-v2:free"
 
 reasoner:
   default: "medium"

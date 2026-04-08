@@ -2,6 +2,7 @@ import { generateWithOpenRouter, type OpenRouterGenerateRequest, type OpenRouter
 import { RequestLimiter } from "../core/limiter";
 import { tracer, meter } from "../core/telemetry";
 import { calculateCost } from "../core/costCenter";
+import { createFileModelHealthStore, type ModelHealthStore } from "../model/modelHealthStore";
 
 type SimulatedRunArgs = {
   forceGuardrailTrip?: boolean;
@@ -29,6 +30,7 @@ type AgentRuntimeDeps = {
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
   sleep?: (ms: number) => Promise<void>;
   limiter?: RequestLimiter;
+  healthStore?: ModelHealthStore;
 };
 
 const tokenCounter = meter.createCounter("llm_tokens_total");
@@ -39,6 +41,7 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
   const generate = deps.generate ?? generateWithOpenRouter;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const limiter = deps.limiter;
+  const healthStore = deps.healthStore ?? createFileModelHealthStore();
 
   return {
     async run(args?: SimulatedRunArgs | OpenRouterRunArgs) {
@@ -52,7 +55,9 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
         return tracer.startActiveSpan("agent_run", { attributes: { model: openrouterArgs.model } }, async (span) => {
           try {
             const retry = openrouterArgs.retry ?? { max_retries: 0, base_delay_ms: 100 };
-            const models = [openrouterArgs.model, ...(openrouterArgs.fallbackModels ?? [])];
+            const models = [openrouterArgs.model, ...(openrouterArgs.fallbackModels ?? [])].filter(
+              (model, index, list) => list.indexOf(model) === index && healthStore.isHealthy(model)
+            );
 
             let lastError: unknown;
 
@@ -95,10 +100,16 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
                 } catch (error) {
                   lastError = error;
                   if (!shouldRetry(error)) {
-                    throw error;
+                    if (shouldMarkUnhealthy(error)) {
+                      healthStore.markUnhealthy(model, getFailureReason(error));
+                    }
+                    break;
                   }
 
                   if (attempt >= retry.max_retries) {
+                    if (shouldMarkUnhealthy(error)) {
+                      healthStore.markUnhealthy(model, getFailureReason(error));
+                    }
                     break;
                   }
 
@@ -151,4 +162,29 @@ function shouldRetry(error: unknown): boolean {
   }
 
   return false;
+}
+
+function shouldMarkUnhealthy(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (/timeout/i.test(error.message)) {
+    return true;
+  }
+
+  const match = error.message.match(/openrouter_error:(\d{3})/);
+  if (!match) {
+    return false;
+  }
+
+  const status = Number(match[1]);
+  return status === 404 || (status >= 500 && status <= 599);
+}
+
+function getFailureReason(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "unknown_model_error";
 }

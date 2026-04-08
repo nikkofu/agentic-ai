@@ -19,7 +19,24 @@ export function getRuntimeConfig(configPath = path.resolve(process.cwd(), "confi
     merged.models = models;
   }
 
-  return runtimeConfigSchema.parse(merged);
+  const config = runtimeConfigSchema.parse(merged);
+
+  // Hard safety check: OpenRouter models MUST end with :free
+  // This is a strict requirement from the user.
+  if (!config.models.base_url) { // If it's using OpenRouter (no generic base_url)
+    const validateModel = (model: string) => {
+      if (!model.endsWith(":free")) {
+        throw new Error(`SECURITY ALERT: Model "${model}" must end with ":free" when using OpenRouter. Non-free models are forbidden by system policy.`);
+      }
+    };
+
+    validateModel(config.models.default);
+    config.models.fallback.forEach(validateModel);
+    Object.values(config.models.by_agent_role).forEach(validateModel);
+    validateModel(config.models.embeddings.default);
+  }
+
+  return config;
 }
 
 function parseYamlFile(filePath: string): Record<string, unknown> {

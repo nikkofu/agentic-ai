@@ -66,10 +66,10 @@ describe("resolveModelRoute", () => {
       ...baseConfig,
       models: {
         ...baseConfig.models,
-        default: "lmstudio/qwen2.5-7b",
+        default: "google/gemini-2.0-flash-001:free",
         by_agent_role: {
           ...baseConfig.models.by_agent_role,
-          planner: "lmstudio/qwen2.5-7b"
+          planner: "google/gemini-2.0-flash-001:free"
         }
       }
     };

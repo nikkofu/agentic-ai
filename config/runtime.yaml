@@ -1,11 +1,22 @@
 models:
-  default: "nvidia/nemotron-3-super-120b-a12b:free"
-  fallback: ["nvidia/nemotron-3-super-120b-a12b:free"]
+  default: "stepfun/step-3.5-flash:free"
+  fallback:
+    - "nvidia/nemotron-3-super-120b-a12b:free"
+    - "arcee-ai/trinity-large-preview:free"
+    - "z-ai/glm-4.5-air:free"
+    - "nvidia/nemotron-3-nano-30b-a3b:free"
+    - "minimax/minimax-m2.5:free"
+    - "openai/gpt-oss-120b:free"
+    - "qwen/qwen3-coder:free"
+    - "google/gemma-4-31b-it:free"
+    - "google/gemma-4-26b-a4b-it:free"
   by_agent_role:
-    planner: "nvidia/nemotron-3-super-120b-a12b:free"
+    planner: "openai/gpt-oss-120b:free"
     researcher: "nvidia/nemotron-3-super-120b-a12b:free"
-    coder: "nvidia/nemotron-3-super-120b-a12b:free"
-    writer: "nvidia/nemotron-3-super-120b-a12b:free"
+    coder: "qwen/qwen3-coder:free"
+    writer: "minimax/minimax-m2.5:free"
+  embeddings:
+    default: "nvidia/llama-nemotron-embed-vl-1b-v2:free"
 
 reasoner:
   default: "medium"

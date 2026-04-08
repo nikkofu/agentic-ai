@@ -16,13 +16,14 @@ export interface AdoptionReport {
 
 export function summarizeAdoptionMetrics(events: RuntimeEvent[]): AdoptionMetrics {
   const closedTasks = events.filter(e => e.type === "TaskClosed");
-  const taskStartedEvents = events.filter(e => e.type === "TaskSubmitted");
-  
-  // 精准识别恢复事件 (测试中使用 resumed 或 replayed 标志)
-  const recoveryEvents = events.filter(e => e.payload.resumed || e.payload.replayed).length;
-  
+  const retryEvents = events.filter(e => e.type === "RetryScheduled");
+  const recoveryEvents = retryEvents.length + events.filter(e => e.payload.resumed || e.payload.replayed).length;
+  const avgRecoveryMs = retryEvents.length > 0
+    ? retryEvents.reduce((sum, event) => sum + Number(event.payload.delay_ms ?? 0), 0) / retryEvents.length
+    : 1500;
+
   const templateUsage: Record<string, number> = {};
-  taskStartedEvents.forEach(e => {
+  events.filter(e => e.type === "TemplateApplied").forEach(e => {
     const t = e.payload.template as string;
     if (t) templateUsage[t] = (templateUsage[t] || 0) + 1;
   });
@@ -33,7 +34,7 @@ export function summarizeAdoptionMetrics(events: RuntimeEvent[]): AdoptionMetric
       successRate: 0, 
       avgDuration: 0, 
       recoveryEvents, 
-      avgRecoveryMs: 1500, 
+      avgRecoveryMs,
       templateUsage 
     };
   }
@@ -44,7 +45,7 @@ export function summarizeAdoptionMetrics(events: RuntimeEvent[]): AdoptionMetric
     successRate: successful / closedTasks.length,
     avgDuration: 0,
     recoveryEvents,
-    avgRecoveryMs: 1500,
+    avgRecoveryMs,
     templateUsage
   };
 }

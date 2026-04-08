@@ -1,6 +1,7 @@
 import type { LocalToolRegistry } from "./localToolRegistry";
 import { McpError, type McpHub } from "./mcpHub";
 import { checkPermission, UserContext } from "../core/auth";
+import type { AuditTrail } from "../core/auditTrail";
 
 type ToolCall = {
   transport: "local" | "mcp";
@@ -25,7 +26,7 @@ type ToolResult = {
 
 const RESTRICTED_RESOURCES = ["local/shell", "mcp/filesystem/write_file"];
 
-export function createToolGateway(localRegistry: LocalToolRegistry, mcpHub: McpHub) {
+export function createToolGateway(localRegistry: LocalToolRegistry, mcpHub: McpHub, auditTrail?: AuditTrail) {
   return {
     async invoke(call: ToolCall, user?: UserContext): Promise<ToolResult> {
       const startedAt = Date.now();
@@ -71,8 +72,21 @@ export function createToolGateway(localRegistry: LocalToolRegistry, mcpHub: McpH
           };
         }
       } else {
+        auditTrail?.logToolExecution({
+          phase: "before",
+          transport: call.transport,
+          tool: call.tool,
+          input: call.input
+        });
         try {
           const output = await mcpHub.callTool(call.tool, call.input);
+          auditTrail?.logToolExecution({
+            phase: "after",
+            transport: call.transport,
+            tool: call.tool,
+            input: call.input,
+            ok: true
+          });
           return {
             ok: true,
             output,
@@ -81,6 +95,13 @@ export function createToolGateway(localRegistry: LocalToolRegistry, mcpHub: McpH
           };
         } catch (error) {
           const isMcpError = error instanceof McpError;
+          auditTrail?.logToolExecution({
+            phase: "after",
+            transport: call.transport,
+            tool: call.tool,
+            input: call.input,
+            ok: false
+          });
           return {
             ok: false,
             output: null,

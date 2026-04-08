@@ -1,7 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runTask } from "../../src/cli/runTask";
 import { WebHub } from "../../src/core/webHub";
+
+afterEach(() => {
+  fs.rmSync("artifacts/verbose-test.md", { force: true });
+  fs.rmSync("artifacts/port-in-use-test.md", { force: true });
+  fs.rmSync("logs/runs", { recursive: true, force: true });
+});
 
 describe("runTask verbose mode", () => {
   it("streams human-readable event lines and still returns summary", async () => {

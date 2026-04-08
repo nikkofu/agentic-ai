@@ -10,7 +10,12 @@ export const runtimeConfigSchema = z.object({
   models: z.object({
     default: z.string(),
     fallback: z.array(z.string()).default([]),
-    by_agent_role: z.record(agentRoleSchema, z.string())
+    by_agent_role: z.record(agentRoleSchema, z.string()),
+    embeddings: z.object({
+      default: z.string()
+    }).default({
+      default: "nvidia/llama-nemotron-embed-vl-1b-v2:free"
+    })
   }),
   reasoner: z.object({
     default: z.string(),
@@ -92,4 +97,20 @@ export type EvalDecision = {
     latency: number;
     total: number;
   };
+};
+
+export type ToolIntent = {
+  transport: "local" | "mcp";
+  tool: string;
+  input: unknown;
+};
+
+export type DeliveryBundle = {
+  status: "completed" | "partial" | "failed" | "blocked";
+  final_result: string;
+  artifacts: string[];
+  verification: string[];
+  risks: string[];
+  blocking_reason?: string;
+  next_actions: string[];
 };

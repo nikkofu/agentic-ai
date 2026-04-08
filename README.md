@@ -2,15 +2,19 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
+当前版本：`0.5.0`
+
 ## 🚀 核心特性
 
 - **多模式调度**：支持 BFS/DFS 策略，以及基于依赖关系的 **声明式 DAG 工作流** 调度。
 - **受控并行执行**：内置 `runParallelTask`，支持 `max_parallel` 并发限制与节点优先级队列。
 - **递归安全护栏 (Guardrails)**：动态监控深度、分支、步数及预算消耗，防止资源失控。
 - **生产级韧性**：内置 OpenAI 兼容接口支持、指数退避重试 (429/5xx) 及模型自动回退 (Fallback)。
+- **自主研究闭环**：支持 `web_search`、`page_fetch`、`github_readme`、`github_file`、`verify_sources` 等研究工具回环。
 - **全链路可观测性**：OpenTelemetry 追踪、JSONL 事件持久化，以及醒目的财务成本摘要。
 - **多端 ChatOps**：支持通过 **Slack** 和 **WhatsApp** 实时推送任务状态。
 - **产品化打磨**：内置 **Preflight 诊断**、**交互式 init 向导**、**模板系统** 及 **Adoption 报告** 生成。
+- **真实交付约束**：空交付不会判定完成；研究型任务缺少 verification 证据会被阻断。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -42,6 +46,13 @@ npx tsx src/cli/runTask.ts -p "执行任务描述" --verbose
 npx tsx src/cli/runTask.ts --workflow my-dag.yaml  # 运行 DAG 工作流
 npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
 ```
+
+### 交付物与运行日志
+
+- 成功交付物写入 `artifacts/`，文件名使用可读 slug，便于直接交付给用户。
+- 运行日志与阻断任务记录写入 `logs/runs/<taskId>/delivery.json`。
+- 若交付物是文件，runtime 会在退出前校验文件真实存在且非空。
+- 调研类任务如果没有来源验证信息，不会被标记为完成。
 
 ### 进入交互式 REPL
 ```bash

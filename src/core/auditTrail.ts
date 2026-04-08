@@ -11,11 +11,19 @@ export interface AuditRecord {
   nodeId?: string;
   severity: "info" | "warning" | "danger";
   payload: any;
-  phase?: "before" | "after"; 
+  phase?: "before" | "after";
+  ok?: boolean;
 }
 
 export interface AuditTrail {
   log: (event: RuntimeEvent) => void;
+  logToolExecution: (entry: {
+    phase: "before" | "after";
+    transport: "local" | "mcp";
+    tool: string;
+    input: unknown;
+    ok?: boolean;
+  }) => void;
   getAll: () => AuditRecord[];
 }
 
@@ -62,6 +70,25 @@ export function createInMemoryAuditTrail(): AuditTrail {
           phase: "after"
         });
       }
+    },
+    logToolExecution: (entry) => {
+      if (entry.transport !== "mcp") {
+        return;
+      }
+
+      records.push({
+        timestamp: new Date().toISOString(),
+        type: "ToolExecution",
+        taskId: "unknown",
+        severity: "danger",
+        payload: {
+          transport: entry.transport,
+          tool: entry.tool,
+          input: entry.input
+        },
+        phase: entry.phase,
+        ok: entry.ok
+      });
     },
     getAll: () => records
   };

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-04-08
+### Added
+- **Autonomous Research Tools**: Added `web_search`, `page_fetch`, `github_readme`, `github_file`, and `verify_sources` local tools for evidence-driven research loops.
+- **Delivery Finalization**: Added delivery archiving and file existence/non-empty verification before marking file-based outputs complete.
+- **Model Resilience**: Added unhealthy-model persistence and skipping for failed OpenRouter free models.
+
+### Changed
+- **Runtime Completion Rules**: Empty deliveries and research tasks without verification evidence are now blocked instead of being reported as completed.
+- **Archiving Policy**: User-facing deliverables now go to `artifacts/`, while runtime logs move to `logs/runs/<taskId>/delivery.json`.
+- **Prompt/Parsing Robustness**: Orchestrator now tolerates fenced JSON, single-item array envelopes, and retries after empty model responses.
+
 ## [0.4.0] - 2026-04-08
 ### Added
 - **UX & Adoption First**: Added preflight checks, template catalog, and adoption report commands.

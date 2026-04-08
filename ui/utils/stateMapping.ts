@@ -7,6 +7,10 @@ export function mapRuntimeEventToNodeState(
   currentMetrics?: TaskMetrics
 ): { node: Node<NodeData> | undefined; metrics: TaskMetrics } {
   const metrics = currentMetrics || { totalTokens: 0, totalCost: 0 };
+
+  if ((event.payload.retry || event.type === 'RetryScheduled') && event.payload.duration) {
+    (metrics as any).recoveryEvents = ((metrics as any).recoveryEvents || 0) + 1;
+  }
   
   if (!node && event.type === 'NodeScheduled') {
     return {
@@ -44,11 +48,6 @@ export function mapRuntimeEventToNodeState(
   // Handle degraded state (test specific expectation)
   if (event.type === 'GuardrailTripped' || event.payload.fallback) {
     (updatedNode.data as any).degraded = true;
-  }
-
-  // Handle recovery metrics update (test specific expectation)
-  if (event.payload.retry && event.payload.duration) {
-    (metrics as any).recoveryEvents = ((metrics as any).recoveryEvents || 0) + 1;
   }
 
   return { node: updatedNode, metrics };

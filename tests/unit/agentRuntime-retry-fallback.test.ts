@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAgentRuntime } from "../../src/agents/agentRuntime";
+import { createInMemoryModelHealthStore } from "../../src/model/modelHealthStore";
 
 describe("agentRuntime retry and fallback", () => {
   it("retries on 429 and then succeeds", async () => {
@@ -10,7 +11,7 @@ describe("agentRuntime retry and fallback", () => {
       .mockRejectedValueOnce(new Error("openrouter_error:429:rate_limited"))
       .mockResolvedValueOnce({ outputText: "ok", raw: {} });
 
-    const runtime = createAgentRuntime({ mode: "openrouter", generate, sleep });
+    const runtime = createAgentRuntime({ mode: "openrouter", generate, sleep, healthStore: createInMemoryModelHealthStore() });
 
     const result = await runtime.run({
       apiKey: "k",
@@ -29,7 +30,7 @@ describe("agentRuntime retry and fallback", () => {
     const sleep = vi.fn(async () => undefined);
     const generate = vi.fn().mockRejectedValue(new Error("openrouter_error:400:bad_request"));
 
-    const runtime = createAgentRuntime({ mode: "openrouter", generate, sleep });
+    const runtime = createAgentRuntime({ mode: "openrouter", generate, sleep, healthStore: createInMemoryModelHealthStore() });
 
     await expect(
       runtime.run({
@@ -53,7 +54,7 @@ describe("agentRuntime retry and fallback", () => {
       .mockRejectedValueOnce(new Error("openrouter_error:500:upstream"))
       .mockResolvedValueOnce({ outputText: "from-fallback", raw: {} });
 
-    const runtime = createAgentRuntime({ mode: "openrouter", generate, sleep });
+    const runtime = createAgentRuntime({ mode: "openrouter", generate, sleep, healthStore: createInMemoryModelHealthStore() });
 
     const result = await runtime.run({
       apiKey: "k",
@@ -77,5 +78,48 @@ describe("agentRuntime retry and fallback", () => {
       expect.objectContaining({ model: "secondary/model" })
     );
     expect(result.outputText).toBe("from-fallback");
+  });
+
+  it("marks a 404 model unhealthy and skips it on the next run", async () => {
+    const generate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("openrouter_error:404:model_not_found"))
+      .mockResolvedValueOnce({ outputText: "from-fallback", raw: {} })
+      .mockResolvedValueOnce({ outputText: "second-run-fallback", raw: {} });
+
+    const runtime = createAgentRuntime({ mode: "openrouter", generate, healthStore: createInMemoryModelHealthStore() });
+
+    const first = await runtime.run({
+      apiKey: "k",
+      model: "primary/model",
+      fallbackModels: ["secondary/model"],
+      reasoner: "high",
+      input: [{ role: "user", content: "hello" }],
+      retry: { max_retries: 0, base_delay_ms: 1 }
+    });
+
+    const second = await runtime.run({
+      apiKey: "k",
+      model: "primary/model",
+      fallbackModels: ["secondary/model"],
+      reasoner: "high",
+      input: [{ role: "user", content: "hello again" }],
+      retry: { max_retries: 0, base_delay_ms: 1 }
+    });
+
+    expect(generate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: "primary/model" })
+    );
+    expect(generate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: "secondary/model" })
+    );
+    expect(generate).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ model: "secondary/model" })
+    );
+    expect(first.outputText).toBe("from-fallback");
+    expect(second.outputText).toBe("second-run-fallback");
   });
 });

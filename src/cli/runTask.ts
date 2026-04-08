@@ -1,5 +1,27 @@
 import { createInterface } from "node:readline/promises";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+
+function forceLoadEnv() {
+  try {
+    const envPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf8");
+      content.split("\n").forEach((line) => {
+        const parts = line.trim().split("=");
+        if (parts.length >= 2) {
+          const key = parts[0].trim();
+          let val = parts.slice(1).join("=").trim();
+          if (val.startsWith("\"") || val.startsWith("'")) val = val.slice(1, -1);
+          process.env[key] = val;
+        }
+      });
+    }
+  } catch {}
+}
+forceLoadEnv();
+
 import { installSkillPackage } from "./skillRegistry";
 import { runInitWizard } from "./initWizard";
 import { runPreflightChecks } from "./preflight";
@@ -18,15 +40,17 @@ import { createPrismaTaskStore } from "../core/prismaTaskStore";
 import { McpHub } from "../tools/mcpHub";
 import { createToolGateway } from "../tools/toolGateway";
 import { createLocalToolRegistry } from "../tools/localToolRegistry";
+import { createResearchTools } from "../tools/researchTools";
 import { RequestLimiter } from "../core/limiter";
 import { initTelemetry } from "../core/telemetry";
 import { SlackBot } from "../bots/slackBot";
 import { WhatsAppBot } from "../bots/whatsappBot";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
+import { finalizeDelivery } from "../core/deliveryArtifacts";
 
 import { resolveExecutionTiers } from "../core/dagEngine";
 import { DagWorkflow } from "../types/dag";
-import fs from "fs";
+import type { DeliveryBundle } from "../types/runtime";
 import YAML from "yaml";
 
 type RunTaskInput = {
@@ -44,6 +68,7 @@ type RunTaskResult = {
   taskId: string;
   finalState: "completed" | "aborted";
   outputText?: string;
+  delivery: DeliveryBundle;
   summary: {
     nodeCount: number;
     childSpawns: number;
@@ -65,7 +90,6 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   const eventBus = createInMemoryEventBus();
   const eventLogStore = createInMemoryEventLogStore();
 
-  // Run UX Preflight Checks
   const preflight = await runPreflightChecks(config);
   if (!preflight.ok) {
     const errorMsg = "Preflight checks failed: " + (preflight.errors || []).join(", ");
@@ -76,24 +100,17 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     process.exit(1);
   }
 
-  // Handle template loading
   let finalInput = args.input;
   if (args.template) {
     const template = loadTemplate(args.template);
     finalInput = template.body.replace("{{input}}", args.input || "default task");
   }
 
-  // Initialize Telemetry
   await initTelemetry();
-
-  // Initialize persistence
   const prisma = new PrismaClient();
   const taskStore = createPrismaTaskStore(prisma);
-
-  // Initialize MCP Hub
   const mcpHub = new McpHub(config.mcp_servers);
 
-  // Initialize Limiter
   let limiter: RequestLimiter | undefined;
   if (config.scheduler.rate_limit) {
     limiter = new RequestLimiter({
@@ -115,12 +132,18 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     });
   }
 
-  // MCP Hub should be initialized before orchestrator runs
   if (Object.keys(config.mcp_servers).length > 0) {
     await mcpHub.initialize();
   }
 
-  const toolGateway = createToolGateway(createLocalToolRegistry([]), mcpHub);
+  const localRegistry = createLocalToolRegistry([
+    {
+      name: "echo",
+      run: (input) => input
+    },
+    ...createResearchTools()
+  ]);
+  const toolGateway = createToolGateway(localRegistry, mcpHub);
 
   const orchestrator = createOrchestrator({
     eventBus,
@@ -131,7 +154,6 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     toolGateway
   });
 
-  // Handle Notifications
   if (args.notify === "slack" && process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID) {
     const slackBot = new SlackBot(process.env.SLACK_BOT_TOKEN, process.env.SLACK_CHANNEL_ID, eventBus);
     await slackBot.init();
@@ -141,7 +163,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
   }
 
   const taskId = randomUUID();
-  const webHub = new WebHub(eventBus);
+  const webHub = new WebHub(eventBus, eventLogStore);
 
   try {
     try {
@@ -151,14 +173,9 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         console.log(`Real-time Dashboard: http://localhost:3000/dashboard?taskId=${taskId}&token=valid-session`);
       }
     } catch (error) {
-      const isAddressInUse =
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        (error as { code?: string }).code === "EADDRINUSE";
-
-      if (isAddressInUse) {
-        console.warn("[WebHub] Port 3001 already in use, skipping dashboard stream startup");
+      const code = error && typeof error === "object" && "code" in error ? (error as { code?: string }).code : undefined;
+      if (code === "EADDRINUSE" || code === "EPERM") {
+        console.warn(`[WebHub] Port 3001 unavailable (${code}), skipping dashboard stream startup`);
       } else {
         throw error;
       }
@@ -168,9 +185,18 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     let finalState: "completed" | "aborted" = "completed";
     let stateTrace: string[] = [];
     let outputText = "";
+    let delivery: DeliveryBundle = {
+      status: "completed",
+      final_result: "",
+      artifacts: [],
+      verification: [],
+      risks: [],
+      next_actions: []
+    };
 
     const getRuntimeInput = (role: any, inputContent: any) => {
       const nodeRoute = resolveModelRoute(config, role, process.env);
+      const prompt = buildAutonomousPrompt(String(inputContent));
       return {
         apiKey: args.generate ? "mock-key" : (nodeRoute.apiKey ?? process.env.OPENROUTER_API_KEY),
         model: nodeRoute.model,
@@ -178,7 +204,10 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         fallbackModels: config.models.fallback,
         reasoner: nodeRoute.reasoner,
         retry: config.retry,
-        input: [{ role: "user", content: inputContent }]
+        input: [
+          { role: "system", content: prompt.system },
+          { role: "user", content: prompt.user }
+        ]
       };
     };
 
@@ -193,7 +222,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
           role: n.role as any,
           priority: 0
         }));
-        
+
         const tierResult = await orchestrator.runParallelTask({
           taskId,
           nodes,
@@ -214,47 +243,59 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         runtimeInput: getRuntimeInput("planner", finalInput)
       });
       totalNodes = 1;
-      finalState = result.finalState === "aborted" ? "aborted" : "completed";
       stateTrace = result.stateTrace;
+      delivery = result.delivery;
+      outputText = result.delivery.final_result;
     }
 
-    // Small delay to ensure all async events are captured in the store
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const events = eventLogStore.getAll();
-    
-    // Aggregate telemetry data and output from events
     let totalTokens = 0;
     let totalCost = 0;
-    
-    events.forEach(e => {
-      if (e.type === "Evaluated") {
+
+    events.forEach((event) => {
+      if (event.type === "Evaluated") {
         if (args.verbose) {
-          console.log(`[DEBUG] Evaluated Payload:`, JSON.stringify(e.payload));
+          console.log("[DEBUG] Evaluated Payload:", JSON.stringify(event.payload));
         }
-        if (e.payload.usage) {
-          const usage = e.payload.usage as any;
+        if (event.payload.usage) {
+          const usage = event.payload.usage as any;
           totalTokens += usage.total_tokens || 0;
-          totalCost += (e.payload.cost as number) || 0;
+          totalCost += (event.payload.cost as number) || 0;
         }
-        if (e.payload.output_text) {
-          outputText = e.payload.output_text as string;
+        if (event.payload.output_text) {
+          outputText = event.payload.output_text as string;
+        }
+        if (event.payload.delivery) {
+          delivery = event.payload.delivery as DeliveryBundle;
         }
       }
     });
+
+    delivery = await finalizeDelivery({
+      taskId,
+      taskInput: finalInput,
+      delivery
+    });
+    finalState = delivery.status === "completed" ? "completed" : "aborted";
+    outputText = delivery.final_result;
 
     return {
       taskId,
       finalState,
       outputText,
+      delivery,
       summary: {
         nodeCount: totalNodes,
         childSpawns: totalNodes,
         toolCalls: {
-          localSuccess: events.some((e) => e.type === "ToolReturned") ? 1 : 0,
+          localSuccess: events.some((event) => event.type === "ToolReturned") ? 1 : 0,
           mcpSuccess: args.workflow ? 0 : 1
         },
-        evaluatorDecisions: events.filter((e) => e.type === "Evaluated").map((e) => String(e.payload.decision ?? "unknown")),
+        evaluatorDecisions: events
+          .filter((event) => event.type === "Evaluated")
+          .map((event) => String(event.payload.decision ?? "unknown")),
         path: stateTrace
       },
       telemetry: {
@@ -267,6 +308,25 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     await mcpHub.closeAll();
     await prisma.$disconnect();
   }
+}
+
+function buildAutonomousPrompt(task: string): { system: string; user: string } {
+  return {
+    system: [
+      "You are an autonomous execution agent.",
+      "Use tools when claims require external evidence.",
+      "Available local tools: web_search, page_fetch, github_readme, github_file, verify_sources, echo.",
+      "Research or factual tasks must include verification URLs or evidence strings.",
+      "If you use a tool, respond with JSON only in one of two forms.",
+      "Tool request schema:",
+      '{"tool_calls":[{"transport":"local","tool":"web_search","input":{"query":"..."}}]}',
+      "Final delivery schema:",
+      '{"final_result":"markdown text","verification":["source or evidence"],"artifacts":[],"risks":[],"next_actions":[]}',
+      "Do not claim completion with an empty final_result.",
+      "Do not claim completion for research work without verification."
+    ].join("\n"),
+    user: task
+  };
 }
 
 export function parseRunTaskArgs(argv: string[]): RunTaskInput {
@@ -284,7 +344,7 @@ export function parseRunTaskArgs(argv: string[]): RunTaskInput {
 
   const notifyArgIndex = argv.findIndex((arg) => arg === "--notify");
   const notifyValue = notifyArgIndex >= 0 ? argv[notifyArgIndex + 1] : undefined;
-  const notify = (notifyValue === "slack" || notifyValue === "whatsapp") ? notifyValue : "none";
+  const notify = notifyValue === "slack" || notifyValue === "whatsapp" ? notifyValue : "none";
 
   return { input, verbose, repl, workflow, template, report, notify };
 }
@@ -297,22 +357,10 @@ export function processReplCommand(line: string):
   | { action: "noop" } {
   const input = line.trim();
 
-  if (input === "/approve") {
-    return { action: "approve" };
-  }
-
-  if (input === "/reject") {
-    return { action: "reject" };
-  }
-
-  if (input === "/exit") {
-    return { action: "exit" };
-  }
-
-  if (input.length === 0) {
-    return { action: "noop" };
-  }
-
+  if (input === "/approve") return { action: "approve" };
+  if (input === "/reject") return { action: "reject" };
+  if (input === "/exit") return { action: "exit" };
+  if (input.length === 0) return { action: "noop" };
   return { action: "prompt", prompt: input };
 }
 
@@ -325,26 +373,18 @@ async function runReplSession(verbose: boolean): Promise<void> {
   try {
     while (true) {
       const line = (await rl.question("agentic> ")).trim();
-
       const command = processReplCommand(line);
 
-      if (command.action === "exit") {
-        break;
-      }
-
+      if (command.action === "exit") break;
       if (command.action === "approve") {
         console.log("revise approved");
         continue;
       }
-
       if (command.action === "reject") {
         console.log("revise rejected");
         continue;
       }
-
-      if (command.action === "noop") {
-        continue;
-      }
+      if (command.action === "noop") continue;
 
       const output = await runTask({ input: command.prompt, verbose });
       process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
@@ -356,7 +396,7 @@ async function runReplSession(verbose: boolean): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
-  
+
   if (args[0] === "init") {
     runInitWizard().catch(console.error);
   } else if (args[0] === "skill" && args[1] === "install" && args[2]) {
@@ -370,7 +410,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       generateAdoptionReport(prisma).then(() => process.exit(0)).catch(console.error);
     } else {
       const run = parsed.repl ? runReplSession(parsed.verbose ?? false) : runTask(parsed);
-
       run
         .then((output) => {
           if (output) {
@@ -379,11 +418,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             process.stdout.write(`Total Tokens: ${output.telemetry.total_tokens}\n`);
             process.stdout.write(`Total Cost: $${output.telemetry.total_cost_usd.toFixed(6)} USD\n`);
             process.stdout.write(`-------------------\n\n`);
-            
+
             if (output.outputText) {
-              process.stdout.write(`📝 Agent Output:\n`);
+              process.stdout.write("📝 Agent Output:\n");
               process.stdout.write(`${output.outputText}\n`);
-              process.stdout.write(`-------------------\n\n`);
+              process.stdout.write("-------------------\n\n");
             }
 
             process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);

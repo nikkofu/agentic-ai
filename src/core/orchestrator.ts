@@ -1,6 +1,6 @@
 import { createAgentRuntime } from "../agents/agentRuntime";
 import { checkSpawnGuardrails } from "../guardrails/guardrails";
-import type { AgentRole } from "../types/runtime";
+import type { AgentRole, DeliveryBundle, ToolIntent } from "../types/runtime";
 import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
@@ -28,9 +28,16 @@ type OrchestratorDeps = {
   eventBus: EventBus;
   eventLogStore: EventLogStore;
   taskStore?: TaskStore;
-  guardrails: GuardrailLimits;
   runtime?: ReturnType<typeof createAgentRuntime>;
-  toolGateway?: any; 
+  guardrails: GuardrailLimits;
+  toolGateway?: {
+    invoke: (call: { transport: "local" | "mcp"; tool: string; input: unknown }) => Promise<{
+      ok: boolean;
+      output: unknown;
+      latencyMs: number;
+      costMeta: { provider: string; tokens: number; usd: number };
+    }>;
+  };
   taskQueue?: TaskQueue;
 };
 
@@ -42,6 +49,7 @@ type RunTaskInput = {
 };
 
 type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "completed" | "aborted";
+type NodeResult = { finalState: NodeState; stateTrace: NodeState[]; delivery: DeliveryBundle };
 
 type ParallelNodeInput = {
   nodeId: string;
@@ -66,77 +74,138 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   const runtime = deps.runtime ?? createAgentRuntime();
   const nodeMiddleware = new MiddlewareManager<RunTaskInput>();
 
-  const runNodeCore = async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
+  const runNodeCore = async (input: RunTaskInput): Promise<NodeResult> => {
     const stateTrace: NodeState[] = ["pending"];
-    
-    publish(deps.eventBus, "NodeScheduled", { task_id: input.taskId, node_id: input.nodeId });
+    const baseRuntimeInput = { ...(input.runtimeInput ?? {}) };
+    const delivery: DeliveryBundle = {
+      status: "completed",
+      final_result: "",
+      artifacts: [],
+      verification: [],
+      risks: [],
+      next_actions: []
+    };
+
+    publish(deps.eventBus, "NodeScheduled", { task_id: input.taskId, node_id: input.nodeId, role: input.role });
     stateTrace.push("running");
     publish(deps.eventBus, "AgentStarted", { task_id: input.taskId, node_id: input.nodeId, role: input.role });
     publish(deps.eventBus, "PromptComposed", { task_id: input.taskId, node_id: input.nodeId });
-    publish(deps.eventBus, "ModelCalled", { task_id: input.taskId, node_id: input.nodeId });
 
-    stateTrace.push("waiting_tool");
-    
-    if (deps.toolGateway) {
-      publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "local/echo" });
-      const localResult = await deps.toolGateway.invoke({ transport: "local", tool: "echo", input: { message: "hello" } });
-      publish(deps.eventBus, "ToolReturned", { 
-        task_id: input.taskId, 
-        node_id: input.nodeId, 
-        ok: localResult.ok, 
-        provider: "local" 
+    let finalState: NodeState = "completed";
+    let loopInput = baseRuntimeInput;
+    let sawToolStage = false;
+
+    for (let iteration = 0; iteration < 5; iteration += 1) {
+      publish(deps.eventBus, "ModelCalled", { task_id: input.taskId, node_id: input.nodeId, iteration });
+
+      if (deps.taskQueue) {
+        await deps.taskQueue.addJob(input.taskId, input.nodeId, input);
+      }
+
+      const runtimeResult = await runtime.run(loopInput);
+      const envelope = parseRuntimeEnvelope((runtimeResult as any).outputText);
+      const toolCalls = envelope.tool_calls ?? [];
+
+      if (toolCalls.length > 0) {
+        if (!sawToolStage) {
+          stateTrace.push("waiting_tool");
+          sawToolStage = true;
+        }
+
+        const toolResults = [];
+        for (const toolCall of toolCalls) {
+          publish(deps.eventBus, "ToolInvoked", {
+            task_id: input.taskId,
+            node_id: input.nodeId,
+            tool: toolCall.tool,
+            transport: toolCall.transport
+          });
+          const result = deps.toolGateway
+            ? await deps.toolGateway.invoke(toolCall)
+            : { ok: true, output: null, latencyMs: 0, costMeta: { provider: toolCall.transport, tokens: 0, usd: 0 } };
+          toolResults.push({ tool: toolCall.tool, transport: toolCall.transport, result });
+          publish(deps.eventBus, "ToolReturned", {
+            task_id: input.taskId,
+            node_id: input.nodeId,
+            tool: toolCall.tool,
+            ok: result.ok,
+            provider: result.costMeta.provider
+          });
+        }
+
+        loopInput = attachToolResults(loopInput, toolResults);
+        continue;
+      }
+
+      if (!sawToolStage) {
+        stateTrace.push("waiting_tool");
+        publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "noop" });
+        publish(deps.eventBus, "ToolReturned", { task_id: input.taskId, node_id: input.nodeId, ok: true, provider: "system" });
+      }
+
+      if (isEmptyEnvelope(envelope, runtimeResult)) {
+        loopInput = attachRepairInstruction(loopInput);
+        continue;
+      }
+
+      stateTrace.push("evaluating");
+      const outputText = envelope.output_text ?? (runtimeResult as any).outputText ?? "";
+      delivery.final_result = envelope.final_result ?? outputText;
+      delivery.artifacts = envelope.artifacts ?? [];
+      delivery.verification = envelope.verification ?? [];
+      delivery.risks = envelope.risks ?? [];
+      delivery.next_actions = envelope.next_actions ?? [];
+      delivery.status = envelope.blocking_reason ? "blocked" : "completed";
+      delivery.blocking_reason = envelope.blocking_reason;
+
+      publish(deps.eventBus, "Evaluated", {
+        task_id: input.taskId,
+        node_id: input.nodeId,
+        decision: delivery.status === "completed" ? "stop" : "continue",
+        output_text: outputText,
+        usage: (runtimeResult as any).usage,
+        cost: (runtimeResult as any).cost,
+        delivery
       });
 
-      publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "mcp-server/test-tool" });
-      publish(deps.eventBus, "ToolReturned", { 
-        task_id: input.taskId, 
-        node_id: input.nodeId, 
-        ok: true, 
-        provider: "mcp" 
-      });
-    } else {
-      publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "echo" });
-      publish(deps.eventBus, "ToolReturned", { task_id: input.taskId, node_id: input.nodeId, ok: true, provider: "local" });
+      finalState = delivery.status === "blocked" ? "aborted" : "completed";
+      break;
     }
 
-    if (deps.taskQueue) {
-      await deps.taskQueue.addJob(input.taskId, input.nodeId, input);
-    }
-
-    const runtimeResult = await runtime.run(input.runtimeInput);
-
-    stateTrace.push("evaluating");
-    publish(deps.eventBus, "Evaluated", { 
-      task_id: input.taskId, 
-      node_id: input.nodeId, 
-      decision: "stop",
-      output_text: (runtimeResult as any).outputText, // 包含输出文本
-      usage: (runtimeResult as any).usage,
-      cost: (runtimeResult as any).cost
+    stateTrace.push(finalState === "completed" ? "completed" : "aborted");
+    publish(deps.eventBus, finalState === "completed" ? "NodeCompleted" : "NodeAborted", {
+      task_id: input.taskId,
+      node_id: input.nodeId
     });
 
-    stateTrace.push("completed");
-    publish(deps.eventBus, "NodeCompleted", { task_id: input.taskId, node_id: input.nodeId });
-    
-    return {
-      finalState: "completed",
-      stateTrace
-    };
+    return { finalState, stateTrace, delivery };
   };
 
-  const runNode = async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
-    let result: { finalState: NodeState; stateTrace: NodeState[] } | undefined;
+  const runNode = async (input: RunTaskInput): Promise<NodeResult> => {
+    let result: NodeResult | undefined;
     await nodeMiddleware.execute(input, async () => {
       result = await runNodeCore(input);
     });
-    return result ?? { finalState: "aborted", stateTrace: ["pending", "aborted"] };
+    return result ?? {
+      finalState: "aborted",
+      stateTrace: ["pending", "aborted"],
+      delivery: {
+        status: "failed",
+        final_result: "",
+        artifacts: [],
+        verification: [],
+        risks: [],
+        blocking_reason: "middleware_aborted",
+        next_actions: []
+      }
+    };
   };
 
   return {
     use: (middleware: Middleware<RunTaskInput>) => {
       nodeMiddleware.use(middleware);
     },
-    runSingleNodeTask: async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
+    runSingleNodeTask: async (input: RunTaskInput): Promise<NodeResult> => {
       publish(deps.eventBus, "TaskSubmitted", { task_id: input.taskId });
 
       const guardrail = checkSpawnGuardrails(
@@ -150,14 +219,29 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       );
 
       if (!guardrail.allowed) {
-        publish(deps.eventBus, "GuardrailTripped", { task_id: input.taskId, node_id: input.nodeId, reason: guardrail.reason });
+        publish(deps.eventBus, "GuardrailTripped", {
+          task_id: input.taskId,
+          node_id: input.nodeId,
+          reason: guardrail.reason
+        });
         publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: "aborted" });
-        return { finalState: "aborted", stateTrace: ["pending", "aborted"] };
+        return {
+          finalState: "aborted",
+          stateTrace: ["pending", "aborted"],
+          delivery: {
+            status: "blocked",
+            final_result: "",
+            artifacts: [],
+            verification: [],
+            risks: [guardrail.reason],
+            blocking_reason: guardrail.reason,
+            next_actions: []
+          }
+        };
       }
 
       const result = await runNode(input);
-      publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: "completed" });
-      
+      publish(deps.eventBus, "TaskClosed", { task_id: input.taskId, state: result.finalState === "aborted" ? "aborted" : "completed" });
       return result;
     },
 
@@ -185,8 +269,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       await Promise.all(workers);
 
-      publish(deps.eventBus, "JoinEvaluated", { 
-        task_id: input.taskId, 
+      publish(deps.eventBus, "JoinEvaluated", {
+        task_id: input.taskId,
         node_count: results.length,
         decision: "stop"
       });
@@ -199,12 +283,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
     resumeTask: async (taskId: string, maxParallel: number = 2) => {
       if (!deps.taskStore) throw new Error("TaskStore is required for resumeTask");
-      
+
       const graph = await deps.taskStore.getGraph(taskId);
       if (!graph) throw new Error(`Task ${taskId} not found`);
 
       const incompleteNodes = Object.values(graph.nodes).filter(
-        node => node.state === "pending" || node.state === "running"
+        (node) => node.state === "pending" || node.state === "running"
       );
 
       if (incompleteNodes.length === 0) {
@@ -214,12 +298,11 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, resumed: true });
 
       const queue = [...incompleteNodes];
-
       const runNext = async () => {
         if (queue.length === 0) return;
         const node = queue.shift()!;
-        const res = await runNode({
-          taskId: taskId,
+        await runNode({
+          taskId,
           nodeId: node.nodeId,
           role: node.role,
           runtimeInput: {}
@@ -235,46 +318,128 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       await Promise.all(workers);
 
       publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: "completed", resumed: true });
-
       return {
         completedNodes: incompleteNodes.length,
         status: "completed"
       };
     },
 
-    replayNode: async (taskId: string, nodeId: string, runtimeInput?: Record<string, unknown>) => {
-      if (!deps.taskStore) throw new Error("TaskStore is required for replayNode");
-      
-      const node = await deps.taskStore.getNode(taskId, nodeId);
-      if (!node) throw new Error(`Node ${nodeId} not found in task ${taskId}`);
-
-      publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, replayed: true, node_id: nodeId });
-
-      await deps.taskStore.upsertNode(taskId, {
-        nodeId: node.nodeId,
-        parentNodeId: node.parentNodeId,
-        role: node.role,
-        state: "pending",
-        depth: node.depth,
-        attempt: node.attempt,
-        inputSummary: node.inputSummary,
-        outputSummary: undefined
-      });
-
-      const result = await runNode({
-        taskId,
-        nodeId,
-        role: node.role,
-        runtimeInput: runtimeInput ?? {}
-      });
-
-      publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: "completed", replayed: true });
-
-      return result;
+    resumeHitl: async (taskId: string, nodeId: string, feedback: string) => {
+      publish(deps.eventBus, "HumanActionResolved", { task_id: taskId, node_id: nodeId, feedback });
     }
   };
 }
 
 function publish(eventBus: EventBus, type: string, payload: Record<string, unknown>) {
   eventBus.publish({ type, payload, ts: Date.now() });
+}
+
+function parseRuntimeEnvelope(outputText: string | undefined): {
+  status?: string;
+  output_text?: string;
+  final_result?: string;
+  verification?: string[];
+  risks?: string[];
+  artifacts?: string[];
+  next_actions?: string[];
+  blocking_reason?: string;
+  tool_calls?: ToolIntent[];
+} {
+  if (!outputText) {
+    return {};
+  }
+
+  try {
+    return normalizeParsedEnvelope(JSON.parse(stripCodeFence(outputText)));
+  } catch {
+    return { output_text: outputText, final_result: outputText };
+  }
+}
+
+function attachToolResults(runtimeInput: Record<string, unknown>, toolResults: unknown[]) {
+  const existingInput = Array.isArray(runtimeInput.input) ? [...(runtimeInput.input as unknown[])] : [];
+  existingInput.push({
+    role: "tool",
+    content: JSON.stringify(toolResults)
+  });
+
+  return {
+    ...runtimeInput,
+    input: existingInput
+  };
+}
+
+function attachRepairInstruction(runtimeInput: Record<string, unknown>) {
+  const existingInput = Array.isArray(runtimeInput.input) ? [...(runtimeInput.input as unknown[])] : [];
+  existingInput.push({
+    role: "user",
+    content:
+      "Your previous response was empty or invalid. Reply with JSON only. Either return tool_calls or a final_result with verification."
+  });
+
+  return {
+    ...runtimeInput,
+    input: existingInput
+  };
+}
+
+function normalizeParsedEnvelope(parsed: unknown) {
+  if (Array.isArray(parsed) && parsed.length === 1 && parsed[0] && typeof parsed[0] === "object") {
+    return parsed[0] as {
+      status?: string;
+      output_text?: string;
+      final_result?: string;
+      verification?: string[];
+      risks?: string[];
+      artifacts?: string[];
+      next_actions?: string[];
+      blocking_reason?: string;
+      tool_calls?: ToolIntent[];
+    };
+  }
+
+  return parsed as {
+    status?: string;
+    output_text?: string;
+    final_result?: string;
+    verification?: string[];
+    risks?: string[];
+    artifacts?: string[];
+    next_actions?: string[];
+    blocking_reason?: string;
+    tool_calls?: ToolIntent[];
+  };
+}
+
+function stripCodeFence(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1] : value;
+}
+
+function isEmptyEnvelope(
+  envelope: {
+    output_text?: string;
+    final_result?: string;
+    artifacts?: string[];
+    tool_calls?: ToolIntent[];
+    blocking_reason?: string;
+  },
+  runtimeResult: unknown
+) {
+  const hasExplicitOutputText =
+    runtimeResult && typeof runtimeResult === "object" && "outputText" in runtimeResult;
+  const rawOutput = hasExplicitOutputText
+    ? String((runtimeResult as { outputText?: string }).outputText ?? "")
+    : "";
+
+  return (
+    hasExplicitOutputText &&
+    !envelope.blocking_reason &&
+    (envelope.tool_calls?.length ?? 0) === 0 &&
+    (envelope.artifacts?.length ?? 0) === 0 &&
+    (envelope.final_result ?? "").trim().length === 0 &&
+    (envelope.output_text ?? "").trim().length === 0 &&
+    rawOutput.trim().length === 0
+  );
 }

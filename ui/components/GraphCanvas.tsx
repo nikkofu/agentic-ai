@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState } from 'react';
 import ReactFlow, { 
   Background, 
   Controls, 
@@ -11,10 +11,11 @@ import 'reactflow/dist/style.css';
 import { useTaskStore } from '@/store/useTaskStore';
 import { NodeInspector } from './NodeInspector';
 
-// Define static objects outside the component to avoid React Flow warnings
-const nodeTypes = {};
+// CRITICAL: MUST BE OUTSIDE TO PREVENT RE-CREATION WARNINGS
+const nodeTypes = {}; 
 const edgeTypes = {};
 const minimapStyle = { background: '#111' };
+const flowDefaultViewport = { x: 0, y: 0, zoom: 1 };
 
 export function GraphCanvas() {
   const { nodes, edges } = useTaskStore();
@@ -38,7 +39,10 @@ export function GraphCanvas() {
           onPaneClick={onPaneClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          defaultViewport={flowDefaultViewport}
           fitView
+          minZoom={0.1}
+          maxZoom={4}
         >
           <Background color="#222" gap={20} />
           <Controls />
