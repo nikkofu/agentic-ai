@@ -72,15 +72,19 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
 
     async getGraph(taskId: string) {
       const graph = await prisma.taskGraph.findUnique({
-        where: { task_id: taskId },
-        include: { nodes: true }
+        where: { task_id: taskId }
       });
       if (!graph) return null;
+      
+      const nodes = await prisma.taskNode.findMany({
+        where: { task_id: taskId }
+      });
+
       return {
         taskId: graph.task_id,
         rootNodeId: graph.root_node_id,
         status: graph.status as any,
-        nodes: Object.fromEntries(graph.nodes.map(n => [n.node_id, {
+        nodes: Object.fromEntries(nodes.map(n => [n.node_id, {
           nodeId: n.node_id,
           role: n.role as any,
           state: n.state as any,

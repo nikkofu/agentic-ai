@@ -13,7 +13,6 @@ model TaskGraph {
   status       String   
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
-  nodes        TaskNode[]
 }
 
 model TaskNode {
@@ -28,8 +27,6 @@ model TaskNode {
   input_summary  String
   output_summary String?
   
-  task           TaskGraph @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
-
   @@unique([task_id, node_id])
 }
 
