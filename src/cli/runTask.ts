@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { randomUUID } from "node:crypto";
 import { installSkillPackage } from "./skillRegistry";
+import { runInitWizard } from "./initWizard";
 
 import { createAgentRuntime } from "../agents/agentRuntime";
 import { getRuntimeConfig } from "../config/loadRuntimeConfig";
@@ -275,7 +276,9 @@ async function runReplSession(verbose: boolean): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
-  if (args[0] === "skill" && args[1] === "install" && args[2]) {
+  if (args[0] === "init") {
+    runInitWizard().catch(console.error);
+  } else if (args[0] === "skill" && args[1] === "install" && args[2]) {
     installSkillPackage(args[2]);
     process.exit(0);
   }
