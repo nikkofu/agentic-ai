@@ -1,0 +1,23 @@
+nodes:
+  - id: collect_market_news
+    role: researcher
+    input: "使用 Brave Search 收集过去 7 天与目标行业相关的关键新闻与数据来源，输出结构化摘要。"
+    depends_on: []
+
+  - id: collect_company_updates
+    role: researcher
+    input: "使用 Brave Search 收集目标公司最近财报、公告与指引变化，输出结构化摘要。"
+    depends_on: []
+
+  - id: collect_macro_signals
+    role: researcher
+    input: "使用 Brave Search 收集宏观经济指标与政策动态，输出结构化摘要。"
+    depends_on: []
+
+  - id: write_report
+    role: writer
+    input: "汇总上游节点信息，生成一份结构化财经研报（摘要、要点、风险、结论）。"
+    depends_on:
+      - collect_market_news
+      - collect_company_updates
+      - collect_macro_signals

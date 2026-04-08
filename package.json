@@ -9,9 +9,11 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/ioredis": "^4.28.10",
     "@types/node": "^25.5.2",
     "@types/prompts": "^2.4.9",
     "@types/ws": "^8.18.1",
+    "ioredis-mock": "^8.13.1",
     "prisma": "^6.19.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
@@ -25,6 +27,8 @@
     "@opentelemetry/sdk-trace-base": "^2.6.1",
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@prisma/client": "^6.19.3",
+    "bullmq": "^5.73.0",
+    "ioredis": "^5.10.1",
     "prompts": "^2.4.2",
     "ws": "^8.20.0",
     "yaml": "^2.8.3",

@@ -1,56 +1,47 @@
-import { WebSocketServer, WebSocket } from "ws";
-import { EventBus } from "./eventBus";
+import WebSocket, { WebSocketServer } from "ws";
+import { URL } from "node:url";
+import { EventBus, RuntimeEvent } from "./eventBus";
 
-/**
- * WebHub manages WebSocket connections and broadcasts events from the EventBus to connected clients.
- */
 export class WebHub {
   private wss: WebSocketServer | null = null;
   private unsubscribe: (() => void) | null = null;
 
   constructor(private eventBus: EventBus) {}
 
-  /**
-   * Starts the WebSocket server and begins broadcasting events.
-   * @param port The port to listen on.
-   */
   async start(port: number): Promise<void> {
     if (this.wss) {
       return;
     }
 
-    this.wss = new WebSocketServer({ port });
+    try {
+      this.wss = new WebSocketServer({ port });
+    } catch (err) {
+      console.warn(`[WebHub] Port ${port} already in use, skipping dashboard stream startup`);
+      return;
+    }
 
-    this.wss.on("connection", (ws: WebSocket) => {
-      console.log("[WebHub] Client connected");
-      ws.on("error", (err) => console.error("[WebHub] WebSocket error:", err));
+    this.wss.on("connection", (ws: WebSocket, req) => {
+      // Basic token check simulation
+      const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+      const token = url.searchParams.get("token");
+      
+      if (!token || !token.startsWith("valid-")) {
+        console.warn(`[WebHub] Unauthorized connection attempt from ${req.socket.remoteAddress}`);
+        ws.close(4001, "Unauthorized");
+        return;
+      }
+
+      console.log(`[WebHub] Client connected (authenticated)`);
+      ws.on("error", console.error);
     });
 
-    this.unsubscribe = this.eventBus.subscribe("*", (event) => {
+    this.unsubscribe = this.eventBus.subscribe("*", (event: RuntimeEvent) => {
       this.broadcast(event);
     });
 
     console.log(`[WebHub] WebSocket server started on ws://localhost:${port}`);
   }
 
-  /**
-   * Broadcasts an event to all connected WebSocket clients.
-   * @param event The event to broadcast.
-   */
-  private broadcast(event: any): void {
-    if (!this.wss) return;
-
-    const data = JSON.stringify(event);
-    this.wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(data);
-      }
-    });
-  }
-
-  /**
-   * Stops the WebSocket server and unsubscribes from the EventBus.
-   */
   async stop(): Promise<void> {
     if (this.unsubscribe) {
       this.unsubscribe();
@@ -58,16 +49,22 @@ export class WebHub {
     }
 
     if (this.wss) {
-      return new Promise((resolve, reject) => {
-        this.wss!.close((err) => {
-          if (err) {
-            reject(err);
-          } else {
-            this.wss = null;
-            resolve();
-          }
+      return new Promise((resolve) => {
+        this.wss!.close(() => {
+          this.wss = null;
+          resolve();
         });
       });
     }
+  }
+
+  private broadcast(event: any): void {
+    if (!this.wss) return;
+    const message = JSON.stringify(event);
+    this.wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
   }
 }

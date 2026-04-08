@@ -101,6 +101,30 @@ npx tsx src/cli/runTask.ts --preflight
 npx tsx src/cli/runTask.ts --report adoption --since 2026-04-01
 ```
 
+### 官方用例画廊（Phase 10）
+
+我们提供了两套端到端 Recipes，帮助你快速复用常见场景：
+
+- `recipes/01-github-issue-solver/`
+  - 基于 `mcp-github` + `mcp-filesystem`
+  - 用于 Issue 分析、代码定位与修复方案生成
+- `recipes/02-financial-report-generator/`
+  - 基于 DAG 工作流并发采集
+  - 使用 Brave Search 聚合信息并由 Writer Agent 汇总输出研报
+
+快速体验：
+
+```bash
+npx tsx src/cli/runTask.ts -p "$(cat recipes/01-github-issue-solver/prompt.md)" --verbose
+
+npx tsx src/cli/runTask.ts \
+  -p "$(cat recipes/02-financial-report-generator/prompt.md)" \
+  --workflow recipes/02-financial-report-generator/workflow.yaml \
+  --verbose
+```
+
+更多细节见对应目录内 `README.md` 与 `runtime.yaml`。
+
 ## 🧪 开发与测试
 
 ### 运行单元测试与集成测试
