@@ -6,17 +6,17 @@
 
 ---
 
-## 🚀 Phase 7: Ecosystem & Extensibility (构建插件与 MCP 生态)
+## 🚀 Phase 7: Ecosystem & Extensibility (构建插件与 SKILL 生态)
 
-**目标**：打破闭门造车，让社区贡献者能够以极低的成本为 Agentic Runtime 开发插件和工具。
+**目标**：打破闭门造车，让社区贡献者能够以极低的成本为 Agentic Runtime 开发插件和专属能力包 (Skills)。
 
 1. **中间件与生命周期钩子 (Middleware API)**
    - **设计**：借鉴 Express/Koa，引入 `agentic.use()`。允许开发者在事件总线 (EventBus)、状态机流转 (State Transition) 或大模型响应前后插入自定义逻辑。
-   - **用例**：自定义安全审计日志、本地敏感词过滤、甚至是针对特定 MCP 工具的二次限流。
+   - **用例**：自定义安全审计日志、本地敏感词过滤、甚至是针对特定 SKILL 的二次限流。
 
-2. **MCP 社区包管理器 (`mcp-registry`)**
-   - **设计**：实现类似 npm/cargo 的命令行体验。例如 `agentic mcp install github`。
-   - **机制**：通过配置自动拉取远程代码仓库，分析 `mcp.json` 或 `mcp.yaml`，并动态将其注册到 `config/runtime.yaml` 的 `mcp_servers` 块中。
+2. **SKILL 社区包管理器 (`skill-registry`)**
+   - **设计**：实现类似 npm/cargo 的命令行体验。例如 `agentic skill install code-reviewer`。
+   - **机制**：通过配置自动拉取远程代码仓库，分析 `SKILL.md` 或配置，并动态将其注册到系统的能力库中，支持按需加载与上下文注入。
 
 3. **声明式 DAG 工作流引擎**
    - **设计**：跳出现有的单根树状调度 (Tree Execution)，允许用户使用 YAML/JSON 定义复杂的有向无环图 (DAG)，例如：节点 A（搜集数据）并行节点 B（验证数据），二者完成后聚合到节点 C（生成报告）。

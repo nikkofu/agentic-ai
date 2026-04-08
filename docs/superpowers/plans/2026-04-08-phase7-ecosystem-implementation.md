@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 构建插件扩展能力和 MCP 社区包管理器，打破系统封闭性，同时支持声明式 DAG 工作流引擎以应对复杂的依赖流转。
+**Goal:** 构建基于 SKILL 的社区扩展生态系统，打破系统封闭性，同时支持声明式 DAG 工作流引擎以应对复杂的依赖流转。
 
-**Architecture:** 引入 `MiddlewareManager` 实现洋葱模型的拦截器；实现基于 `git` 和 `npm` 的 MCP 动态拉取注册表；新增 `DagEngine` 来解析并转化为底层的并行与顺序节点调度。
+**Architecture:** 引入 `MiddlewareManager` 实现洋葱模型的拦截器；实现基于 `git` 和 Markdown 文本协议的 SKILL 动态拉取与解析；新增 `DagEngine` 来解析并转化为底层的并行与顺序节点调度。
 
 **Tech Stack:** TypeScript, Zod, Node.js `child_process`.
 
@@ -93,39 +93,38 @@ git commit -m "feat: add onion-model middleware architecture for node execution"
 
 ---
 
-### Task 2: MCP 社区包管理器 (`mcp-registry`)
+### Task 2: SKILL 社区包管理器 (`skill-registry`)
 
 **Files:**
-- Create: `src/cli/mcpRegistry.ts`
+- Create: `src/cli/skillRegistry.ts`
 - Modify: `src/cli/runTask.ts`
-- Test: `tests/unit/mcpRegistry.test.ts`
+- Test: `tests/unit/skillRegistry.test.ts`
 
 - [ ] **Step 1: 编写失败的 Registry 测试**
-验证 `installMcpPackage` 函数能否正确解析 GitHub 仓库地址，并生成预期的 `mcp_servers` 配置片段。
+验证 `installSkillPackage` 函数能否正确解析 GitHub 仓库地址，并拉取 `SKILL.md` 的内容。
 
-- [ ] **Step 2: 实现 MCP 注册逻辑**
-在 `src/cli/mcpRegistry.ts` 中：
+- [ ] **Step 2: 实现 SKILL 注册逻辑**
+在 `src/cli/skillRegistry.ts` 中：
 ```typescript
 import { execSync } from "child_process";
 import fs from "fs";
 
-export function installMcpPackage(repoUrl: string, configPath: string) {
-  // 1. Git clone repo to ~/.config/superpowers/mcp_packages/
-  // 2. npm install inside the repo
-  // 3. Read mcp.json from the repo to get command/args
-  // 4. Update the local runtime.yaml with the new server config
+export function installSkillPackage(repoUrl: string, targetPath: string) {
+  // 1. Git clone repo to ~/.config/superpowers/skills/<skill-name>
+  // 2. Validate SKILL.md exists in the repo
+  // 3. Register skill metadata in local configuration
 }
 ```
 
 - [ ] **Step 3: CLI 接入**
 修改 `src/cli/runTask.ts`，支持新的子命令：
-如果参数是 `mcp install <repo>`，则调用 `installMcpPackage` 并退出。
+如果参数是 `skill install <repo>`，则调用 `installSkillPackage` 并退出。
 
 - [ ] **Step 4: 测试并提交**
 ```bash
 npm test
-git add src/cli/mcpRegistry.ts src/cli/runTask.ts tests/unit/mcpRegistry.test.ts
-git commit -m "feat: implement basic MCP package manager for community extensions"
+git add src/cli/skillRegistry.ts src/cli/runTask.ts tests/unit/skillRegistry.test.ts
+git commit -m "feat: implement SKILL package manager for community extensions"
 ```
 
 ---
