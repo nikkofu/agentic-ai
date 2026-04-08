@@ -4,6 +4,7 @@ import type { AgentRole } from "../types/runtime";
 import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
+import { MiddlewareManager, Middleware } from "./middleware";
 
 type EventBus = {
   publish: (event: RuntimeEvent) => void;
@@ -60,8 +61,9 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   }
 
   const runtime = deps.runtime ?? createAgentRuntime();
+  const nodeMiddleware = new MiddlewareManager<RunTaskInput>();
 
-  const runNode = async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
+  const runNodeCore = async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
     const stateTrace: NodeState[] = ["pending"];
     
     publish(deps.eventBus, "NodeScheduled", { task_id: input.taskId, node_id: input.nodeId });
@@ -111,7 +113,18 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     };
   };
 
+  const runNode = async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
+    let result: { finalState: NodeState; stateTrace: NodeState[] } | undefined;
+    await nodeMiddleware.execute(input, async () => {
+      result = await runNodeCore(input);
+    });
+    return result ?? { finalState: "aborted", stateTrace: ["pending", "aborted"] };
+  };
+
   return {
+    use: (middleware: Middleware<RunTaskInput>) => {
+      nodeMiddleware.use(middleware);
+    },
     runSingleNodeTask: async (input: RunTaskInput): Promise<{ finalState: NodeState; stateTrace: NodeState[] }> => {
       publish(deps.eventBus, "TaskSubmitted", { task_id: input.taskId });
 
