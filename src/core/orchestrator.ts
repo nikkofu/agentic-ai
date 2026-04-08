@@ -5,6 +5,7 @@ import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
 import { MiddlewareManager, Middleware } from "./middleware";
+import { TaskQueue } from "../worker/queue";
 
 type EventBus = {
   publish: (event: RuntimeEvent) => void;
@@ -30,6 +31,7 @@ type OrchestratorDeps = {
   guardrails: GuardrailLimits;
   runtime?: ReturnType<typeof createAgentRuntime>;
   toolGateway?: any; // 这里使用 any 或者是导入类型，为了简单先用 any
+  taskQueue?: TaskQueue;
 };
 
 type RunTaskInput = {
@@ -98,6 +100,13 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     } else {
       publish(deps.eventBus, "ToolInvoked", { task_id: input.taskId, node_id: input.nodeId, tool: "echo" });
       publish(deps.eventBus, "ToolReturned", { task_id: input.taskId, node_id: input.nodeId, ok: true, provider: "local" });
+    }
+
+    // Distributed dispatch if queue exists
+    if (deps.taskQueue) {
+      await deps.taskQueue.addJob(input.taskId, input.nodeId, input);
+      // In a real distributed setup, we would wait for a "JobCompleted" event via EventBus/PubSub
+      // For Task 1 demonstration, we still run locally but record the dispatch
     }
 
     await runtime.run(input.runtimeInput);
@@ -246,10 +255,14 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       // Reset node to pending and run it
       await deps.taskStore.upsertNode(taskId, {
-        ...node,
+        nodeId: node.nodeId,
+        parentNodeId: node.parentNodeId,
+        role: node.role,
         state: "pending",
-        outputSummary: undefined,
-        metrics: undefined
+        depth: node.depth,
+        attempt: node.attempt,
+        inputSummary: node.inputSummary,
+        outputSummary: undefined
       });
 
       const result = await runNode({
