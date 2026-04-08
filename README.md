@@ -101,27 +101,28 @@ npx tsx src/cli/runTask.ts --preflight
 npx tsx src/cli/runTask.ts --report adoption --since 2026-04-01
 ```
 
-### 官方用例画廊（Phase 10）
+## 🍱 用例画廊
 
 我们提供了两套端到端 Recipes，帮助你快速复用常见场景：
 
-- `recipes/01-github-issue-solver/`
-  - 基于 `mcp-github` + `mcp-filesystem`
-  - 用于 Issue 分析、代码定位与修复方案生成
-- `recipes/02-financial-report-generator/`
-  - 基于 DAG 工作流并发采集
-  - 使用 Brave Search 聚合信息并由 Writer Agent 汇总输出研报
+### [1. GitHub Issue 解决器](./recipes/01-github-issue-solver/)
+- **核心工具**：`mcp-github` + `mcp-filesystem`
+- **场景**：自动分析 GitHub Issue、定位本地代码并生成修复补丁。
+- **快速体验**：
+  ```bash
+  npx tsx src/cli/runTask.ts -p "$(cat recipes/01-github-issue-solver/prompt.md)" --verbose
+  ```
 
-快速体验：
-
-```bash
-npx tsx src/cli/runTask.ts -p "$(cat recipes/01-github-issue-solver/prompt.md)" --verbose
-
-npx tsx src/cli/runTask.ts \
-  -p "$(cat recipes/02-financial-report-generator/prompt.md)" \
-  --workflow recipes/02-financial-report-generator/workflow.yaml \
-  --verbose
-```
+### [2. 财经研报聚合流水线](./recipes/02-financial-report-generator/)
+- **核心工具**：Brave Search + DAG 工作流
+- **场景**：并行调用多个搜索工具获取市场、公司、宏观数据并自动汇总研报。
+- **快速体验**：
+  ```bash
+  npx tsx src/cli/runTask.ts \
+    -p "$(cat recipes/02-financial-report-generator/prompt.md)" \
+    --workflow recipes/02-financial-report-generator/workflow.yaml \
+    --verbose
+  ```
 
 更多细节见对应目录内 `README.md` 与 `runtime.yaml`。
 
