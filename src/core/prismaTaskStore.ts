@@ -119,6 +119,26 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
         payload: JSON.parse(e.payload),
         ts: Number(e.ts)
       }));
+    },
+
+    async cloneNode(taskId: string, sourceNodeId: string, newNodeId: string) {
+      const sourceNode = await prisma.taskNode.findUnique({
+        where: { task_id_node_id: { task_id: taskId, node_id: sourceNodeId } }
+      });
+      if (!sourceNode) throw new Error(`Source node ${sourceNodeId} not found`);
+
+      await prisma.taskNode.create({
+        data: {
+          task_id: taskId,
+          node_id: newNodeId,
+          parent_node_id: sourceNode.parent_node_id,
+          role: sourceNode.role,
+          state: "pending",
+          depth: sourceNode.depth,
+          attempt: sourceNode.attempt,
+          input_summary: sourceNode.input_summary
+        }
+      });
     }
   };
 }

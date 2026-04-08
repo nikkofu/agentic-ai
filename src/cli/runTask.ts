@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { randomUUID } from "node:crypto";
 import { installSkillPackage } from "./skillRegistry";
+import { runInitWizard } from "./initWizard";
 
 import { createAgentRuntime } from "../agents/agentRuntime";
 import { getRuntimeConfig } from "../config/loadRuntimeConfig";
@@ -74,9 +75,6 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     });
   }
 
-  const route = resolveModelRoute(config, "planner", process.env);
-  const apiKey = args.generate ? "mock-key" : process.env.OPENROUTER_API_KEY;
-
   const runtime = createAgentRuntime({
     mode: "openrouter",
     generate: args.generate,
@@ -132,6 +130,19 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     let finalState: "completed" | "aborted" = "completed";
     let stateTrace: string[] = [];
 
+    const getRuntimeInput = (role: any, inputContent: any) => {
+      const nodeRoute = resolveModelRoute(config, role, process.env);
+      return {
+        apiKey: args.generate ? "mock-key" : (nodeRoute.apiKey ?? process.env.OPENROUTER_API_KEY),
+        model: nodeRoute.model,
+        baseUrl: nodeRoute.baseUrl,
+        fallbackModels: config.models.fallback,
+        reasoner: nodeRoute.reasoner,
+        retry: config.retry,
+        input: [{ role: "user", content: inputContent }]
+      };
+    };
+
     if (args.workflow) {
       const workflowText = fs.readFileSync(args.workflow, "utf8");
       const workflow = YAML.parse(workflowText) as DagWorkflow;
@@ -143,10 +154,15 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
           role: n.role as any,
           priority: 0
         }));
+        
+        // Use the first node's info to derive a shared runtimeInput if needed, 
+        // but our orchestrator now supports per-node runtimeInput if we wanted.
+        // For now we just pass a base runtimeInput to runParallelTask
         const tierResult = await orchestrator.runParallelTask({
           taskId,
           nodes,
-          maxParallel: 5
+          maxParallel: 5,
+          runtimeInput: getRuntimeInput("planner", "") // Base input, individual nodes might need more
         });
         totalNodes += tierResult.completedNodes;
         if (tierResult.joinDecision === "aborted") {
@@ -159,14 +175,7 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
         taskId,
         nodeId: "node-root",
         role: "planner",
-        runtimeInput: {
-          apiKey,
-          model: route.model,
-          fallbackModels: config.models.fallback,
-          reasoner: route.reasoner,
-          retry: config.retry,
-          input: [{ role: "user", content: args.input }]
-        }
+        runtimeInput: getRuntimeInput("planner", args.input)
       });
       totalNodes = 1;
       finalState = result.finalState === "aborted" ? "aborted" : "completed";
@@ -289,7 +298,9 @@ async function runReplSession(verbose: boolean): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
-  if (args[0] === "skill" && args[1] === "install" && args[2]) {
+  if (args[0] === "init") {
+    runInitWizard().catch(console.error);
+  } else if (args[0] === "skill" && args[1] === "install" && args[2]) {
     installSkillPackage(args[2]);
     process.exit(0);
   }

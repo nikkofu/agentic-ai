@@ -51,6 +51,7 @@ type ParallelTaskInput = {
   taskId: string;
   nodes: ParallelNodeInput[];
   maxParallel: number;
+  runtimeInput?: Record<string, unknown>;
 };
 
 export function createOrchestrator(deps: OrchestratorDeps) {
@@ -162,7 +163,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
           taskId: input.taskId,
           nodeId: node.nodeId,
           role: node.role,
-          runtimeInput: {}
+          runtimeInput: input.runtimeInput
         });
         results.push({ nodeId: node.nodeId, state: res.finalState });
       };
@@ -233,6 +234,34 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         completedNodes: results.length,
         status: "completed"
       };
+    },
+
+    replayNode: async (taskId: string, nodeId: string, runtimeInput?: Record<string, unknown>) => {
+      if (!deps.taskStore) throw new Error("TaskStore is required for replayNode");
+      
+      const node = await deps.taskStore.getNode(taskId, nodeId);
+      if (!node) throw new Error(`Node ${nodeId} not found in task ${taskId}`);
+
+      publish(deps.eventBus, "TaskSubmitted", { task_id: taskId, replayed: true, node_id: nodeId });
+
+      // Reset node to pending and run it
+      await deps.taskStore.upsertNode(taskId, {
+        ...node,
+        state: "pending",
+        outputSummary: undefined,
+        metrics: undefined
+      });
+
+      const result = await runNode({
+        taskId,
+        nodeId,
+        role: node.role,
+        runtimeInput: runtimeInput ?? {}
+      });
+
+      publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: "completed", replayed: true });
+
+      return result;
     }
   };
 }

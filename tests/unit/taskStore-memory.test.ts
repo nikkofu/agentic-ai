@@ -69,4 +69,27 @@ describe("InMemoryTaskStore", () => {
     const store = createInMemoryTaskStore();
     await expect(store.upsertNode("non-existent", {} as any)).rejects.toThrow("Graph non-existent not found");
   });
+
+  it("should clone a node into a new ID", async () => {
+    const store = createInMemoryTaskStore();
+    const taskId = "task-1";
+    await store.createGraph({ taskId, rootNodeId: "node-1" });
+
+    await store.upsertNode(taskId, {
+      nodeId: "node-1",
+      role: "planner",
+      state: "completed",
+      depth: 0,
+      attempt: 1,
+      inputSummary: "root"
+    });
+
+    await store.cloneNode(taskId, "node-1", "node-1-clone");
+    const cloned = await store.getNode(taskId, "node-1-clone");
+    
+    expect(cloned).toBeDefined();
+    expect(cloned?.nodeId).toBe("node-1-clone");
+    expect(cloned?.state).toBe("pending");
+    expect(cloned?.role).toBe("planner");
+  });
 });

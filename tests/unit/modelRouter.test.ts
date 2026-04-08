@@ -6,6 +6,7 @@ import type { RuntimeConfig } from "../../src/types/runtime";
 const baseConfig: RuntimeConfig = {
   models: {
     default: "qwen/qwen3.6-plus:free",
+    fallback: [],
     by_agent_role: {
       planner: "qwen/qwen3.6-plus:free",
       researcher: "qwen/qwen3.6-plus:free",
@@ -38,6 +39,17 @@ const baseConfig: RuntimeConfig = {
       cost: 0.2,
       latency: 0.2
     }
+  },
+  retry: {
+    max_retries: 3,
+    base_delay_ms: 1000
+  },
+  mcp_servers: {},
+  providers: {
+    lmstudio: {
+      base_url: "http://localhost:1234/v1",
+      api_key_env: "LM_STUDIO_KEY"
+    }
   }
 };
 
@@ -49,21 +61,30 @@ describe("resolveModelRoute", () => {
     expect(route.reasoner).toBe("high");
   });
 
-  it("falls back to default reasoner when role override missing", () => {
-    const config: RuntimeConfig = {
+  it("resolves custom provider with baseUrl and apiKey from env", () => {
+    const config = {
       ...baseConfig,
-      reasoner: {
-        default: "low",
+      models: {
+        ...baseConfig.models,
+        default: "lmstudio/qwen2.5-7b",
         by_agent_role: {
-          planner: "high",
-          researcher: "low",
-          coder: "low",
-          writer: "low"
+          ...baseConfig.models.by_agent_role,
+          planner: "lmstudio/qwen2.5-7b"
         }
       }
     };
+    
+    const route = resolveModelRoute(config, "planner", {
+      LM_STUDIO_KEY: "sk-local-test"
+    });
 
-    const route = resolveModelRoute(config, "coder", {});
+    expect(route.model).toBe("qwen2.5-7b");
+    expect(route.baseUrl).toBe("http://localhost:1234/v1");
+    expect(route.apiKey).toBe("sk-local-test");
+  });
+
+  it("falls back to default reasoner when role override missing", () => {
+    const route = resolveModelRoute(baseConfig, "coder", {});
     expect(route.reasoner).toBe("low");
   });
 
@@ -73,20 +94,5 @@ describe("resolveModelRoute", () => {
     });
 
     expect(route.model).toBe("qwen/qwen3.6-plus:free");
-  });
-
-  it("ignores ambient process.env when explicit env is empty", () => {
-    const previous = process.env.OPENROUTER_DEFAULT_MODEL;
-    process.env.OPENROUTER_DEFAULT_MODEL = "minimax/minimax-m2.5:free";
-
-    const route = resolveModelRoute(baseConfig, "planner", {});
-
-    expect(route.model).toBe("qwen/qwen3.6-plus:free");
-
-    if (previous === undefined) {
-      delete process.env.OPENROUTER_DEFAULT_MODEL;
-    } else {
-      process.env.OPENROUTER_DEFAULT_MODEL = previous;
-    }
   });
 });

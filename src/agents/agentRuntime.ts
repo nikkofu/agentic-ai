@@ -15,6 +15,7 @@ type RetryPolicy = {
 type OpenRouterRunArgs = {
   apiKey?: string;
   model: string;
+  baseUrl?: string;
   fallbackModels?: string[];
   reasoner: string;
   input: unknown;
@@ -63,6 +64,7 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
                   const response = await generate({
                     apiKey: openrouterArgs.apiKey!,
                     model,
+                    baseUrl: openrouterArgs.baseUrl,
                     reasoner: openrouterArgs.reasoner,
                     input: openrouterArgs.input
                   });
