@@ -1,4 +1,5 @@
 import type { EvalDecision } from "../types/runtime";
+import type { AcceptanceProof } from "../runtime/contracts";
 
 type EvaluatorInput = {
   quality: number;
@@ -52,6 +53,22 @@ export function evaluateDecision(input: EvaluatorInput, weights: EvaluatorWeight
   }
 
   return { decision: "block", reason: "threshold_block", scores };
+}
+
+export function evaluateAcceptanceProof(proof?: AcceptanceProof | null): EvalDecision["decision"] {
+  if (!proof) {
+    return "deliver";
+  }
+
+  if (proof.decision === "accept") {
+    return "deliver";
+  }
+
+  if (proof.decision === "revise") {
+    return "revise";
+  }
+
+  return "block";
 }
 
 function computeScores(input: Pick<EvaluatorInput, "quality" | "cost" | "latency">, weights: EvaluatorWeights) {

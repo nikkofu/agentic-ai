@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-09
+### Added
+- **Phase 15 QA / Verifier Harness**: Added shared verifier contracts, QA finding taxonomy, acceptance proof, and family-aware audit flow for `research_writing` and `browser_workflow`.
+- **Research Verifier Flow**: Research deliveries can now be accepted, revised, or rejected based on source coverage, verification adequacy, and artifact validity.
+- **Browser Verifier Flow**: Browser deliveries can now be accepted, revised, or rejected based on outcome validation, recovery state, and execution-proof artifacts.
+- **Acceptance Proof Product Surface**: Runtime inspector and dashboard lifecycle panel now expose verifier decision, verifier summary, findings count, and findings preview.
+
+### Changed
+- **Verifier-Enforced Handoff**: Executor now treats verifier acceptance as a required boundary before final user-facing completion.
+- **Acceptance-Aware Explanations**: Research and browser explanations now distinguish accepted, revised, and rejected states instead of only generic blocked/completed phrasing.
+
 ## [1.1.0] - 2026-04-09
 ### Added
 - **Phase 14 Task Family Contracts**: Added shared `research_writing` and `browser_workflow` delivery contracts, family-aware policies, delivery proof bundles, and verification records.

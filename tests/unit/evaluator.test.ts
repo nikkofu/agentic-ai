@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateDecision } from "../../src/eval/evaluator";
+import { evaluateAcceptanceProof, evaluateDecision } from "../../src/eval/evaluator";
 
 describe("evaluateDecision", () => {
   const weights = { quality: 0.6, cost: 0.2, latency: 0.2 };
@@ -109,5 +109,24 @@ describe("evaluateDecision", () => {
 
     expect(result.decision).toBe("block");
     expect(result.reason).toBe("unrecoverable_tool_error");
+  });
+
+  it("maps acceptance proof decisions into runtime convergence decisions", () => {
+    expect(evaluateAcceptanceProof(undefined)).toBe("deliver");
+    expect(evaluateAcceptanceProof({
+      decision: "accept",
+      verifierSummary: "ok",
+      findings: []
+    })).toBe("deliver");
+    expect(evaluateAcceptanceProof({
+      decision: "revise",
+      verifierSummary: "fix",
+      findings: []
+    })).toBe("revise");
+    expect(evaluateAcceptanceProof({
+      decision: "reject",
+      verifierSummary: "bad",
+      findings: []
+    })).toBe("block");
   });
 });

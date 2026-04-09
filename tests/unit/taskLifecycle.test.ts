@@ -237,6 +237,10 @@ describe("task lifecycle", () => {
         validationSummary: "policy_verification_required",
         recoveryAttempts: 0,
         runProofSummary: "",
+        acceptanceDecision: "",
+        verifierSummary: "",
+        findingsCount: 0,
+        findingsPreview: [],
         artifacts: [],
         verificationPreview: ["https://example.com/source"],
         referencesPreview: []
@@ -412,6 +416,11 @@ describe("task lifecycle", () => {
                   { kind: "source", sourceId: "a", summary: "README", passed: true },
                   { kind: "source", sourceId: "b", summary: "Docs", passed: true }
                 ],
+                acceptance_proof: {
+                  decision: "accept",
+                  verifierSummary: "Accepted research delivery with 2 verified sources.",
+                  findings: []
+                },
                 delivery_proof: {
                   family: "research_writing",
                   steps: []
@@ -429,7 +438,9 @@ describe("task lifecycle", () => {
     expect(inspection.runtimeInspector?.finalDelivery?.sourceCoverage).toBe(2);
     expect(inspection.runtimeInspector?.finalDelivery?.verifiedClaimCount).toBe(2);
     expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("source_coverage=2; references=2");
-    expect(inspection.runtimeInspector?.explanation).toBe("Research delivery completed with 2 verified sources and 0 artifacts");
+    expect(inspection.runtimeInspector?.finalDelivery?.acceptanceDecision).toBe("accept");
+    expect(inspection.runtimeInspector?.finalDelivery?.verifierSummary).toBe("Accepted research delivery with 2 verified sources.");
+    expect(inspection.runtimeInspector?.explanation).toBe("Research delivery accepted with 2 verified sources and 0 artifacts");
   });
 
   it("builds family-aware browser workflow summaries", async () => {
@@ -459,6 +470,17 @@ describe("task lifecycle", () => {
                 artifacts: [],
                 verification: [],
                 blocking_reason: "browser_outcome_not_reached",
+                acceptance_proof: {
+                  decision: "revise",
+                  verifierSummary: "Browser verifier found 1 issue(s).",
+                  findings: [
+                    {
+                      severity: "major",
+                      kind: "browser_outcome_mismatch",
+                      summary: "submit button missing"
+                    }
+                  ]
+                },
                 delivery_proof: {
                   family: "browser_workflow",
                   steps: [
@@ -479,7 +501,10 @@ describe("task lifecycle", () => {
     expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("browser_workflow");
     expect(inspection.runtimeInspector?.finalDelivery?.stepCount).toBe(2);
     expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("steps=2; last_successful=open_session; validation=browser_outcome_not_reached");
-    expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow blocked: browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.finalDelivery?.acceptanceDecision).toBe("revise");
+    expect(inspection.runtimeInspector?.finalDelivery?.findingsCount).toBe(1);
+    expect(inspection.runtimeInspector?.finalDelivery?.findingsPreview).toEqual(["submit button missing"]);
+    expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow revise: Browser verifier found 1 issue(s).");
     expect(inspection.runtimeInspector?.actionHint).toBe("Retry the workflow, re-locate the target, or reload the page before resuming.");
   });
 });

@@ -38,6 +38,10 @@ type InspectionResult = {
       validationSummary: string;
       recoveryAttempts: number;
       runProofSummary: string;
+      acceptanceDecision: string;
+      verifierSummary: string;
+      findingsCount: number;
+      findingsPreview: string[];
       artifacts: Array<{
         path: string;
         exists: boolean;
@@ -191,11 +195,18 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           <InspectorLine label="artifacts" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.artifactCount) : ""} />
           <InspectorLine label="verification" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.verificationCount) : ""} />
           <InspectorLine label="run proof" value={inspection?.runtimeInspector?.finalDelivery?.runProofSummary ?? ""} />
+          <InspectorLine label="acceptance" value={inspection?.runtimeInspector?.finalDelivery?.acceptanceDecision ?? ""} />
+          <InspectorLine label="verifier" value={inspection?.runtimeInspector?.finalDelivery?.verifierSummary ?? ""} />
+          <InspectorLine label="findings" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.findingsCount) : ""} />
           <InspectorLine label="blocking" value={inspection?.runtimeInspector?.finalDelivery?.blockingReason ?? ""} tone="danger" />
           <InspectorLine label="result" value={inspection?.runtimeInspector?.finalDelivery?.finalResult.slice(0, 80) ?? ""} />
           <InspectorLine
             label="verification preview"
             value={inspection?.runtimeInspector?.finalDelivery?.verificationPreview.join(", ") ?? ""}
+          />
+          <InspectorLine
+            label="findings preview"
+            value={inspection?.runtimeInspector?.finalDelivery?.findingsPreview.join(", ") ?? ""}
           />
           <InspectorLine
             label="artifact truth"

@@ -7,9 +7,11 @@ import { buildWorkflowFromIntent, normalizeJoinDecision, planWorkflowFromPlanner
 import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
 import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "./deliveryHarness";
+import { auditFamilyDelivery } from "./familyAudit";
 import { buildTaskFamilyPolicy, inferTaskFamily, normalizeTaskFamily } from "./taskFamily";
 import { finalizeResearchWritingDelivery } from "./researchWriting";
 import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "./contracts";
+import { evaluateAcceptanceProof } from "../eval/evaluator";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
 
@@ -415,7 +417,16 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           delivery: familyDelivery
         });
       }
-      finalState = familyDelivery.status === "completed" ? "completed" : "aborted";
+      if ("family" in familyDelivery) {
+        familyDelivery = await auditFamilyDelivery({
+          delivery: familyDelivery,
+          familyPolicy
+        });
+      }
+      const acceptanceDecision = "acceptance_proof" in familyDelivery
+        ? evaluateAcceptanceProof(familyDelivery.acceptance_proof)
+        : "deliver";
+      finalState = familyDelivery.status === "completed" && acceptanceDecision === "deliver" ? "completed" : "aborted";
       outputText = familyDelivery.final_result;
 
       deps.eventBus.publish({
@@ -500,7 +511,16 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           delivery: familyDelivery
         });
       }
-      const finalState = familyDelivery.status === "completed" ? "completed" : "aborted";
+      if ("family" in familyDelivery) {
+        familyDelivery = await auditFamilyDelivery({
+          delivery: familyDelivery,
+          familyPolicy
+        });
+      }
+      const acceptanceDecision = "acceptance_proof" in familyDelivery
+        ? evaluateAcceptanceProof(familyDelivery.acceptance_proof)
+        : "deliver";
+      const finalState = familyDelivery.status === "completed" && acceptanceDecision === "deliver" ? "completed" : "aborted";
 
       deps.eventBus.publish({
         type: "TaskClosed",

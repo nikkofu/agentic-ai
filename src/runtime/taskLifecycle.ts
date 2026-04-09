@@ -4,7 +4,7 @@ import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
 import { computeResearchSourceCoverage } from "./researchWriting";
 import { summarizeBrowserWorkflow } from "./browserWorkflow";
-import type { DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
+import type { AcceptanceProof, DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
 
 type ExecuteResult = {
   taskId: string;
@@ -81,6 +81,10 @@ type RuntimeInspector = {
     validationSummary: string;
     recoveryAttempts: number;
     runProofSummary: string;
+    acceptanceDecision: string;
+    verifierSummary: string;
+    findingsCount: number;
+    findingsPreview: string[];
     artifacts: Array<{
       path: string;
       exists: boolean;
@@ -160,6 +164,7 @@ async function summarizeRuntimeInspector(
   const normalizedVerification = normalizeVerificationRecords(deliveryPayload?.verification);
   const browserSummary = summarizeBrowserDeliveryProof(deliveryPayload);
   const family = typeof deliveryPayload?.family === "string" ? deliveryPayload.family : "";
+  const acceptanceProof = normalizeAcceptanceProof(deliveryPayload?.acceptance_proof);
   const sourceCoverage = computeResearchSourceCoverage(normalizedVerification);
   const verificationPreview = normalizedVerification.map((record) => record.summary).slice(0, 3);
   const referencesPreview = normalizedVerification
@@ -186,6 +191,10 @@ async function summarizeRuntimeInspector(
           referencesPreview,
           browserSummary
         }),
+        acceptanceDecision: acceptanceProof?.decision ?? "",
+        verifierSummary: acceptanceProof?.verifierSummary ?? "",
+        findingsCount: acceptanceProof?.findings.length ?? 0,
+        findingsPreview: acceptanceProof?.findings.map((finding) => finding.summary).slice(0, 3) ?? [],
         artifacts: await inspectArtifacts(deliveryArtifacts),
         verificationPreview,
         referencesPreview
@@ -263,6 +272,43 @@ function normalizeVerificationRecords(value: unknown): VerificationRecord[] {
   });
 }
 
+function normalizeAcceptanceProof(value: unknown): AcceptanceProof | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Partial<AcceptanceProof>;
+  if (record.decision !== "accept" && record.decision !== "revise" && record.decision !== "reject") {
+    return null;
+  }
+
+  return {
+    decision: record.decision,
+    acceptedAt: typeof record.acceptedAt === "number" ? record.acceptedAt : undefined,
+    verifierSummary: typeof record.verifierSummary === "string" ? record.verifierSummary : "",
+    findings: Array.isArray(record.findings)
+      ? record.findings.flatMap((finding) => {
+          if (!finding || typeof finding !== "object") {
+            return [];
+          }
+          const summary = typeof (finding as { summary?: unknown }).summary === "string"
+            ? (finding as { summary: string }).summary
+            : "";
+          if (!summary.trim()) {
+            return [];
+          }
+          return [{
+            severity: (finding as { severity?: "critical" | "major" | "minor" }).severity ?? "minor",
+            kind: (finding as { kind?: AcceptanceProof["findings"][number]["kind"] }).kind ?? "policy_violation",
+            summary,
+            evidenceRefs: [],
+            nodeId: undefined
+          }];
+        })
+      : []
+  };
+}
+
 function summarizeBrowserDeliveryProof(value: unknown) {
   if (!value || typeof value !== "object") {
     return {
@@ -317,11 +363,15 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
   }
 
   if (finalDelivery.family === "research_writing" && (finalDelivery.status === "blocked" || finalDelivery.blockingReason)) {
-    return `Research delivery blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+    return finalDelivery.acceptanceDecision === "reject" || finalDelivery.acceptanceDecision === "revise"
+      ? `Research delivery ${finalDelivery.acceptanceDecision}: ${finalDelivery.verifierSummary || finalDelivery.blockingReason || "unknown_reason"}`
+      : `Research delivery blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
   }
 
   if (finalDelivery.family === "browser_workflow" && (finalDelivery.status === "blocked" || finalDelivery.blockingReason)) {
-    return `Browser workflow blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+    return finalDelivery.acceptanceDecision === "reject" || finalDelivery.acceptanceDecision === "revise"
+      ? `Browser workflow ${finalDelivery.acceptanceDecision}: ${finalDelivery.verifierSummary || finalDelivery.blockingReason || "unknown_reason"}`
+      : `Browser workflow blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
   }
 
   if (finalDelivery.status === "blocked" || finalDelivery.blockingReason) {
@@ -329,11 +379,15 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
   }
 
   if (finalDelivery.family === "research_writing" && finalDelivery.status === "completed") {
-    return `Research delivery completed with ${finalDelivery.sourceCoverage} verified sources and ${finalDelivery.artifactCount} artifacts`;
+    return finalDelivery.acceptanceDecision === "accept"
+      ? `Research delivery accepted with ${finalDelivery.sourceCoverage} verified sources and ${finalDelivery.artifactCount} artifacts`
+      : `Research delivery completed with ${finalDelivery.sourceCoverage} verified sources and ${finalDelivery.artifactCount} artifacts`;
   }
 
   if (finalDelivery.family === "browser_workflow" && finalDelivery.status === "completed") {
-    return `Browser workflow completed in ${finalDelivery.stepCount} steps with validation: ${finalDelivery.validationSummary || "passed"}`;
+    return finalDelivery.acceptanceDecision === "accept"
+      ? `Browser workflow accepted in ${finalDelivery.stepCount} steps with validation: ${finalDelivery.validationSummary || "passed"}`
+      : `Browser workflow completed in ${finalDelivery.stepCount} steps with validation: ${finalDelivery.validationSummary || "passed"}`;
   }
 
   if (finalDelivery.status === "completed") {
@@ -352,8 +406,24 @@ function buildActionHint(finalDelivery: RuntimeInspector["finalDelivery"]) {
     return "Add better sources and verification evidence before attempting final article delivery again.";
   }
 
+  if (finalDelivery.family === "research_writing" && finalDelivery.acceptanceDecision === "revise") {
+    return "Address verifier findings and rebuild the article package before re-submitting.";
+  }
+
+  if (finalDelivery.family === "research_writing" && finalDelivery.acceptanceDecision === "reject") {
+    return "Do not hand off this article until the verifier findings are resolved.";
+  }
+
   if (finalDelivery.family === "browser_workflow" && finalDelivery.status === "blocked") {
     return "Retry the workflow, re-locate the target, or reload the page before resuming.";
+  }
+
+  if (finalDelivery.family === "browser_workflow" && finalDelivery.acceptanceDecision === "revise") {
+    return "Retry the workflow with verifier findings applied before final handoff.";
+  }
+
+  if (finalDelivery.family === "browser_workflow" && finalDelivery.acceptanceDecision === "reject") {
+    return "Do not hand off this workflow run until the verifier findings are resolved.";
   }
 
   if (finalDelivery.blockingReason === "policy_verification_required" || finalDelivery.blockingReason === "verification_missing") {

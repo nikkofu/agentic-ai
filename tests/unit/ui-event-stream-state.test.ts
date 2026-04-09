@@ -91,4 +91,29 @@ describe("event stream state", () => {
     expect(details.blockingReason).toBe("verification_missing");
     expect(details.explanation).toBe("Task blocked: verification_missing");
   });
+
+  it("keeps task closed success text stable when acceptance proof is present", () => {
+    const details = applyRuntimeEventToStreamState({
+      taskId: "task-stream-4",
+      current: createInitialEventStreamDetails(),
+      event: {
+        type: "TaskClosed",
+        payload: {
+          task_id: "task-stream-4",
+          state: "completed",
+          delivery: {
+            status: "completed",
+            final_result: "accepted output",
+            acceptance_proof: {
+              decision: "accept",
+              verifierSummary: "accepted",
+              findings: []
+            }
+          }
+        }
+      }
+    });
+
+    expect(details.explanation).toBe("Task completed successfully");
+  });
 });

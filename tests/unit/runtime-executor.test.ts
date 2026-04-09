@@ -1,9 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTaskExecutor } from "../../src/runtime/executor";
 import { createTaskMemoryStore } from "../../src/runtime/memory";
 
 describe("runtime executor", () => {
+  afterEach(() => {
+    fs.rmSync(path.resolve("artifacts", "resumed-family-output.md"), { force: true });
+    fs.rmSync(path.resolve("artifacts", "resumed-family-output-references.json"), { force: true });
+  });
+
   it("executes a single-node task through injected runtime services", async () => {
     const eventBus = {
       publish: vi.fn(),
@@ -1103,6 +1110,9 @@ describe("runtime executor", () => {
   });
 
   it("resumes a family task through the family-aware finalization boundary", async () => {
+    fs.mkdirSync(path.resolve("artifacts"), { recursive: true });
+    fs.writeFileSync(path.resolve("artifacts", "resumed-family-output.md"), "resumed family output", "utf8");
+
     const eventBus = {
       publish: vi.fn(),
       subscribe: vi.fn()
@@ -1138,7 +1148,7 @@ describe("runtime executor", () => {
           delivery: {
             status: "completed",
             final_result: "resumed family output",
-            artifacts: ["artifact-1"],
+            artifacts: ["artifacts/resumed-family-output.md"],
             verification: [
               {
                 kind: "source",

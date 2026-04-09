@@ -36,6 +36,29 @@ export type VerificationRecord = {
   locator?: string;
 };
 
+export type VerifierDecision = "accept" | "revise" | "reject";
+
+export type QaFinding = {
+  severity: "critical" | "major" | "minor";
+  kind:
+    | "verification_gap"
+    | "claim_risk"
+    | "artifact_invalid"
+    | "browser_outcome_mismatch"
+    | "browser_recovery_exhausted"
+    | "policy_violation";
+  summary: string;
+  evidenceRefs?: string[];
+  nodeId?: string;
+};
+
+export type AcceptanceProof = {
+  decision: VerifierDecision;
+  acceptedAt?: number;
+  findings: QaFinding[];
+  verifierSummary: string;
+};
+
 export type TaskIntent = {
   task_kind: string;
   execution_mode: "single_node" | "tree" | "dag" | "async";
@@ -80,6 +103,7 @@ export type FamilyDeliveryBundle = Omit<DeliveryBundle, "verification"> & {
   family: TaskFamily;
   verification: VerificationRecord[];
   delivery_proof: DeliveryProof;
+  acceptance_proof?: AcceptanceProof;
 };
 
 export type ExecutionContext = {

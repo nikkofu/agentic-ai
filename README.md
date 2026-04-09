@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.1.0`
+当前版本：`1.2.0`
 
 ## 🚀 核心特性
 
@@ -37,6 +37,9 @@
 - **Research Trust Pipeline**：research 任务现在会统计 distinct source coverage、输出 `references.json`，并在 inspector 里展示 `sourceCoverage / verifiedClaimCount / referencesPreview`。
 - **Browser Automation Proof**：browser workflow 任务现在会记录 `stepCount / lastSuccessfulStep / validationSummary / recoveryAttempts`，并在 inspector 中以 run-proof 形式展示。
 - **Family-Aware 解释层**：research 与 browser 的阻断/完成解释和下一步建议现在按任务族分别表达，不再只用通用 blocked/completed 文案。
+- **QA / Verifier Harness**：新增 verifier acceptance boundary，开始区分 “已产出 delivery” 与 “已通过 verifier 接受的 delivery”。
+- **Acceptance Proof**：research/browser 两类任务都会生成 verifier decision、verifier summary、typed findings，并在 inspector 中可见。
+- **拒收与修订语义**：research/browser 交付现在可以被 verifier 标记为 `accept / revise / reject`，最终 handoff 只在接受后完成。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -90,6 +93,10 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/specs/2026-04-09-phase14-real-world-delivery-platform-design.md`](docs/superpowers/specs/2026-04-09-phase14-real-world-delivery-platform-design.md)
 - Phase 14 的实现计划见：
   [`docs/superpowers/plans/2026-04-09-phase14-real-world-delivery-platform.md`](docs/superpowers/plans/2026-04-09-phase14-real-world-delivery-platform.md)
+- Phase 15 的 QA / Verifier Harness 设计见：
+  [`docs/superpowers/specs/2026-04-09-phase15-qa-verifier-harness-design.md`](docs/superpowers/specs/2026-04-09-phase15-qa-verifier-harness-design.md)
+- Phase 15 的实现计划见：
+  [`docs/superpowers/plans/2026-04-09-phase15-qa-verifier-harness.md`](docs/superpowers/plans/2026-04-09-phase15-qa-verifier-harness.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 
@@ -114,6 +121,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 12**: Agent 智能化内核，统一 prompt pipeline、typed invalid-output taxonomy、evaluator authority、planner policy enforcement。
 - [x] **Phase 13**: 用户产品化，runtime inspector、artifact truth、统一 explanation、gold-path 产品证明。
 - [x] **Phase 14**: 真实交付平台，task-family-aware delivery harness、research trust pipeline、browser workflow automation、family-aware product surface。
+- [x] **Phase 15**: QA / Verifier Harness，acceptance proof、typed findings、research/browser verifier flow、verifier-enforced handoff。
 
 ## 📄 开源协议
 
