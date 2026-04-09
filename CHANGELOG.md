@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-04-09
+### Changed
+- **Release Diary Tone Update**: Refined the `v1.3.0` release diary toward a more reflective, relationship-aware INFJ-style voice while keeping the engineering facts intact.
+
 ## [1.3.0] - 2026-04-09
 ### Added
 - **Phase 16 Memory Productization**: Added first-class `personal`, `project`, and `task` memory layers with markdown-first storage, JSON indexing, promotion, and retrieval primitives.
