@@ -3,13 +3,14 @@ import path from "node:path";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
 import { computeResearchSourceCoverage } from "./researchWriting";
-import type { VerificationRecord } from "./contracts";
+import { summarizeBrowserWorkflow } from "./browserWorkflow";
+import type { DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
 
 type ExecuteResult = {
   taskId: string;
   finalState: "completed" | "aborted";
   outputText?: string;
-  delivery: DeliveryBundle;
+  delivery: DeliveryBundle | FamilyDeliveryBundle;
   summary: {
     nodeCount: number;
     childSpawns: number;
@@ -73,6 +74,10 @@ type RuntimeInspector = {
     verificationCount: number;
     artifactCount: number;
     sourceCoverage: number;
+    stepCount: number;
+    lastSuccessfulStep: string;
+    validationSummary: string;
+    recoveryAttempts: number;
     artifacts: Array<{
       path: string;
       exists: boolean;
@@ -150,6 +155,7 @@ async function summarizeRuntimeInspector(
   const deliveryPayload = (latestTerminal?.payload.delivery as Record<string, unknown> | undefined) ?? undefined;
   const deliveryArtifacts = normalizeStringArray(deliveryPayload?.artifacts);
   const normalizedVerification = normalizeVerificationRecords(deliveryPayload?.verification);
+  const browserSummary = summarizeBrowserDeliveryProof(deliveryPayload);
   const verificationPreview = normalizedVerification.map((record) => record.summary).slice(0, 3);
   const referencesPreview = normalizedVerification
     .filter((record) => record.kind === "source")
@@ -163,6 +169,10 @@ async function summarizeRuntimeInspector(
         verificationCount: normalizedVerification.length,
         artifactCount: deliveryArtifacts.length,
         sourceCoverage: computeResearchSourceCoverage(normalizedVerification),
+        stepCount: browserSummary.stepCount,
+        lastSuccessfulStep: browserSummary.lastSuccessfulStep,
+        validationSummary: browserSummary.validationSummary,
+        recoveryAttempts: browserSummary.recoveryAttempts,
         artifacts: await inspectArtifacts(deliveryArtifacts),
         verificationPreview,
         referencesPreview
@@ -237,6 +247,54 @@ function normalizeVerificationRecords(value: unknown): VerificationRecord[] {
       sourceId: typeof record.sourceId === "string" ? record.sourceId : undefined,
       locator: typeof record.locator === "string" ? record.locator : undefined
     }];
+  });
+}
+
+function summarizeBrowserDeliveryProof(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return {
+      stepCount: 0,
+      lastSuccessfulStep: "",
+      validationSummary: "",
+      recoveryAttempts: 0
+    };
+  }
+
+  const payload = value as {
+    blocking_reason?: unknown;
+    delivery_proof?: {
+      replayHints?: unknown;
+      steps?: Array<{
+        kind?: string;
+        status?: "completed" | "failed" | "blocked";
+        summary?: string;
+      }>;
+    };
+  };
+  const proof = payload.delivery_proof;
+  const steps: DeliveryProofStep[] = Array.isArray(proof?.steps)
+    ? proof.steps
+        .filter((step): step is { kind: string; status: "completed" | "failed" | "blocked"; summary: string } =>
+          Boolean(step && typeof step.kind === "string" && typeof step.summary === "string")
+        )
+        .map((step) => ({
+          kind: step.kind,
+          status: step.status === "failed" || step.status === "blocked" ? step.status : "completed",
+          summary: step.summary
+        }))
+    : [];
+  const validationStep = [...steps].reverse().find((step) => step.kind === "validate_outcome");
+  const replayHints = Array.isArray(proof?.replayHints)
+    ? proof.replayHints.filter((hint): hint is string => typeof hint === "string" && hint.trim().length > 0)
+    : [];
+
+  return summarizeBrowserWorkflow({
+    steps,
+    validation: {
+      summary: validationStep?.summary ?? String(payload.blocking_reason ?? ""),
+      passed: validationStep?.status === "completed"
+    },
+    recoveryAttempts: replayHints.length
   });
 }
 

@@ -13,6 +13,7 @@ import { resolveModelRoute } from "../model/modelRouter";
 import { McpHub } from "../tools/mcpHub";
 import { createToolGateway } from "../tools/toolGateway";
 import { createLocalToolRegistry } from "../tools/localToolRegistry";
+import { createBrowserTools } from "../tools/browserTools";
 import { createResearchTools } from "../tools/researchTools";
 import { createTaskExecutor } from "./executor";
 import { createTaskLifecycle } from "./taskLifecycle";
@@ -56,9 +57,14 @@ export async function createRuntimeServices(args?: {
       name: "echo",
       run: (input) => input
     },
-    ...createResearchTools()
+    ...createResearchTools(),
+    ...createBrowserTools()
   ]);
-  const availableLocalTools = ["echo", ...createResearchTools().map((tool) => tool.name)];
+  const availableLocalTools = [
+    "echo",
+    ...createResearchTools().map((tool) => tool.name),
+    ...createBrowserTools().map((tool) => tool.name)
+  ];
   const toolGateway = createToolGateway(localRegistry, mcpHub);
 
   const orchestrator = createOrchestrator({

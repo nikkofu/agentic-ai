@@ -230,6 +230,10 @@ describe("task lifecycle", () => {
         verificationCount: 1,
         artifactCount: 0,
         sourceCoverage: 0,
+        stepCount: 0,
+        lastSuccessfulStep: "",
+        validationSummary: "policy_verification_required",
+        recoveryAttempts: 0,
         artifacts: [],
         verificationPreview: ["https://example.com/source"],
         referencesPreview: []
