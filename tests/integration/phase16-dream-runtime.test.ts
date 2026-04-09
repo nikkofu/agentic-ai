@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createDreamRuntime } from "../../src/runtime/dreamRuntime";
+import { createDreamScheduler } from "../../src/runtime/dreamScheduler";
 
 const tempRoots: string[] = [];
 
@@ -32,5 +33,26 @@ describe("phase16 dream runtime", () => {
     expect(result.skillDrafts.length).toBeGreaterThan(0);
     expect(fs.existsSync(path.join(repoRoot, "memory", "dream", "recommendations"))).toBe(true);
     expect(fs.existsSync(path.join(repoRoot, "memory", "dream", "skills"))).toBe(true);
+  });
+
+  it("triggers Dream through the scheduler when the idle threshold is met", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "phase16-dream-scheduler-repo-"));
+    const userHome = fs.mkdtempSync(path.join(os.tmpdir(), "phase16-dream-scheduler-user-"));
+    tempRoots.push(repoRoot, userHome);
+
+    const dream = createDreamRuntime({ repoRoot, userHome });
+    const scheduler = createDreamScheduler({
+      dreamRuntime: dream,
+      thresholdMinutes: 20
+    });
+
+    const result = await scheduler.maybeRunIdleCycle({
+      idleMinutes: 25,
+      taskFailures: ["browser_outcome_not_reached"],
+      memoryEntries: [{ id: "task-1", body: "Recovered by validating earlier." }]
+    });
+
+    expect(result?.reflections.length).toBeGreaterThan(0);
+    expect(fs.existsSync(path.join(repoRoot, "memory", "dream", "reflections"))).toBe(true);
   });
 });

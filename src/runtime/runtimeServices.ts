@@ -20,6 +20,7 @@ import { createTaskLifecycle } from "./taskLifecycle";
 import { createMemoryEngine } from "./memoryEngine";
 import { createDreamRuntime } from "./dreamRuntime";
 import { createDreamInspector, createMemoryInspector } from "./memoryInspectors";
+import { createDreamScheduler } from "./dreamScheduler";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 export async function createRuntimeServices(args?: {
@@ -41,6 +42,10 @@ export async function createRuntimeServices(args?: {
   const dreamRuntime = createDreamRuntime({
     repoRoot: process.cwd(),
     userHome: process.env.HOME ?? process.cwd()
+  });
+  const dreamScheduler = createDreamScheduler({
+    dreamRuntime,
+    thresholdMinutes: config.dream?.idle_threshold_minutes ?? 20
   });
 
   let limiter: RequestLimiter | undefined;
@@ -118,6 +123,7 @@ export async function createRuntimeServices(args?: {
     mcpHub,
     memoryStore,
     dreamRuntime,
+    dreamScheduler,
     orchestrator,
     executor,
     taskLifecycle,
