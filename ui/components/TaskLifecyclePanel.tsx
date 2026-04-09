@@ -25,17 +25,26 @@ type InspectionResult = {
       verificationPolicy: string;
     } | null;
     finalDelivery: {
+      family: string;
       status: string;
       finalResult: string;
       blockingReason: string;
       verificationCount: number;
       artifactCount: number;
+      sourceCoverage: number;
+      verifiedClaimCount: number;
+      stepCount: number;
+      lastSuccessfulStep: string;
+      validationSummary: string;
+      recoveryAttempts: number;
+      runProofSummary: string;
       artifacts: Array<{
         path: string;
         exists: boolean;
         nonEmpty: boolean;
       }>;
       verificationPreview: string[];
+      referencesPreview: string[];
     } | null;
     plan: {
       nodeCount: number;
@@ -177,9 +186,11 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
         </InspectorCard>
 
         <InspectorCard title="Delivery">
+          <InspectorLine label="family" value={inspection?.runtimeInspector?.finalDelivery?.family ?? ""} />
           <InspectorLine label="status" value={inspection?.runtimeInspector?.finalDelivery?.status ?? ""} />
           <InspectorLine label="artifacts" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.artifactCount) : ""} />
           <InspectorLine label="verification" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.verificationCount) : ""} />
+          <InspectorLine label="run proof" value={inspection?.runtimeInspector?.finalDelivery?.runProofSummary ?? ""} />
           <InspectorLine label="blocking" value={inspection?.runtimeInspector?.finalDelivery?.blockingReason ?? ""} tone="danger" />
           <InspectorLine label="result" value={inspection?.runtimeInspector?.finalDelivery?.finalResult.slice(0, 80) ?? ""} />
           <InspectorLine
@@ -194,6 +205,24 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
                 .join(", ") ?? ""
             }
           />
+          {inspection?.runtimeInspector?.finalDelivery?.family === "research_writing" ? (
+            <>
+              <InspectorLine label="source coverage" value={String(inspection.runtimeInspector.finalDelivery.sourceCoverage)} />
+              <InspectorLine label="verified claims" value={String(inspection.runtimeInspector.finalDelivery.verifiedClaimCount)} />
+              <InspectorLine
+                label="references"
+                value={inspection.runtimeInspector.finalDelivery.referencesPreview.join(", ")}
+              />
+            </>
+          ) : null}
+          {inspection?.runtimeInspector?.finalDelivery?.family === "browser_workflow" ? (
+            <>
+              <InspectorLine label="steps" value={String(inspection.runtimeInspector.finalDelivery.stepCount)} />
+              <InspectorLine label="last successful step" value={inspection.runtimeInspector.finalDelivery.lastSuccessfulStep} />
+              <InspectorLine label="validation" value={inspection.runtimeInspector.finalDelivery.validationSummary} />
+              <InspectorLine label="recovery attempts" value={String(inspection.runtimeInspector.finalDelivery.recoveryAttempts)} />
+            </>
+          ) : null}
         </InspectorCard>
 
         <InspectorCard title="Runtime">

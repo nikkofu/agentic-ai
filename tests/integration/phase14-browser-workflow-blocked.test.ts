@@ -65,8 +65,12 @@ describe("phase14 browser workflow blocked", () => {
 
     expect(inspection.runtimeInspector?.finalDelivery?.status).toBe("blocked");
     expect(inspection.runtimeInspector?.finalDelivery?.blockingReason).toBe("browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("browser_workflow");
     expect(inspection.runtimeInspector?.finalDelivery?.stepCount).toBe(2);
     expect(inspection.runtimeInspector?.finalDelivery?.lastSuccessfulStep).toBe("open_session");
     expect(inspection.runtimeInspector?.finalDelivery?.validationSummary).toBe("browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("steps=2; last_successful=open_session; validation=browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow blocked: browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.actionHint).toBe("Retry the workflow, re-locate the target, or reload the page before resuming.");
   });
 });

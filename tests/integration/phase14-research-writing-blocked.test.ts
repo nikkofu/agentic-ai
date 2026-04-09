@@ -62,7 +62,9 @@ describe("phase14 research writing blocked", () => {
 
     expect(inspection.runtimeInspector?.finalDelivery?.status).toBe("blocked");
     expect(inspection.runtimeInspector?.finalDelivery?.blockingReason).toBe("policy_source_coverage_required");
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("research_writing");
     expect(inspection.runtimeInspector?.finalDelivery?.sourceCoverage).toBe(1);
-    expect(inspection.runtimeInspector?.explanation).toBe("Task blocked: policy_source_coverage_required");
+    expect(inspection.runtimeInspector?.explanation).toBe("Research delivery blocked: policy_source_coverage_required");
+    expect(inspection.runtimeInspector?.actionHint).toBe("Add better sources and verification evidence before attempting final article delivery again.");
   });
 });

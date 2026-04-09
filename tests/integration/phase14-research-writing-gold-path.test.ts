@@ -85,8 +85,11 @@ describe("phase14 research writing gold path", () => {
     const inspection = await lifecycle.inspectTask("task-phase14-research");
 
     expect(inspection.runtimeInspector?.finalDelivery?.artifactCount).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("research_writing");
     expect(inspection.runtimeInspector?.finalDelivery?.sourceCoverage).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.verifiedClaimCount).toBe(2);
     expect(inspection.runtimeInspector?.finalDelivery?.referencesPreview).toEqual(["README", "Docs"]);
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("source_coverage=2; references=2");
     expect(inspection.runtimeInspector?.finalDelivery?.artifacts).toEqual([
       { path: "artifacts/phase14-research.md", exists: true, nonEmpty: true },
       { path: "artifacts/phase14-research-references.json", exists: true, nonEmpty: true }

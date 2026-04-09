@@ -224,16 +224,19 @@ describe("task lifecycle", () => {
         verificationPolicy: "cite urls"
       },
       finalDelivery: {
+        family: "",
         status: "blocked",
         finalResult: "",
         blockingReason: "policy_verification_required",
         verificationCount: 1,
         artifactCount: 0,
         sourceCoverage: 0,
+        verifiedClaimCount: 0,
         stepCount: 0,
         lastSuccessfulStep: "",
         validationSummary: "policy_verification_required",
         recoveryAttempts: 0,
+        runProofSummary: "",
         artifacts: [],
         verificationPreview: ["https://example.com/source"],
         referencesPreview: []
@@ -378,5 +381,105 @@ describe("task lifecycle", () => {
       "https://example.com/source-b",
       "https://example.com/source-c"
     ]);
+  });
+
+  it("builds family-aware research delivery summaries", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-family-research",
+          status: "completed",
+          nodes: {
+            "node-root": { state: "completed", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-family-research",
+              state: "completed",
+              delivery: {
+                status: "completed",
+                final_result: "final article",
+                family: "research_writing",
+                artifacts: [],
+                verification: [
+                  { kind: "source", sourceId: "a", summary: "README", passed: true },
+                  { kind: "source", sourceId: "b", summary: "Docs", passed: true }
+                ],
+                delivery_proof: {
+                  family: "research_writing",
+                  steps: []
+                }
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-family-research");
+
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("research_writing");
+    expect(inspection.runtimeInspector?.finalDelivery?.sourceCoverage).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.verifiedClaimCount).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("source_coverage=2; references=2");
+    expect(inspection.runtimeInspector?.explanation).toBe("Research delivery completed with 2 verified sources and 0 artifacts");
+  });
+
+  it("builds family-aware browser workflow summaries", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-family-browser",
+          status: "aborted",
+          nodes: {
+            "node-root": { state: "aborted", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-family-browser",
+              state: "aborted",
+              delivery: {
+                status: "blocked",
+                final_result: "",
+                family: "browser_workflow",
+                artifacts: [],
+                verification: [],
+                blocking_reason: "browser_outcome_not_reached",
+                delivery_proof: {
+                  family: "browser_workflow",
+                  steps: [
+                    { kind: "open_session", status: "completed", summary: "opened page" },
+                    { kind: "execute_step", status: "blocked", summary: "submit button missing" }
+                  ],
+                  replayHints: ["reload page and retry"]
+                }
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-family-browser");
+
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("browser_workflow");
+    expect(inspection.runtimeInspector?.finalDelivery?.stepCount).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("steps=2; last_successful=open_session; validation=browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow blocked: browser_outcome_not_reached");
+    expect(inspection.runtimeInspector?.actionHint).toBe("Retry the workflow, re-locate the target, or reload the page before resuming.");
   });
 });

@@ -68,16 +68,19 @@ type RuntimeInspector = {
     verificationPolicy: string;
   } | null;
   finalDelivery: {
+    family: string;
     status: string;
     finalResult: string;
     blockingReason: string;
     verificationCount: number;
     artifactCount: number;
     sourceCoverage: number;
+    verifiedClaimCount: number;
     stepCount: number;
     lastSuccessfulStep: string;
     validationSummary: string;
     recoveryAttempts: number;
+    runProofSummary: string;
     artifacts: Array<{
       path: string;
       exists: boolean;
@@ -156,23 +159,33 @@ async function summarizeRuntimeInspector(
   const deliveryArtifacts = normalizeStringArray(deliveryPayload?.artifacts);
   const normalizedVerification = normalizeVerificationRecords(deliveryPayload?.verification);
   const browserSummary = summarizeBrowserDeliveryProof(deliveryPayload);
+  const family = typeof deliveryPayload?.family === "string" ? deliveryPayload.family : "";
+  const sourceCoverage = computeResearchSourceCoverage(normalizedVerification);
   const verificationPreview = normalizedVerification.map((record) => record.summary).slice(0, 3);
   const referencesPreview = normalizedVerification
     .filter((record) => record.kind === "source")
     .map((record) => record.summary)
     .slice(0, 3);
   const finalDelivery = latestTerminal
-    ? {
+      ? {
+        family,
         status: String(deliveryPayload?.status ?? latestTerminal.payload.state ?? latestTerminal.payload.final_state ?? ""),
         finalResult: String(deliveryPayload?.final_result ?? latestTerminal.payload.final_result ?? ""),
         blockingReason: String(deliveryPayload?.blocking_reason ?? latestTerminal.payload.blocking_reason ?? latestTerminal.payload.error ?? ""),
         verificationCount: normalizedVerification.length,
         artifactCount: deliveryArtifacts.length,
-        sourceCoverage: computeResearchSourceCoverage(normalizedVerification),
+        sourceCoverage,
+        verifiedClaimCount: family === "research_writing" ? normalizedVerification.filter((record) => record.kind === "source" && record.passed).length : 0,
         stepCount: browserSummary.stepCount,
         lastSuccessfulStep: browserSummary.lastSuccessfulStep,
         validationSummary: browserSummary.validationSummary,
         recoveryAttempts: browserSummary.recoveryAttempts,
+        runProofSummary: buildRunProofSummary({
+          family,
+          sourceCoverage,
+          referencesPreview,
+          browserSummary
+        }),
         artifacts: await inspectArtifacts(deliveryArtifacts),
         verificationPreview,
         referencesPreview
@@ -303,8 +316,24 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
     return "";
   }
 
+  if (finalDelivery.family === "research_writing" && (finalDelivery.status === "blocked" || finalDelivery.blockingReason)) {
+    return `Research delivery blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+  }
+
+  if (finalDelivery.family === "browser_workflow" && (finalDelivery.status === "blocked" || finalDelivery.blockingReason)) {
+    return `Browser workflow blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+  }
+
   if (finalDelivery.status === "blocked" || finalDelivery.blockingReason) {
     return `Task blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+  }
+
+  if (finalDelivery.family === "research_writing" && finalDelivery.status === "completed") {
+    return `Research delivery completed with ${finalDelivery.sourceCoverage} verified sources and ${finalDelivery.artifactCount} artifacts`;
+  }
+
+  if (finalDelivery.family === "browser_workflow" && finalDelivery.status === "completed") {
+    return `Browser workflow completed in ${finalDelivery.stepCount} steps with validation: ${finalDelivery.validationSummary || "passed"}`;
   }
 
   if (finalDelivery.status === "completed") {
@@ -319,6 +348,14 @@ function buildActionHint(finalDelivery: RuntimeInspector["finalDelivery"]) {
     return "";
   }
 
+  if (finalDelivery.family === "research_writing" && (finalDelivery.blockingReason === "policy_verification_required" || finalDelivery.blockingReason === "verification_missing" || finalDelivery.blockingReason === "policy_source_coverage_required")) {
+    return "Add better sources and verification evidence before attempting final article delivery again.";
+  }
+
+  if (finalDelivery.family === "browser_workflow" && finalDelivery.status === "blocked") {
+    return "Retry the workflow, re-locate the target, or reload the page before resuming.";
+  }
+
   if (finalDelivery.blockingReason === "policy_verification_required" || finalDelivery.blockingReason === "verification_missing") {
     return "Add verification evidence before attempting final delivery again.";
   }
@@ -329,6 +366,23 @@ function buildActionHint(finalDelivery: RuntimeInspector["finalDelivery"]) {
 
   if (finalDelivery.status === "blocked") {
     return "Inspect the blocking reason and revise the task inputs or evidence.";
+  }
+
+  return "";
+}
+
+function buildRunProofSummary(args: {
+  family: string;
+  sourceCoverage: number;
+  referencesPreview: string[];
+  browserSummary: ReturnType<typeof summarizeBrowserWorkflow>;
+}) {
+  if (args.family === "research_writing") {
+    return `source_coverage=${args.sourceCoverage}; references=${args.referencesPreview.length}`;
+  }
+
+  if (args.family === "browser_workflow") {
+    return `steps=${args.browserSummary.stepCount}; last_successful=${args.browserSummary.lastSuccessfulStep || "none"}; validation=${args.browserSummary.validationSummary || "none"}`;
   }
 
   return "";

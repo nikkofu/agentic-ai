@@ -83,9 +83,12 @@ describe("phase14 browser workflow gold path", () => {
 
     const inspection = await lifecycle.inspectTask("task-phase14-browser");
 
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("browser_workflow");
     expect(inspection.runtimeInspector?.finalDelivery?.stepCount).toBe(3);
     expect(inspection.runtimeInspector?.finalDelivery?.lastSuccessfulStep).toBe("validate_outcome");
     expect(inspection.runtimeInspector?.finalDelivery?.validationSummary).toBe("confirmation banner visible");
     expect(inspection.runtimeInspector?.finalDelivery?.recoveryAttempts).toBe(1);
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("steps=3; last_successful=validate_outcome; validation=confirmation banner visible");
+    expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow completed in 3 steps with validation: confirmation banner visible");
   });
 });
