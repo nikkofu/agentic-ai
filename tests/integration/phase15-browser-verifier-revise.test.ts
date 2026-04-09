@@ -5,15 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTaskExecutor } from "../../src/runtime/executor";
 
 afterEach(() => {
-  fs.rmSync(path.resolve("artifacts", "phase15-run-summary.md"), { force: true });
-  fs.rmSync(path.resolve("artifacts", "phase15-steps.json"), { force: true });
+  fs.rmSync(path.resolve("artifacts", "phase15-revise-run-summary.md"), { force: true });
+  fs.rmSync(path.resolve("artifacts", "phase15-revise-steps.json"), { force: true });
 });
 
 describe("phase15 browser verifier revise", () => {
   it("marks recoverable browser mismatch as revise", async () => {
     fs.mkdirSync(path.resolve("artifacts"), { recursive: true });
-    fs.writeFileSync(path.resolve("artifacts", "phase15-run-summary.md"), "ok", "utf8");
-    fs.writeFileSync(path.resolve("artifacts", "phase15-steps.json"), "[]", "utf8");
+    fs.writeFileSync(path.resolve("artifacts", "phase15-revise-run-summary.md"), "ok", "utf8");
+    fs.writeFileSync(path.resolve("artifacts", "phase15-revise-steps.json"), "[]", "utf8");
 
     const executor = createTaskExecutor({
       config: {
@@ -35,7 +35,7 @@ describe("phase15 browser verifier revise", () => {
           delivery: {
             status: "completed",
             final_result: "",
-            artifacts: ["artifacts/phase15-run-summary.md", "artifacts/phase15-steps.json"],
+            artifacts: ["artifacts/phase15-revise-run-summary.md", "artifacts/phase15-revise-steps.json"],
             verification: [],
             risks: [],
             next_actions: [],

@@ -5,15 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTaskExecutor } from "../../src/runtime/executor";
 
 afterEach(() => {
-  fs.rmSync(path.resolve("artifacts", "phase15-run-summary.md"), { force: true });
-  fs.rmSync(path.resolve("artifacts", "phase15-steps.json"), { force: true });
+  fs.rmSync(path.resolve("artifacts", "phase15-accept-run-summary.md"), { force: true });
+  fs.rmSync(path.resolve("artifacts", "phase15-accept-steps.json"), { force: true });
 });
 
 describe("phase15 browser verifier accept", () => {
   it("accepts a valid browser workflow", async () => {
     fs.mkdirSync(path.resolve("artifacts"), { recursive: true });
-    fs.writeFileSync(path.resolve("artifacts", "phase15-run-summary.md"), "ok", "utf8");
-    fs.writeFileSync(path.resolve("artifacts", "phase15-steps.json"), "[]", "utf8");
+    fs.writeFileSync(path.resolve("artifacts", "phase15-accept-run-summary.md"), "ok", "utf8");
+    fs.writeFileSync(path.resolve("artifacts", "phase15-accept-steps.json"), "[]", "utf8");
 
     const executor = createTaskExecutor({
       config: {
@@ -35,7 +35,7 @@ describe("phase15 browser verifier accept", () => {
           delivery: {
             status: "completed",
             final_result: "submitted",
-            artifacts: ["artifacts/phase15-run-summary.md", "artifacts/phase15-steps.json"],
+            artifacts: ["artifacts/phase15-accept-run-summary.md", "artifacts/phase15-accept-steps.json"],
             verification: [{ kind: "form_result", summary: "confirmation", passed: true }],
             risks: [],
             next_actions: [],
