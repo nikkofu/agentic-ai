@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildWorkflowFromIntent, planWorkflowFromPlanner } from "../../src/runtime/plan";
+import { buildWorkflowFromIntent, normalizeJoinDecision, planWorkflowFromPlanner } from "../../src/runtime/plan";
 import type { TaskIntent } from "../../src/runtime/intent";
+import { normalizePlannerPolicy } from "../../src/runtime/policy";
 
 describe("runtime planning", () => {
   it("builds a fallback workflow from tree intent", () => {
@@ -67,5 +68,31 @@ describe("runtime planning", () => {
     expect(plan?.requiredCapabilities).toEqual(["research", "verification"]);
     expect(plan?.verificationPolicy).toBe("cite urls");
     expect(plan?.nodes.map((node) => node.id)).toEqual(["node-root", "node-research", "node-write"]);
+  });
+
+  it("normalizes deeper planner policy constraints for runtime enforcement", () => {
+    const policy = normalizePlannerPolicy({
+      recommended_tools: ["web_search"],
+      required_capabilities: ["research", "writing"],
+      verification_policy: "cite urls",
+      max_revisions: 1,
+      require_artifacts: true
+    });
+
+    expect(policy).toEqual({
+      recommendedTools: ["web_search"],
+      requiredCapabilities: ["research", "writing"],
+      verificationPolicy: "cite urls",
+      maxRevisions: 1,
+      requireArtifacts: true
+    });
+  });
+
+  it("normalizes planner join decisions into typed runtime actions", () => {
+    expect(normalizeJoinDecision("deliver")).toBe("deliver");
+    expect(normalizeJoinDecision("revise_child")).toBe("revise_child");
+    expect(normalizeJoinDecision("spawn_more")).toBe("spawn_more");
+    expect(normalizeJoinDecision("block")).toBe("block");
+    expect(normalizeJoinDecision("whatever")).toBe("block");
   });
 });

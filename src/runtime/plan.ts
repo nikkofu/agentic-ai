@@ -1,5 +1,5 @@
 import type { DagNode, DagWorkflow } from "../types/dag";
-import type { PlannedWorkflow, TaskIntent } from "./contracts";
+import type { JoinDecision, PlannedWorkflow, TaskIntent } from "./contracts";
 import { normalizeStringList } from "./policy";
 
 export type PlannerWorkflowSpec = {
@@ -14,6 +14,12 @@ export type PlannerWorkflowSpec = {
     depends_on?: string[];
   }>;
 };
+
+export function normalizeJoinDecision(value: unknown): JoinDecision {
+  return value === "deliver" || value === "revise_child" || value === "spawn_more" || value === "queued"
+    ? value
+    : "block";
+}
 
 export function buildWorkflowFromIntent(intent: TaskIntent | null, task: string): DagWorkflow | null {
   if (!intent || intent.execution_mode !== "tree") {

@@ -3,10 +3,10 @@ import type { AgentRole } from "../types/runtime";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
 import type { RuntimeEvent } from "../core/eventBus";
-import { buildWorkflowFromIntent, planWorkflowFromPlanner } from "./plan";
+import { buildWorkflowFromIntent, normalizeJoinDecision, planWorkflowFromPlanner } from "./plan";
 import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
-import type { ExecutionContext, PlannerPolicy } from "./contracts";
+import type { ExecutionContext, JoinDecision, PlannerPolicy } from "./contracts";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
 
@@ -93,7 +93,7 @@ type TaskExecutorDeps = {
       }) => Record<string, unknown>;
     }) => Promise<{
       completedNodes: number;
-      joinDecision: string;
+      joinDecision: JoinDecision;
       nodeResults?: Array<{
         nodeId: string;
         finalState: "completed" | "aborted";
@@ -311,8 +311,17 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
             content: formatJoinSummary(tierIndex, tierResult.nodeResults ?? []),
             tags: ["join-summary", `tier:${tierIndex}`]
           });
-          if (tierResult.joinDecision === "aborted") {
+          if (normalizeJoinDecision(tierResult.joinDecision) === "block") {
             finalState = "aborted";
+            delivery = {
+              status: "blocked",
+              final_result: "",
+              artifacts: [],
+              verification: [],
+              risks: [],
+              blocking_reason: "join_blocked",
+              next_actions: []
+            };
             break;
           }
         }

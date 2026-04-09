@@ -5,7 +5,7 @@ import { evaluateDecision } from "../../src/eval/evaluator";
 describe("evaluateDecision", () => {
   const weights = { quality: 0.6, cost: 0.2, latency: 0.2 };
 
-  it("returns continue when total score is >= 0.75", () => {
+  it("returns deliver when total score is >= 0.75", () => {
     const result = evaluateDecision(
       {
         quality: 0.9,
@@ -19,7 +19,7 @@ describe("evaluateDecision", () => {
       weights
     );
 
-    expect(result.decision).toBe("continue");
+    expect(result.decision).toBe("deliver");
     expect(result.scores.total).toBeGreaterThanOrEqual(0.75);
   });
 
@@ -40,7 +40,7 @@ describe("evaluateDecision", () => {
     expect(result.decision).toBe("revise");
   });
 
-  it("returns stop when total score is below 0.55", () => {
+  it("returns block when total score is below 0.55", () => {
     const result = evaluateDecision(
       {
         quality: 0.3,
@@ -54,10 +54,10 @@ describe("evaluateDecision", () => {
       weights
     );
 
-    expect(result.decision).toBe("stop");
+    expect(result.decision).toBe("block");
   });
 
-  it("returns escalate when revise loops without improvement", () => {
+  it("returns block when revise loops without improvement", () => {
     const result = evaluateDecision(
       {
         quality: 0.6,
@@ -71,11 +71,11 @@ describe("evaluateDecision", () => {
       weights
     );
 
-    expect(result.decision).toBe("escalate");
+    expect(result.decision).toBe("block");
     expect(result.reason).toBe("revise_without_improvement");
   });
 
-  it("returns escalate when guardrail is tripped", () => {
+  it("returns block when guardrail is tripped", () => {
     const result = evaluateDecision(
       {
         quality: 0.9,
@@ -89,11 +89,11 @@ describe("evaluateDecision", () => {
       weights
     );
 
-    expect(result.decision).toBe("escalate");
+    expect(result.decision).toBe("block");
     expect(result.reason).toBe("guardrail_tripped");
   });
 
-  it("returns escalate for unrecoverable tool error", () => {
+  it("returns block for unrecoverable tool error", () => {
     const result = evaluateDecision(
       {
         quality: 0.9,
@@ -107,7 +107,7 @@ describe("evaluateDecision", () => {
       weights
     );
 
-    expect(result.decision).toBe("escalate");
+    expect(result.decision).toBe("block");
     expect(result.reason).toBe("unrecoverable_tool_error");
   });
 });

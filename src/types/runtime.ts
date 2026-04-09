@@ -89,7 +89,7 @@ export type TaskNode = {
 };
 
 export type EvalDecision = {
-  decision: "continue" | "revise" | "stop" | "escalate";
+  decision: "deliver" | "revise" | "block";
   reason: string;
   scores: {
     quality: number;

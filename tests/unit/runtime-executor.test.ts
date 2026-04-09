@@ -401,7 +401,7 @@ describe("runtime executor", () => {
         .fn()
         .mockResolvedValueOnce({
           completedNodes: 1,
-          joinDecision: "stop",
+          joinDecision: "deliver",
           nodeResults: [
             {
               nodeId: "node-root",
@@ -419,7 +419,7 @@ describe("runtime executor", () => {
         })
         .mockResolvedValueOnce({
           completedNodes: 1,
-          joinDecision: "stop",
+          joinDecision: "deliver",
           nodeResults: [
             {
               nodeId: "node-research",
@@ -437,7 +437,7 @@ describe("runtime executor", () => {
         })
         .mockResolvedValueOnce({
           completedNodes: 1,
-          joinDecision: "stop",
+          joinDecision: "deliver",
           nodeResults: [
             {
               nodeId: "node-write",
@@ -506,6 +506,114 @@ describe("runtime executor", () => {
     expect(entries.map((entry) => entry.sourceId)).toContain("mem://task-executor-4/node-research");
     expect(entries.map((entry) => entry.sourceId)).toContain("mem://task-executor-4/node-write");
     expect(entries.map((entry) => entry.sourceId)).toContain("mem://task-executor-4/join/tier-1");
+  });
+
+  it("aborts tree execution when the orchestrator returns a blocking join decision", async () => {
+    const eventBus = {
+      publish: vi.fn(),
+      subscribe: vi.fn()
+    };
+    const eventLogStore = {
+      append: vi.fn(),
+      getAll: vi.fn().mockReturnValue([])
+    };
+    const runtime = {
+      run: vi
+        .fn()
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            task_kind: "research_writing",
+            execution_mode: "tree",
+            roles: ["planner", "researcher", "writer"],
+            needs_verification: true,
+            reason: "staged work"
+          })
+        })
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            summary: "planner summary",
+            recommended_tools: ["web_search"],
+            required_capabilities: ["research", "writing"],
+            verification_policy: "cite urls",
+            spawn_children: [
+              {
+                id: "node-research",
+                role: "researcher",
+                input: "Research OpenClaw",
+                depends_on: ["node-root"]
+              }
+            ]
+          })
+        })
+    };
+    const orchestrator = {
+      runParallelContexts: vi.fn().mockResolvedValue({
+        completedNodes: 1,
+        joinDecision: "block",
+        nodeResults: [
+          {
+            nodeId: "node-root",
+            finalState: "aborted",
+            delivery: {
+              status: "blocked",
+              final_result: "",
+              artifacts: [],
+              verification: [],
+              risks: [],
+              blocking_reason: "join_blocked",
+              next_actions: []
+            }
+          }
+        ]
+      })
+    };
+
+    const executor = createTaskExecutor({
+      config: {
+        models: {
+          default: "test-model",
+          fallback: [],
+          by_agent_role: {
+            planner: "test-model",
+            researcher: "test-model",
+            coder: "test-model",
+            writer: "test-model"
+          },
+          embeddings: { default: "embed-model" }
+        },
+        reasoner: {
+          default: "medium",
+          by_agent_role: {
+            planner: "medium",
+            researcher: "medium",
+            coder: "medium",
+            writer: "medium"
+          }
+        },
+        scheduler: { default_policy: "bfs", policy_overrides: {} },
+        guardrails: { max_depth: 4, max_branch: 3, max_steps: 60, max_budget: 5 },
+        evaluator: { weights: { quality: 0.6, cost: 0.2, latency: 0.2 } },
+        retry: { max_retries: 3, base_delay_ms: 1000 },
+        mcp_servers: {}
+      } as any,
+      runtime: runtime as any,
+      eventBus: eventBus as any,
+      eventLogStore: eventLogStore as any,
+      orchestrator: orchestrator as any,
+      finalizeDelivery: vi.fn().mockImplementation(async ({ delivery }) => delivery),
+      resolveModelRoute: vi.fn().mockReturnValue({
+        model: "test-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      }),
+      taskIdFactory: () => "task-executor-block-1"
+    });
+
+    const result = await executor.execute({
+      input: "research OpenClaw and write article"
+    });
+
+    expect(result.finalState).toBe("aborted");
   });
 
   it("publishes task memory persistence events for replayable resume", async () => {

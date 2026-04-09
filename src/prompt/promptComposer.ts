@@ -1,35 +1,105 @@
-import { AgentRole, RuntimeConfig } from "../types/runtime";
+import type { AgentRole, RuntimeConfig } from "../types/runtime";
+import type { ExecutionContext } from "../runtime/contracts";
 
-export function composeSystemPrompt(config: RuntimeConfig, role: AgentRole): string {
-  const base = [
-    `You are an AI agent acting as a ${role}.`,
-    "",
-    "CRITICAL PROTOCOL: AUTONOMOUS GRAPH ORCHESTRATION",
-    "You do not just answer questions. You design and execute a workflow graph.",
-    "If the user request is multi-step, you MUST output a JSON object to spawn the next steps.",
-    "",
-    "RESPONSE FORMAT (JSON ONLY):",
-    "{",
-    '  "thought": "Deep reasoning about current state and strategy",',
-    '  "status": "thinking | completed | waiting_hitl",',
-    '  "output_text": "Final result for THIS node",',
-    '  "next_nodes": [',
-    '    {',
-    '      "id": "meaningful-id",',
-    '      "type": "task | tool | loop_entry | hitl",',
-    '      "role": "researcher | coder | writer",',
-    '      "input": "Specific prompt for the next node"',
-    '    }',
-    '  ]',
-    "}",
-    "",
-    "NODE TYPES:",
-    "- task: standard LLM reasoning",
-    "- hitl: PAUSE and wait for human approval/input",
-    "- loop_entry: start a cycle that repeats until a condition is met",
-    "",
-    "Constraint: Max recursion depth is 5 nodes. Use 'completed' status to stop."
-  ].join("\n");
+type PromptPayload = {
+  system: string;
+  role: AgentRole;
+  task: string;
+  context: string[];
+  tools: string[];
+  memory: string[];
+  constraints: string[];
+  output_schema: {
+    type: string;
+    shape: Record<string, string>;
+  };
+};
 
-  return base;
+type StructuredPromptInput = {
+  system: string;
+  role: AgentRole;
+  task: string;
+  context: string[];
+  tools: string[];
+  memory: string[];
+  constraints: string[];
+  outputSchema: {
+    type: string;
+    shape: Record<string, string>;
+  };
+};
+
+type ComposePromptPayloadInput = StructuredPromptInput | { context: ExecutionContext };
+
+export function composeSystemPrompt(_config: RuntimeConfig, role: AgentRole): string {
+  return `You are an AI agent acting as a ${role}.`;
+}
+
+export function composePromptPayload(input: ComposePromptPayloadInput): PromptPayload {
+  if (isExecutionContextInput(input)) {
+    return composePromptPayloadFromExecutionContext(input.context);
+  }
+
+  return {
+    system: input.system,
+    role: input.role,
+    task: input.task,
+    context: input.context,
+    tools: input.tools,
+    memory: input.memory,
+    constraints: input.constraints,
+    output_schema: input.outputSchema
+  };
+}
+
+function composePromptPayloadFromExecutionContext(context: ExecutionContext): PromptPayload {
+  const tools = context.policy?.recommendedTools ?? [];
+  const constraints = [
+    ...(context.policy?.verificationPolicy ? [`verification:${context.policy.verificationPolicy}`] : []),
+    ...(context.policy?.requiredCapabilities ?? []).map((capability) => `capability:${capability}`)
+  ];
+
+  const promptContext = [
+    `node:${context.node.input}`,
+    ...context.dependencyOutputs.map((entry) => `dependency:${entry}`)
+  ];
+
+  const memory = [
+    ...context.memoryRefs.map((entry) => `memref:${entry}`),
+    ...context.workingMemory.map((entry) => `working:${entry}`),
+    ...context.retrievalContext.map((entry) => `retrieved:${entry.sourceId}:${entry.content}`)
+  ];
+
+  return {
+    system: [
+      `You are an autonomous ${context.node.role} agent.`,
+      "Use tools when claims require external evidence.",
+      "Research or factual tasks must include verification URLs or evidence strings.",
+      "Do not claim completion with an empty final_result."
+    ].join("\n"),
+    role: context.node.role,
+    task: context.task,
+    context: promptContext,
+    tools,
+    memory,
+    constraints,
+    output_schema: {
+      type: "json",
+      shape: {
+        final_result: "string",
+        verification: "string[]",
+        artifacts: "string[]",
+        risks: "string[]",
+        next_actions: "string[]"
+      }
+    }
+  };
+}
+
+function isExecutionContextInput(input: ComposePromptPayloadInput): input is { context: ExecutionContext } {
+  return "context" in input && isExecutionContext(input.context);
+}
+
+function isExecutionContext(value: StructuredPromptInput["context"] | ExecutionContext): value is ExecutionContext {
+  return typeof value === "object" && value !== null && "node" in value && "task" in value;
 }

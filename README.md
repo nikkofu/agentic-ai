@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`0.8.0`
+当前版本：`0.9.0`
 
 ## 🚀 核心特性
 
@@ -21,6 +21,10 @@
 - **任务控制面闭环**：已提供统一 `task lifecycle` 服务，支持 `start / resume / inspect / close`，并通过 CLI、queue worker 与 Dashboard API 共享同一条控制链。
 - **异步执行可视化**：queue-backed parallel node execution、worker 回流事件、Dashboard 生命周期面板与异步任务状态展示已经打通。
 - **分布式闭环增强**：queued node 具备 ownership/dedupe 元数据，shared task graph 会同步 async node/task writeback、distributed join readiness 与 resume/replay 恢复语义。
+- **统一生产 Prompt Pipeline**：`ExecutionContext` 现在通过单一 `promptComposer` 渲染为结构化生产 prompt payload，减少运行时 prompt 分叉。
+- **Typed Invalid Output Taxonomy**：runtime 会显式分类 `invalid_protocol`、`empty_delivery`、`verification_missing` 等无效输出，并决定 repair 或 block。
+- **Evaluator 唯一收敛权威**：节点只有在 evaluator 明确给出 `deliver` 时才会完成，避免隐式 stop 路径伪完成。
+- **Typed Planner Join Decisions**：planner/join 决策开始统一到 `deliver / revise_child / spawn_more / block / queued`，减少 stringly-typed 分支漂移。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -66,6 +70,8 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
 - Phase 11 的分布式闭环设计与计划见：
   [`docs/superpowers/specs/2026-04-09-phase11-13-iteration-design.md`](docs/superpowers/specs/2026-04-09-phase11-13-iteration-design.md)
   [`docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md`](docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md)
+- Phase 12 的 Agent 智能化内核计划见：
+  [`docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md`](docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 

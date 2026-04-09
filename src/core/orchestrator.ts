@@ -3,8 +3,9 @@ import { evaluateDecision } from "../eval/evaluator";
 import { checkSpawnGuardrails } from "../guardrails/guardrails";
 import { allowsToolByCapabilities } from "../runtime/capabilities";
 import { enrichExecutionContext, replayTaskMemoryFromEvents, type MemoryStore, type RetrievalProvider } from "../runtime/memory";
+import { composePromptPayload } from "../prompt/promptComposer";
 import type { AgentRole, DeliveryBundle, ToolIntent } from "../types/runtime";
-import type { ExecutionContext, PlannerPolicy } from "../runtime/contracts";
+import type { ExecutionContext, InvalidOutputClassification, JoinDecision, PlannerPolicy } from "../runtime/contracts";
 import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
@@ -49,7 +50,7 @@ type OrchestratorDeps = {
     policy: RuntimePolicyMetadata;
     iteration: number;
     sawToolStage: boolean;
-  }) => { decision: "stop" | "revise" | "block"; reason: string };
+  }) => { decision: "deliver" | "revise" | "block" | "join"; reason: string };
   memoryStore?: MemoryStore;
   retrievalProvider?: RetrievalProvider;
 };
@@ -75,6 +76,8 @@ type RuntimePolicyMetadata = {
   recommendedTools?: string[];
   requiredCapabilities?: string[];
   verificationPolicy?: string;
+  maxRevisions?: number;
+  requireArtifacts?: boolean;
   needsVerification?: boolean;
   taskKind?: string;
 };
@@ -114,6 +117,12 @@ type ParallelNodeResult = {
   nodeId: string;
   finalState: "completed" | "aborted";
   delivery: DeliveryBundle;
+};
+
+type ParallelRunResult = {
+  completedNodes: number;
+  joinDecision: JoinDecision;
+  nodeResults: ParallelNodeResult[];
 };
 
 export function createOrchestrator(deps: OrchestratorDeps) {
@@ -180,6 +189,20 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       const policy = extractRuntimePolicy(loopInput);
       const toolCalls = (envelope.tool_calls ?? []).filter((toolCall) => isAllowedToolCall(toolCall, policy));
 
+      const invalidOutput = classifyRuntimeOutput({
+        envelope,
+        rawOutputText: String((runtimeResult as any).outputText ?? ""),
+        requiresVerification: requiresVerification(policy)
+      });
+      if (invalidOutput) {
+        publish(deps.eventBus, "InvalidOutputClassified", {
+          task_id: input.taskId,
+          node_id: input.nodeId,
+          kind: invalidOutput.kind,
+          recoverable: invalidOutput.recoverable
+        });
+      }
+
       if ((envelope.tool_calls?.length ?? 0) > 0 && toolCalls.length === 0) {
         if (!stateTrace.includes("evaluating")) {
           stateTrace.push("evaluating");
@@ -238,12 +261,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         continue;
       }
 
-      if (envelope.invalid_tool_call_text) {
+      if (invalidOutput?.kind === "invalid_protocol" && invalidOutput.recoverable) {
         loopInput = attachRepairInstruction(loopInput);
         continue;
       }
 
-      if (isEmptyEnvelope(envelope, runtimeResult)) {
+      if (invalidOutput?.kind === "empty_delivery" && invalidOutput.recoverable) {
         loopInput = attachRepairInstruction(loopInput);
         continue;
       }
@@ -258,7 +281,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       delivery.status = envelope.blocking_reason ? "blocked" : "completed";
       delivery.blocking_reason = envelope.blocking_reason;
 
-      if (requiresVerification(policy) && delivery.verification.length === 0) {
+      if (invalidOutput?.kind === "verification_missing") {
         delivery.status = "blocked";
         delivery.blocking_reason = "policy_verification_required";
       }
@@ -279,6 +302,26 @@ export function createOrchestrator(deps: OrchestratorDeps) {
           });
 
       if (evaluatorDecision.decision === "revise") {
+        if (typeof policy.maxRevisions === "number" && iteration >= policy.maxRevisions) {
+          delivery.status = "blocked";
+          delivery.blocking_reason = "policy_revision_limit_reached";
+          publish(deps.eventBus, "Evaluated", {
+            task_id: input.taskId,
+            node_id: input.nodeId,
+            role: input.role,
+            decision: "block",
+            output_text: outputText,
+            usage: (runtimeResult as any).usage,
+            cost: (runtimeResult as any).cost,
+            model: typeof loopInput.model === "string" ? loopInput.model : undefined,
+            latency_ms: typeof (runtimeResult as any).latencyMs === "number" ? (runtimeResult as any).latencyMs : undefined,
+            delivery
+          });
+          evaluated = true;
+          finalState = "aborted";
+          break;
+        }
+
         publish(deps.eventBus, "Evaluated", {
           task_id: input.taskId,
           node_id: input.nodeId,
@@ -300,7 +343,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         continue;
       }
 
-      if (evaluatorDecision.decision === "block") {
+      if (policy.requireArtifacts && delivery.artifacts.length === 0) {
+        delivery.status = "blocked";
+        delivery.blocking_reason = "policy_artifacts_required";
+      }
+
+      if (evaluatorDecision.decision === "block" || evaluatorDecision.decision === "join") {
         delivery.status = "blocked";
         delivery.blocking_reason = delivery.blocking_reason ?? evaluatorDecision.reason;
       }
@@ -309,7 +357,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         task_id: input.taskId,
         node_id: input.nodeId,
         role: input.role,
-        decision: delivery.status === "completed" ? "stop" : "block",
+        decision: evaluatorDecision.decision,
         output_text: outputText,
         usage: (runtimeResult as any).usage,
         cost: (runtimeResult as any).cost,
@@ -319,7 +367,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       });
 
       evaluated = true;
-      finalState = delivery.status === "blocked" ? "aborted" : "completed";
+      finalState = evaluatorDecision.decision === "deliver" && delivery.status !== "blocked" ? "completed" : "aborted";
       break;
     }
 
@@ -439,8 +487,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       });
     },
 
-    runParallelTask: async (input: ParallelTaskInput) => {
-      const results: { nodeId: string; state: NodeState }[] = [];
+    runParallelTask: async (input: ParallelTaskInput): Promise<ParallelRunResult> => {
+      const results: Array<{ nodeId: string; state: ParallelNodeResult["finalState"] }> = [];
       const queue = [...input.nodes].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
       const runNext = async () => {
@@ -471,12 +519,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "JoinEvaluated", {
         task_id: input.taskId,
         node_count: results.length,
-        decision: "stop"
+        decision: "deliver"
       });
 
       return {
         completedNodes: results.length,
-        joinDecision: "stop",
+        joinDecision: "deliver",
         nodeResults: results.map((result) => ({
           nodeId: result.nodeId,
           finalState: result.state,
@@ -492,7 +540,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       };
     },
 
-    runParallelContexts: async (input: ParallelContextInput) => {
+    runParallelContexts: async (input: ParallelContextInput): Promise<ParallelRunResult> => {
       if (input.dispatchMode === "queue" && deps.taskQueue) {
         const joinNodeId = `join-${input.taskId}`;
         publish(deps.eventBus, "NodeScheduled", {
@@ -579,12 +627,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "JoinEvaluated", {
         task_id: input.taskId,
         node_count: results.length,
-        decision: "stop"
+        decision: "deliver"
       });
 
       return {
         completedNodes: results.length,
-        joinDecision: "stop",
+        joinDecision: "deliver",
         nodeResults: results
       };
     },
@@ -730,20 +778,17 @@ function restoreExecutionContexts(events: RuntimeEvent[]): Map<string, Execution
 }
 
 function buildRuntimeInputFromContext(context: ExecutionContext): Record<string, unknown> {
-  const prompt = buildAutonomousPrompt(context.node.role, context.node.input, {
-    task: context.task,
-    dependsOn: context.node.depends_on,
-    plannerPolicy: context.policy,
-    promptContext: context.dependencyOutputs,
-    workingMemory: context.workingMemory,
-    retrievalContext: context.retrievalContext
-  });
+  const promptPayload = composePromptPayload({ context });
+  const prompt = buildAutonomousPrompt(promptPayload, context);
 
   return {
+    __prompt: promptPayload,
     __policy: {
       recommendedTools: context.policy?.recommendedTools ?? [],
       requiredCapabilities: context.policy?.requiredCapabilities ?? [],
       verificationPolicy: context.policy?.verificationPolicy ?? "",
+      maxRevisions: context.policy?.maxRevisions,
+      requireArtifacts: context.policy?.requireArtifacts ?? false,
       needsVerification: context.intent?.needs_verification ?? false,
       taskKind: context.intent?.task_kind ?? ""
     },
@@ -795,7 +840,7 @@ function defaultEvaluateNode(args: {
   policy: RuntimePolicyMetadata;
   iteration: number;
   sawToolStage: boolean;
-}): { decision: "stop" | "revise" | "block"; reason: string } {
+}): { decision: "deliver" | "revise" | "block" | "join"; reason: string } {
   if (args.delivery.status === "blocked") {
     return {
       decision: "block",
@@ -827,7 +872,7 @@ function defaultEvaluateNode(args: {
     };
   }
 
-  if (evalDecision.decision === "escalate") {
+  if (evalDecision.decision === "block") {
     return {
       decision: "block",
       reason: evalDecision.reason
@@ -835,40 +880,42 @@ function defaultEvaluateNode(args: {
   }
 
   return {
-    decision: "stop",
+    decision: "deliver",
     reason: "quality_sufficient"
   };
 }
 
 function buildAutonomousPrompt(
-  role: AgentRole,
-  task: string,
-  context?: {
+  promptPayload: {
+    system: string;
+    role: AgentRole;
     task: string;
-    dependsOn?: string[];
-    plannerPolicy?: PlannerPolicy;
-    promptContext?: string[];
-    workingMemory?: string[];
-    retrievalContext?: Array<{ sourceId: string; content: string; relevance?: number }>;
-  }
+    context: string[];
+    tools: string[];
+    memory: string[];
+    constraints: string[];
+  },
+  context?: ExecutionContext
 ): { system: string; user: string } {
   const dependencyLine =
-    context?.dependsOn && context.dependsOn.length > 0
-      ? `Completed dependency nodes: ${context.dependsOn.join(", ")}. Use their outputs as prior context when available.`
+    context?.node.depends_on && context.node.depends_on.length > 0
+      ? `Completed dependency nodes: ${context.node.depends_on.join(", ")}. Use their outputs as prior context when available.`
       : "No dependency nodes are available for this step.";
-  const plannerPolicyLines = context?.plannerPolicy
-    ? [
-        `Planner recommended tools: ${context.plannerPolicy.recommendedTools.join(", ") || "none"}.`,
-        `Planner required capabilities: ${context.plannerPolicy.requiredCapabilities.join(", ") || "none"}.`,
-        `Planner verification policy: ${context.plannerPolicy.verificationPolicy || "default"}`
-      ]
+  const plannerPolicyLines = [
+    `Planner recommended tools: ${promptPayload.tools.join(", ") || "none"}.`,
+    `Planner required capabilities: ${context?.policy?.requiredCapabilities.join(", ") || "none"}.`,
+    `Planner verification policy: ${context?.policy?.verificationPolicy || "default"}`
+  ];
+  const contextLines = promptPayload.context.length
+    ? promptPayload.context.map((entry, index) => `Context[${index + 1}]: ${entry}`)
     : [];
-  const contextLines = context?.promptContext?.length
-    ? context.promptContext.map((entry, index) => `Context[${index + 1}]: ${entry}`)
-    : [];
-  const memoryLines = context?.workingMemory?.length
-    ? context.workingMemory.map((entry, index) => `WorkingMemory[${index + 1}]: ${entry}`)
-    : [];
+  const memoryLines = [
+    ...(context?.memoryRefs ?? []).map((entry, index) => `MemoryRef[${index + 1}]: ${entry}`),
+    ...(context?.workingMemory ?? []).map((entry, index) => `WorkingMemory[${index + 1}]: ${entry}`),
+    ...promptPayload.memory
+      .filter((entry) => !entry.startsWith("memref:") && !entry.startsWith("working:"))
+      .map((entry, index) => `Memory[${index + 1}]: ${entry}`)
+  ];
   const retrievalLines = context?.retrievalContext?.length
     ? context.retrievalContext.map((entry, index) =>
         `Retrieved[${index + 1}] ${entry.sourceId} (relevance=${String(entry.relevance ?? "")}): ${entry.content}`
@@ -877,25 +924,22 @@ function buildAutonomousPrompt(
 
   return {
     system: [
-      `You are an autonomous ${role} agent.`,
-      "Use tools when claims require external evidence.",
-      "Available local tools: web_search, page_fetch, github_readme, github_file, verify_sources, echo.",
-      "Research or factual tasks must include verification URLs or evidence strings.",
+      promptPayload.system,
+      `Available local tools: ${promptPayload.tools.join(", ") || "none"}.`,
+      ...promptPayload.constraints,
       "If you use a tool, respond with JSON only in one of two forms.",
       "Tool request schema:",
       '{"tool_calls":[{"transport":"local","tool":"web_search","input":{"query":"..."}}]}',
       "Final delivery schema:",
       '{"final_result":"markdown text","verification":["source or evidence"],"artifacts":[],"risks":[],"next_actions":[]}',
-      "Do not claim completion with an empty final_result.",
-      "Do not claim completion for research work without verification.",
       dependencyLine,
       ...plannerPolicyLines,
       ...contextLines,
       ...memoryLines,
       ...retrievalLines,
-      getRoleInstructions(role)
+      getRoleInstructions(promptPayload.role)
     ].join("\n"),
-    user: `User task: ${context?.task ?? task}\n\nCurrent node objective: ${task}`
+    user: `User task: ${promptPayload.task}\n\nCurrent node objective: ${context?.node.input ?? promptPayload.task}`
   };
 }
 
@@ -1048,6 +1092,54 @@ function isEmptyEnvelope(
     (envelope.output_text ?? "").trim().length === 0 &&
     rawOutput.trim().length === 0
   );
+}
+
+export function classifyRuntimeOutput(args: {
+  envelope: {
+    output_text?: string;
+    final_result?: string;
+    invalid_tool_call_text?: boolean;
+    verification?: string[];
+    artifacts?: string[];
+    tool_calls?: ToolIntent[];
+    blocking_reason?: string;
+  };
+  rawOutputText: string;
+  requiresVerification: boolean;
+}): InvalidOutputClassification | null {
+  if (args.envelope.invalid_tool_call_text) {
+    return {
+      kind: "invalid_protocol",
+      recoverable: true
+    };
+  }
+
+  if (
+    !args.envelope.blocking_reason &&
+    (args.envelope.tool_calls?.length ?? 0) === 0 &&
+    (args.envelope.artifacts?.length ?? 0) === 0 &&
+    (args.envelope.final_result ?? "").trim().length === 0 &&
+    (args.envelope.output_text ?? "").trim().length === 0 &&
+    args.rawOutputText.trim().length === 0
+  ) {
+    return {
+      kind: "empty_delivery",
+      recoverable: true
+    };
+  }
+
+  if (
+    args.requiresVerification &&
+    (args.envelope.final_result ?? "").trim().length > 0 &&
+    (args.envelope.verification ?? []).length === 0
+  ) {
+    return {
+      kind: "verification_missing",
+      recoverable: false
+    };
+  }
+
+  return null;
 }
 
 function looksLikePseudoToolCallText(outputText: string): boolean {

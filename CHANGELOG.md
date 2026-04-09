@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-04-09
+### Added
+- **Phase 12 Prompt Pipeline**: Added a single production prompt path rooted in `composePromptPayload(ExecutionContext)` plus a focused integration test for prompt payload propagation.
+- **Invalid Output Taxonomy**: Added typed invalid-output classification and `InvalidOutputClassified` events for malformed or non-deliverable runtime envelopes.
+- **Typed Join Policy Coverage**: Added Phase 12 join-policy coverage to verify typed `block` join decisions abort tree execution deterministically.
+
+### Changed
+- **Evaluator Authority**: Node completion now requires an explicit evaluator `deliver` decision instead of loose implicit stop semantics.
+- **Planner Policy Enforcement**: Runtime policy now enforces revise limits and artifact-required delivery constraints structurally, not only through prompt hints.
+- **Join Decision Contracts**: Parallel execution paths now normalize join outcomes into typed runtime decisions instead of stringly `stop` branches.
+
 ## [0.8.0] - 2026-04-09
 ### Added
 - **Distributed Queue Metadata**: Queued lifecycle and node jobs now carry `ownerId`, `dedupeKey`, and enqueue metadata so workers and inspection tools can reason about ownership and deduplication.

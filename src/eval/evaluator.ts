@@ -19,7 +19,7 @@ type EvaluatorWeights = {
 export function evaluateDecision(input: EvaluatorInput, weights: EvaluatorWeights): EvalDecision {
   if (input.guardrailTripped) {
     return {
-      decision: "escalate",
+      decision: "block",
       reason: "guardrail_tripped",
       scores: computeScores(input, weights)
     };
@@ -27,7 +27,7 @@ export function evaluateDecision(input: EvaluatorInput, weights: EvaluatorWeight
 
   if (input.unrecoverableToolError) {
     return {
-      decision: "escalate",
+      decision: "block",
       reason: "unrecoverable_tool_error",
       scores: computeScores(input, weights)
     };
@@ -35,7 +35,7 @@ export function evaluateDecision(input: EvaluatorInput, weights: EvaluatorWeight
 
   if (input.consecutiveRevises >= 2 && input.qualityDelta < 0.05) {
     return {
-      decision: "escalate",
+      decision: "block",
       reason: "revise_without_improvement",
       scores: computeScores(input, weights)
     };
@@ -44,14 +44,14 @@ export function evaluateDecision(input: EvaluatorInput, weights: EvaluatorWeight
   const scores = computeScores(input, weights);
 
   if (scores.total >= 0.75) {
-    return { decision: "continue", reason: "threshold_continue", scores };
+    return { decision: "deliver", reason: "threshold_deliver", scores };
   }
 
   if (scores.total >= 0.55) {
     return { decision: "revise", reason: "threshold_revise", scores };
   }
 
-  return { decision: "stop", reason: "threshold_stop", scores };
+  return { decision: "block", reason: "threshold_block", scores };
 }
 
 function computeScores(input: Pick<EvaluatorInput, "quality" | "cost" | "latency">, weights: EvaluatorWeights) {

@@ -14,6 +14,12 @@ export const eventSchemaRegistry = {
   AgentStarted: z.object({ task_id: z.string(), node_id: z.string(), role: z.string() }),
   PromptComposed: z.object({ task_id: z.string(), node_id: z.string() }),
   ModelCalled: z.object({ task_id: z.string(), node_id: z.string() }),
+  InvalidOutputClassified: z.object({
+    task_id: z.string(),
+    node_id: z.string(),
+    kind: z.string(),
+    recoverable: z.boolean()
+  }),
   ToolInvoked: z.object({ task_id: z.string(), node_id: z.string(), tool: z.string() }),
   ToolReturned: z.object({ task_id: z.string(), node_id: z.string(), ok: z.boolean() }),
   ExecutionContextPrepared: z.object({ task_id: z.string(), node_id: z.string(), context: z.any() }),

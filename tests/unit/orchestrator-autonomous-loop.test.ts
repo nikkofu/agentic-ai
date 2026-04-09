@@ -250,6 +250,8 @@ describe("orchestrator autonomous loop", () => {
     expect(runtime.run).toHaveBeenCalledTimes(2);
     expect(result.finalState).toBe("completed");
     expect(result.delivery.final_result).toBe("verified article");
+    const invalidEvent = eventLogStore.getAll().find((event) => event.type === "InvalidOutputClassified");
+    expect(invalidEvent?.payload.kind).toBe("invalid_protocol");
   });
 
   it("aborts instead of completing when tool loops exhaust without a final delivery", async () => {
@@ -530,6 +532,8 @@ describe("orchestrator autonomous loop", () => {
     expect(result.finalState).toBe("aborted");
     expect(result.delivery.status).toBe("blocked");
     expect(result.delivery.blocking_reason).toBe("policy_verification_required");
+    const invalidEvent = eventLogStore.getAll().find((event) => event.type === "InvalidOutputClassified");
+    expect(invalidEvent?.payload.kind).toBe("verification_missing");
   });
 
   it("revises once when evaluator marks the draft as insufficient but recoverable", async () => {
@@ -571,7 +575,7 @@ describe("orchestrator autonomous loop", () => {
       evaluator: vi
         .fn()
         .mockReturnValueOnce({ decision: "revise", reason: "quality_below_threshold" })
-        .mockReturnValueOnce({ decision: "stop", reason: "quality_sufficient" }) as any
+        .mockReturnValueOnce({ decision: "deliver", reason: "quality_sufficient" }) as any
     });
 
     const context = createExecutionContext({
@@ -614,6 +618,80 @@ describe("orchestrator autonomous loop", () => {
     expect(result.finalState).toBe("completed");
     expect(result.delivery.final_result).toBe("improved draft");
     expect(eventLogStore.getAll().map((event) => event.type)).toContain("NodeRevised");
+  });
+
+  it("blocks when planner policy forbids additional revisions beyond the configured bound", async () => {
+    const eventBus = createInMemoryEventBus();
+    const eventLogStore = createInMemoryEventLogStore();
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          final_result: "thin draft",
+          verification: ["source-a"],
+          artifacts: [],
+          risks: [],
+          next_actions: []
+        })
+      })
+    };
+
+    const orchestrator = createOrchestrator({
+      eventBus,
+      eventLogStore,
+      guardrails: {
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
+      },
+      runtime: runtime as any,
+      evaluator: vi.fn().mockReturnValue({
+        decision: "revise",
+        reason: "quality_below_threshold"
+      }) as any
+    });
+
+    const context = createExecutionContext({
+      intent: {
+        task_kind: "research_writing",
+        execution_mode: "tree",
+        roles: ["planner", "researcher", "writer"],
+        needs_verification: true,
+        reason: "needs staged execution"
+      },
+      plan: null,
+      policy: {
+        recommendedTools: ["web_search"],
+        requiredCapabilities: ["research", "writing"],
+        verificationPolicy: "cite urls",
+        maxRevisions: 0
+      } as any,
+      node: {
+        id: "node-write",
+        role: "writer",
+        input: "write article",
+        depends_on: ["node-root"]
+      },
+      task: "调研项目并写文章",
+      dependencyOutputs: ["research summary"],
+      memoryRefs: []
+    });
+
+    const result = await orchestrator.runSingleNodeContext({
+      taskId: "task-policy-revise-bound",
+      context,
+      resolveRuntimeInput: ({ runtimeInput }) => ({
+        ...runtimeInput,
+        model: "writer-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      })
+    });
+
+    expect(result.finalState).toBe("aborted");
+    expect(result.delivery.status).toBe("blocked");
+    expect(result.delivery.blocking_reason).toBe("policy_revision_limit_reached");
+    expect(runtime.run).toHaveBeenCalledTimes(1);
   });
 
   it("blocks immediately when evaluator returns block even if model emitted a result", async () => {
@@ -661,6 +739,122 @@ describe("orchestrator autonomous loop", () => {
     expect(result.finalState).toBe("aborted");
     expect(result.delivery.status).toBe("blocked");
     expect(result.delivery.blocking_reason).toBe("unsafe_claims");
+  });
+
+  it("does not complete a node unless evaluator explicitly returns deliver", async () => {
+    const eventBus = createInMemoryEventBus();
+    const eventLogStore = createInMemoryEventLogStore();
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          final_result: "draft article",
+          verification: ["source-a"],
+          artifacts: [],
+          risks: [],
+          next_actions: []
+        })
+      })
+    };
+
+    const orchestrator = createOrchestrator({
+      eventBus,
+      eventLogStore,
+      guardrails: {
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
+      },
+      runtime: runtime as any,
+      evaluator: vi.fn().mockReturnValue({
+        decision: "join",
+        reason: "waiting_for_join"
+      }) as any
+    });
+
+    const result = await orchestrator.runSingleNodeTask({
+      taskId: "task-eval-join-1",
+      nodeId: "node-1",
+      role: "writer",
+      runtimeInput: {
+        model: "writer-model",
+        reasoner: "medium",
+        input: [{ role: "user", content: "write article" }]
+      }
+    });
+
+    expect(result.finalState).toBe("aborted");
+    expect(result.delivery.status).toBe("blocked");
+    expect(result.delivery.blocking_reason).toBe("waiting_for_join");
+  });
+
+  it("blocks final delivery when planner policy requires artifacts but none were produced", async () => {
+    const eventBus = createInMemoryEventBus();
+    const eventLogStore = createInMemoryEventLogStore();
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          final_result: "article draft",
+          verification: ["source-a"],
+          artifacts: [],
+          risks: [],
+          next_actions: []
+        })
+      })
+    };
+
+    const orchestrator = createOrchestrator({
+      eventBus,
+      eventLogStore,
+      guardrails: {
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
+      },
+      runtime: runtime as any
+    });
+
+    const context = createExecutionContext({
+      intent: {
+        task_kind: "research_writing",
+        execution_mode: "tree",
+        roles: ["planner", "researcher", "writer"],
+        needs_verification: true,
+        reason: "needs staged execution"
+      },
+      plan: null,
+      policy: {
+        recommendedTools: ["web_search"],
+        requiredCapabilities: ["research", "writing"],
+        verificationPolicy: "cite urls",
+        requireArtifacts: true
+      } as any,
+      node: {
+        id: "node-write",
+        role: "writer",
+        input: "write article",
+        depends_on: ["node-root"]
+      },
+      task: "调研项目并写文章",
+      dependencyOutputs: ["research summary"],
+      memoryRefs: []
+    });
+
+    const result = await orchestrator.runSingleNodeContext({
+      taskId: "task-policy-artifacts",
+      context,
+      resolveRuntimeInput: ({ runtimeInput }) => ({
+        ...runtimeInput,
+        model: "writer-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      })
+    });
+
+    expect(result.finalState).toBe("aborted");
+    expect(result.delivery.status).toBe("blocked");
+    expect(result.delivery.blocking_reason).toBe("policy_artifacts_required");
   });
 
   it("allows multiple concrete research tools when policy grants the research capability", async () => {
