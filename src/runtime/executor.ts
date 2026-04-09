@@ -100,7 +100,15 @@ type TaskExecutorDeps = {
         delivery: DeliveryBundle;
       }>;
     }>;
-    resumeTask: (taskId: string, maxParallel?: number) => Promise<{
+    resumeTask: (
+      taskId: string,
+      maxParallel?: number,
+      resolveRuntimeInput?: (args: {
+        role: AgentRole;
+        context: ExecutionContext;
+        runtimeInput: Record<string, unknown>;
+      }) => Record<string, unknown>
+    ) => Promise<{
       completedNodes: number;
       status: "completed" | "aborted";
       message?: string;
@@ -122,6 +130,22 @@ type TaskExecutorDeps = {
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
   const env = deps.env ?? process.env;
+  const resolveRuntimeInput = ({ role, runtimeInput }: {
+    role: AgentRole;
+    context: ExecutionContext;
+    runtimeInput: Record<string, unknown>;
+  }) => {
+    const nodeRoute = deps.resolveModelRoute(deps.config, role, env);
+    return {
+      ...runtimeInput,
+      apiKey: nodeRoute.apiKey ?? env.OPENROUTER_API_KEY,
+      model: nodeRoute.model,
+      baseUrl: nodeRoute.baseUrl,
+      fallbackModels: deps.config.models.fallback,
+      reasoner: nodeRoute.reasoner,
+      retry: deps.config.retry
+    };
+  };
 
   const persistTaskMemory = async (entry: {
     taskId: string;
@@ -173,22 +197,6 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         next_actions: []
       };
       let plannerPolicy: PlannerPolicy | undefined;
-      const resolveRuntimeInput = ({ role, runtimeInput }: {
-        role: AgentRole;
-        context: ExecutionContext;
-        runtimeInput: Record<string, unknown>;
-      }) => {
-        const nodeRoute = deps.resolveModelRoute(deps.config, role, env);
-        return {
-          ...runtimeInput,
-          apiKey: nodeRoute.apiKey ?? env.OPENROUTER_API_KEY,
-          model: nodeRoute.model,
-          baseUrl: nodeRoute.baseUrl,
-          fallbackModels: deps.config.models.fallback,
-          reasoner: nodeRoute.reasoner,
-          retry: deps.config.retry
-        };
-      };
 
       const plannerRoute = deps.resolveModelRoute(deps.config, "planner", env);
       const intent = input.workflow
@@ -437,7 +445,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
 
       const beforeEvents = await deps.taskStore.getEvents(input.taskId);
       const taskInput = restoreTaskInput(beforeEvents) ?? `resumed task ${input.taskId}`;
-      const resumeResult = await deps.orchestrator.resumeTask(input.taskId, input.maxParallel ?? 2);
+      const resumeResult = await deps.orchestrator.resumeTask(input.taskId, input.maxParallel ?? 2, resolveRuntimeInput);
       const afterEvents = await deps.taskStore.getEvents(input.taskId);
       const resumedEvents = afterEvents.slice(beforeEvents.length);
       const restoredDelivery = restoreLatestDelivery(afterEvents) ?? {

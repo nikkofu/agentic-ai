@@ -23,11 +23,16 @@
 - **分布式闭环增强**：queued node 具备 ownership/dedupe 元数据，shared task graph 会同步 async node/task writeback、distributed join readiness 与 resume/replay 恢复语义。
 - **统一生产 Prompt Pipeline**：`ExecutionContext` 现在通过单一 `promptComposer` 渲染为结构化生产 prompt payload，减少运行时 prompt 分叉。
 - **Typed Invalid Output Taxonomy**：runtime 会显式分类 `invalid_protocol`、`empty_delivery`、`verification_missing` 等无效输出，并决定 repair 或 block。
+- **语义 Tool Loop 识别**：重复发出等价 tool-call 的节点现在会被明确分类为 `semantic_tool_loop`，避免继续漂到泛化的耗尽状态。
 - **Evaluator 唯一收敛权威**：节点只有在 evaluator 明确给出 `deliver` 时才会完成，避免隐式 stop 路径伪完成。
 - **Typed Planner Join Decisions**：planner/join 决策开始统一到 `deliver / revise_child / spawn_more / block / queued`，减少 stringly-typed 分支漂移。
 - **产品化 Runtime Inspector**：Dashboard 开始按 `Intent / Plan / Delivery / Runtime` 分区展示任务状态、证据、artifact 真值和解释链路。
 - **交付物真值展示**：inspection 会返回 artifact 是否存在、是否非空，以及 verification 预览，不再只展示计数。
 - **可执行解释层**：UI 已统一展示 `explanation + actionHint`，把完成、阻断、失败转成更可读且可执行的用户提示。
+- **Gold-Path 产品证明补齐**：当前已具备三条产品化 proof：
+  - research-writing 成功/阻断
+  - code edit + test 成功交付
+  - async resume after interruption
 
 ## 🖥️ 可视化 Dashboard
 

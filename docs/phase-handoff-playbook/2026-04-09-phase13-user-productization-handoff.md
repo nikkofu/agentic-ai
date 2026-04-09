@@ -29,18 +29,21 @@ Scope: productize runtime truth so users can understand completed and blocked ta
 - product-facing gold-path proof exists for:
   - successful research-writing completion
   - blocked research-writing due to missing verification
+  - successful code edit + test delivery
+  - successful resume after interruption
+- Phase 12 closure work now also classifies repeated identical tool loops as `semantic_tool_loop`
 
 ## Verification
 
 Focused Phase 13 suite:
 
 ```bash
-npm test -- --run tests/unit/taskLifecycle.test.ts tests/unit/ui-event-stream-state.test.ts tests/unit/ui-task-store.test.ts tests/integration/phase13-gold-path-inspection.test.ts
+npm test -- --run tests/unit/runtime-invalid-output.test.ts tests/unit/orchestrator-autonomous-loop.test.ts tests/unit/taskLifecycle.test.ts tests/unit/ui-event-stream-state.test.ts tests/unit/ui-task-store.test.ts tests/integration/phase13-gold-path-inspection.test.ts tests/integration/phase13-code-edit-gold-path.test.ts tests/integration/phase13-async-resume-gold-path.test.ts
 ```
 
 Result:
-- `4` test files passed
-- `18` tests passed
+- `8` test files passed
+- `41` tests passed
 
 UI type verification:
 
@@ -59,9 +62,11 @@ Result:
 - `ui/hooks/eventStreamState.ts`
 - `ui/store/useTaskStore.ts`
 - `tests/integration/phase13-gold-path-inspection.test.ts`
+- `tests/integration/phase13-code-edit-gold-path.test.ts`
+- `tests/integration/phase13-async-resume-gold-path.test.ts`
 
 ## Recommended Next Steps
 
-- add a dedicated artifact/evidence visual section rather than keeping everything inside the lifecycle panel
-- improve node detail / graph selection so node-level reasoning and node-level evidence are inspectable
-- prepare release-facing docs, diary, and version bump when Phase 13 is considered feature-complete
+- Phase 11-13 closure is now functionally complete
+- next work should start a new Phase 14 line rather than reopening productization closure
+- if a release is desired, prepare release-facing docs, diary, version bump, and merge from this closure branch

@@ -41,4 +41,24 @@ describe("runtime invalid output classification", () => {
     expect(classification.kind).toBe("verification_missing");
     expect(classification.recoverable).toBe(false);
   });
+
+  it("classifies repeated semantic tool loops as semantic_tool_loop", () => {
+    const classification = classifyRuntimeOutput({
+      envelope: {
+        tool_calls: [
+          {
+            transport: "local",
+            tool: "web_search",
+            input: { query: "openclaw github" }
+          }
+        ]
+      },
+      rawOutputText: "{\"tool_calls\":[{\"transport\":\"local\",\"tool\":\"web_search\",\"input\":{\"query\":\"openclaw github\"}}]}",
+      requiresVerification: false,
+      repeatedToolLoop: true
+    });
+
+    expect(classification.kind).toBe("semantic_tool_loop");
+    expect(classification.recoverable).toBe(false);
+  });
 });

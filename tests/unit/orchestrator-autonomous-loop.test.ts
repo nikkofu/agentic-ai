@@ -258,17 +258,63 @@ describe("orchestrator autonomous loop", () => {
     const eventBus = createInMemoryEventBus();
     const eventLogStore = createInMemoryEventLogStore();
     const runtime = {
-      run: vi.fn().mockResolvedValue({
-        outputText: JSON.stringify({
-          tool_calls: [
-            {
-              transport: "local",
-              tool: "web_search",
-              input: { query: "openclaw github" }
-            }
-          ]
+      run: vi
+        .fn()
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            tool_calls: [
+              {
+                transport: "local",
+                tool: "web_search",
+                input: { query: "openclaw github" }
+              }
+            ]
+          })
         })
-      })
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            tool_calls: [
+              {
+                transport: "local",
+                tool: "web_search",
+                input: { query: "openclaw readme" }
+              }
+            ]
+          })
+        })
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            tool_calls: [
+              {
+                transport: "local",
+                tool: "web_search",
+                input: { query: "openclaw architecture" }
+              }
+            ]
+          })
+        })
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            tool_calls: [
+              {
+                transport: "local",
+                tool: "web_search",
+                input: { query: "openclaw repo stars" }
+              }
+            ]
+          })
+        })
+        .mockResolvedValueOnce({
+          outputText: JSON.stringify({
+            tool_calls: [
+              {
+                transport: "local",
+                tool: "web_search",
+                input: { query: "openclaw issues" }
+              }
+            ]
+          })
+        })
     };
     const toolGateway = {
       invoke: vi.fn().mockResolvedValue({
@@ -309,6 +355,63 @@ describe("orchestrator autonomous loop", () => {
     expect(result.delivery.blocking_reason).toBe("tool_loop_exhausted");
     expect(eventLogStore.getAll().map((event) => event.type)).toContain("NodeAborted");
     expect(eventLogStore.getAll().map((event) => event.type)).not.toContain("NodeCompleted");
+  });
+
+  it("blocks repeated identical tool loops as semantic_tool_loop before generic exhaustion", async () => {
+    const eventBus = createInMemoryEventBus();
+    const eventLogStore = createInMemoryEventLogStore();
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          tool_calls: [
+            {
+              transport: "local",
+              tool: "web_search",
+              input: { query: "openclaw github" }
+            }
+          ]
+        })
+      })
+    };
+    const toolGateway = {
+      invoke: vi.fn().mockResolvedValue({
+        ok: true,
+        output: { results: [] },
+        latencyMs: 1,
+        costMeta: { provider: "local", tokens: 0, usd: 0 }
+      })
+    };
+
+    const orchestrator = createOrchestrator({
+      eventBus,
+      eventLogStore,
+      guardrails: {
+        max_depth: 4,
+        max_branch: 3,
+        max_steps: 60,
+        max_budget: 5
+      },
+      runtime: runtime as any,
+      toolGateway
+    });
+
+    const result = await orchestrator.runSingleNodeTask({
+      taskId: "task-loop-semantic-1",
+      nodeId: "node-1",
+      role: "planner",
+      runtimeInput: {
+        model: "mock-model",
+        reasoner: "medium",
+        input: [{ role: "user", content: "research project" }]
+      }
+    });
+
+    expect(runtime.run).toHaveBeenCalledTimes(2);
+    expect(result.finalState).toBe("aborted");
+    expect(result.delivery.status).toBe("blocked");
+    expect(result.delivery.blocking_reason).toBe("semantic_tool_loop");
+    const invalidEvent = eventLogStore.getAll().find((event) => event.type === "InvalidOutputClassified");
+    expect(invalidEvent?.payload.kind).toBe("semantic_tool_loop");
   });
 
   it("runs a node directly from execution context and assembles runtime input in core", async () => {

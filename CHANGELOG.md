@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- **Phase 13 Code Edit Gold Path**: Added a product-facing proof that completed code-edit tasks surface artifact truth, verification preview, and user-facing delivery explanations.
+- **Phase 13 Async Resume Gold Path**: Added a product-facing proof that interrupted tasks can be resumed and then inspected through the same delivery/explanation surface.
+
+### Changed
+- **Phase 12 Taxonomy Closure**: Runtime now classifies repeated identical tool loops as `semantic_tool_loop` instead of only falling through to generic loop exhaustion.
+- **Resume Runtime Routing**: Resumed nodes now reuse the same resolved model/runtime route as normal execution, preserving model/apiKey injection during replay.
+
 ## [1.0.0] - 2026-04-09
 ### Added
 - **Phase 13 Runtime Inspector**: `taskLifecycle.inspectTask()` now produces a structured product-facing inspector with intent, planner policy, plan summary, delivery truth, explanation, and action hint.

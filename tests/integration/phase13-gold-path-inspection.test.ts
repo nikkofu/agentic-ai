@@ -5,8 +5,6 @@ import { createRuntimeServices } from "../../src/runtime/runtimeServices";
 
 afterEach(() => {
   fs.rmSync("artifacts/openclaw.md", { force: true });
-  fs.rmSync("logs/runs", { recursive: true, force: true });
-  fs.rmSync("audit_trail.jsonl", { force: true });
 });
 
 describe("phase 13 gold-path inspection", () => {

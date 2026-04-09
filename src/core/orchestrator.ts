@@ -170,6 +170,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     let loopInput = baseRuntimeInput;
     let sawToolStage = false;
     let evaluated = false;
+    let previousToolLoopSignature: string | null = null;
 
     for (let iteration = 0; iteration < 5; iteration += 1) {
       publish(deps.eventBus, "ModelCalled", {
@@ -188,11 +189,17 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       const envelope = parseRuntimeEnvelope((runtimeResult as any).outputText);
       const policy = extractRuntimePolicy(loopInput);
       const toolCalls = (envelope.tool_calls ?? []).filter((toolCall) => isAllowedToolCall(toolCall, policy));
+      const currentToolLoopSignature = toolCalls.length > 0 ? createToolLoopSignature(toolCalls) : null;
 
       const invalidOutput = classifyRuntimeOutput({
         envelope,
         rawOutputText: String((runtimeResult as any).outputText ?? ""),
-        requiresVerification: requiresVerification(policy)
+        requiresVerification: requiresVerification(policy),
+        repeatedToolLoop: Boolean(
+          currentToolLoopSignature &&
+          previousToolLoopSignature &&
+          currentToolLoopSignature === previousToolLoopSignature
+        )
       });
       if (invalidOutput) {
         publish(deps.eventBus, "InvalidOutputClassified", {
@@ -228,11 +235,37 @@ export function createOrchestrator(deps: OrchestratorDeps) {
         break;
       }
 
+      if (invalidOutput?.kind === "semantic_tool_loop") {
+        if (!stateTrace.includes("evaluating")) {
+          stateTrace.push("evaluating");
+        }
+        delivery.status = "blocked";
+        delivery.final_result = "";
+        delivery.artifacts = [];
+        delivery.verification = [];
+        delivery.risks = ["runtime detected a repeated semantic tool loop"];
+        delivery.next_actions = [];
+        delivery.blocking_reason = "semantic_tool_loop";
+        publish(deps.eventBus, "Evaluated", {
+          task_id: input.taskId,
+          node_id: input.nodeId,
+          role: input.role,
+          decision: "block",
+          output_text: "",
+          model: typeof loopInput.model === "string" ? loopInput.model : undefined,
+          delivery
+        });
+        evaluated = true;
+        finalState = "aborted";
+        break;
+      }
+
       if (toolCalls.length > 0) {
         if (!sawToolStage) {
           stateTrace.push("waiting_tool");
           sawToolStage = true;
         }
+        previousToolLoopSignature = currentToolLoopSignature;
 
         const toolResults = [];
         for (const toolCall of toolCalls) {
@@ -637,7 +670,15 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       };
     },
 
-    resumeTask: async (taskId: string, maxParallel: number = 2): Promise<{
+    resumeTask: async (
+      taskId: string,
+      maxParallel: number = 2,
+      resolveRuntimeInput?: (args: {
+        role: AgentRole;
+        context: ExecutionContext;
+        runtimeInput: Record<string, unknown>;
+      }) => Record<string, unknown>
+    ): Promise<{
       completedNodes: number;
       status: "completed" | "aborted";
       message?: string;
@@ -680,11 +721,19 @@ export function createOrchestrator(deps: OrchestratorDeps) {
             memoryStore: deps.memoryStore,
             retrievalProvider: deps.retrievalProvider
           });
+          const baseRuntimeInput = buildRuntimeInputFromContext(enrichedContext);
+          const runtimeInput = resolveRuntimeInput
+            ? resolveRuntimeInput({
+                role: enrichedContext.node.role,
+                context: enrichedContext,
+                runtimeInput: baseRuntimeInput
+              })
+            : baseRuntimeInput;
           results.push(await runNode({
             taskId,
             nodeId: enrichedContext.node.id,
             role: enrichedContext.node.role,
-            runtimeInput: withNodeMetadata(buildRuntimeInputFromContext(enrichedContext), enrichedContext)
+            runtimeInput: withNodeMetadata(runtimeInput, enrichedContext)
           }));
           return;
         }
@@ -1106,7 +1155,15 @@ export function classifyRuntimeOutput(args: {
   };
   rawOutputText: string;
   requiresVerification: boolean;
+  repeatedToolLoop?: boolean;
 }): InvalidOutputClassification | null {
+  if (args.repeatedToolLoop) {
+    return {
+      kind: "semantic_tool_loop",
+      recoverable: false
+    };
+  }
+
   if (args.envelope.invalid_tool_call_text) {
     return {
       kind: "invalid_protocol",
@@ -1164,4 +1221,14 @@ function summarizeInput(runtimeInput?: Record<string, unknown>) {
     ) as { content?: string } | undefined;
 
   return typeof lastUserMessage?.content === "string" ? lastUserMessage.content.slice(0, 280) : "";
+}
+
+function createToolLoopSignature(toolCalls: ToolIntent[]) {
+  return JSON.stringify(
+    toolCalls.map((toolCall) => ({
+      transport: toolCall.transport,
+      tool: toolCall.tool,
+      input: toolCall.input
+    }))
+  );
 }
