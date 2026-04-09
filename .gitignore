@@ -6,6 +6,7 @@ node_modules/
 dist/
 artifacts/
 .worktrees/
+audit_trail.jsonl
 *.json
 !package.json
 !package-lock.json
