@@ -19,6 +19,7 @@ import { createTaskExecutor } from "./executor";
 import { createTaskLifecycle } from "./taskLifecycle";
 import { createMemoryEngine } from "./memoryEngine";
 import { createDreamRuntime } from "./dreamRuntime";
+import { createDreamInspector, createMemoryInspector } from "./memoryInspectors";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 export async function createRuntimeServices(args?: {
@@ -101,7 +102,12 @@ export async function createRuntimeServices(args?: {
 
   const taskLifecycle = createTaskLifecycle({
     executor,
-    taskStore
+    taskStore,
+    memoryInspector: createMemoryInspector({ memoryStore }),
+    dreamInspector: createDreamInspector({
+      repoRoot: process.cwd(),
+      userHome: process.env.HOME ?? process.cwd()
+    })
   });
 
   return {
