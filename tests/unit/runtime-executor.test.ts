@@ -1101,4 +1101,123 @@ describe("runtime executor", () => {
       })
     );
   });
+
+  it("resumes a family task through the family-aware finalization boundary", async () => {
+    const eventBus = {
+      publish: vi.fn(),
+      subscribe: vi.fn()
+    };
+    const persistedEvents = [
+      {
+        type: "ExecutionContextPrepared",
+        payload: {
+          task_id: "task-resume-family-1",
+          node_id: "node-root",
+          context: {
+            task: "research and write a summary",
+            policy: {
+              family: "research_writing",
+              familyPolicy: {
+                family: "research_writing",
+                automationPriority: "low",
+                trustPriority: "high",
+                requireVerification: true,
+                requireArtifacts: true,
+                sourceCoverageMinimum: 2,
+                browserRecoveryBudget: 0
+              }
+            }
+          }
+        }
+      },
+      {
+        type: "Evaluated",
+        payload: {
+          task_id: "task-resume-family-1",
+          node_id: "node-root",
+          decision: "stop",
+          delivery: {
+            status: "completed",
+            final_result: "resumed family output",
+            artifacts: ["artifact-1"],
+            verification: [
+              {
+                kind: "source",
+                summary: "source-a",
+                sourceId: "source-a",
+                passed: true
+              }
+            ],
+            risks: [],
+            next_actions: []
+          }
+        }
+      }
+    ];
+    const taskStore = {
+      getEvents: vi
+        .fn()
+        .mockResolvedValueOnce(persistedEvents)
+        .mockResolvedValueOnce(persistedEvents)
+    };
+    const orchestrator = {
+      resumeTask: vi.fn().mockResolvedValue({
+        completedNodes: 1,
+        status: "completed"
+      })
+    };
+
+    const executor = createTaskExecutor({
+      config: {
+        models: {
+          default: "test-model",
+          fallback: [],
+          by_agent_role: {
+            planner: "test-model",
+            researcher: "test-model",
+            coder: "test-model",
+            writer: "test-model"
+          },
+          embeddings: { default: "embed-model" }
+        },
+        reasoner: {
+          default: "medium",
+          by_agent_role: {
+            planner: "medium",
+            researcher: "medium",
+            coder: "medium",
+            writer: "medium"
+          }
+        },
+        scheduler: { default_policy: "bfs", policy_overrides: {} },
+        guardrails: { max_depth: 4, max_branch: 3, max_steps: 60, max_budget: 5 },
+        evaluator: { weights: { quality: 0.6, cost: 0.2, latency: 0.2 } },
+        retry: { max_retries: 3, base_delay_ms: 1000 },
+        mcp_servers: {}
+      } as any,
+      eventBus: eventBus as any,
+      eventLogStore: { getAll: vi.fn().mockReturnValue([]) } as any,
+      orchestrator: orchestrator as any,
+      taskStore: taskStore as any,
+      finalizeDelivery: vi.fn().mockImplementation(async ({ delivery }) => delivery),
+      resolveModelRoute: vi.fn().mockReturnValue({
+        model: "test-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      })
+    });
+
+    const result = await executor.resume({
+      taskId: "task-resume-family-1"
+    });
+
+    expect(result.finalState).toBe("completed");
+    expect(result.delivery.family).toBe("research_writing");
+    expect(result.delivery.delivery_proof.family).toBe("research_writing");
+    expect(result.delivery.verification[0]).toMatchObject({
+      kind: "source",
+      summary: "source-a",
+      passed: true
+    });
+  });
 });

@@ -7,7 +7,7 @@ import { buildWorkflowFromIntent, normalizeJoinDecision, planWorkflowFromPlanner
 import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
 import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "./deliveryHarness";
-import { buildTaskFamilyPolicy, inferTaskFamily } from "./taskFamily";
+import { buildTaskFamilyPolicy, inferTaskFamily, normalizeTaskFamily } from "./taskFamily";
 import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "./contracts";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
@@ -463,6 +463,8 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       const resumeResult = await deps.orchestrator.resumeTask(input.taskId, input.maxParallel ?? 2, resolveRuntimeInput);
       const afterEvents = await deps.taskStore.getEvents(input.taskId);
       const resumedEvents = afterEvents.slice(beforeEvents.length);
+      const family = restoreTaskFamily(afterEvents) ?? restoreTaskFamily(beforeEvents);
+      const familyPolicy = restoreTaskFamilyPolicy(afterEvents) ?? restoreTaskFamilyPolicy(beforeEvents) ?? (family ? buildTaskFamilyPolicy(family) : undefined);
       const restoredDelivery = restoreLatestDelivery(afterEvents) ?? {
         status: resumeResult.status === "completed" ? "completed" : "blocked",
         final_result: "",
@@ -478,7 +480,12 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskInput,
         delivery: restoredDelivery
       });
-      const finalState = delivery.status === "completed" ? "completed" : "aborted";
+      const familyDelivery = finalizeTaskFamilyDelivery({
+        delivery,
+        family,
+        familyPolicy
+      });
+      const finalState = familyDelivery.status === "completed" ? "completed" : "aborted";
 
       deps.eventBus.publish({
         type: "TaskClosed",
@@ -486,10 +493,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           task_id: input.taskId,
           state: finalState,
           resumed: true,
-          delivery,
-          final_result: delivery.final_result,
-          artifacts: delivery.artifacts,
-          blocking_reason: delivery.blocking_reason
+          delivery: familyDelivery,
+          final_result: familyDelivery.final_result,
+          artifacts: familyDelivery.artifacts,
+          blocking_reason: familyDelivery.blocking_reason
         },
         ts: Date.now()
       });
@@ -497,8 +504,8 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       return {
         taskId: input.taskId,
         finalState,
-        outputText: delivery.final_result,
-        delivery,
+        outputText: familyDelivery.final_result,
+        delivery: familyDelivery,
         summary: {
           nodeCount: resumedEvents.filter((event) => event.type === "NodeScheduled").length,
           childSpawns: resumedEvents
@@ -561,6 +568,45 @@ function restoreLatestDelivery(events: RuntimeEvent[]): DeliveryBundle | undefin
       return event.payload.delivery as DeliveryBundle;
     }
   }
+  return undefined;
+}
+
+function restoreTaskFamily(events: RuntimeEvent[]): TaskFamily | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === "ExecutionContextPrepared") {
+      const context = event.payload.context as { policy?: { family?: unknown } } | undefined;
+      const family = normalizeTaskFamily(context?.policy?.family);
+      if (family) {
+        return family;
+      }
+    }
+
+    if ((event.type === "TaskClosed" || event.type === "Evaluated") && event.payload.delivery && typeof event.payload.delivery === "object") {
+      const family = normalizeTaskFamily((event.payload.delivery as { family?: unknown }).family);
+      if (family) {
+        return family;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function restoreTaskFamilyPolicy(events: RuntimeEvent[]): TaskFamilyPolicy | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type !== "ExecutionContextPrepared") {
+      continue;
+    }
+
+    const context = event.payload.context as { policy?: { familyPolicy?: unknown } } | undefined;
+    const familyPolicy = context?.policy?.familyPolicy;
+    if (familyPolicy && typeof familyPolicy === "object") {
+      return familyPolicy as TaskFamilyPolicy;
+    }
+  }
+
   return undefined;
 }
 
