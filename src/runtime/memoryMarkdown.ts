@@ -7,6 +7,8 @@ type MemoryMarkdownFrontmatter = {
   kind: string;
   confidence: string;
   tags?: string[];
+  taskId?: string;
+  source_refs?: string[];
 };
 
 type MemoryMarkdownDocument = {
@@ -83,6 +85,8 @@ function parseFrontmatter(frontmatter: string): MemoryMarkdownFrontmatter {
     state: String(result.state ?? "raw") as MemoryState,
     kind: String(result.kind ?? ""),
     confidence: String(result.confidence ?? ""),
-    tags: Array.isArray(result.tags) ? (result.tags as string[]) : undefined
+    tags: Array.isArray(result.tags) ? (result.tags as string[]) : undefined,
+    taskId: typeof result.taskId === "string" ? result.taskId : undefined,
+    source_refs: Array.isArray(result.source_refs) ? (result.source_refs as string[]) : undefined
   };
 }

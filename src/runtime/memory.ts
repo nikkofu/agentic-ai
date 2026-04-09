@@ -34,6 +34,16 @@ export type MemoryStore = {
     content: string;
     tags: string[];
   }>>;
+  recordEntry?: (entry: {
+    layer: "personal" | "project" | "task";
+    state: "raw" | "curated" | "compressed";
+    kind: string;
+    body: string;
+    taskId?: string;
+    tags?: string[];
+    sourceRefs?: string[];
+    confidence?: string;
+  }) => Promise<unknown>;
 };
 
 type RuntimeEventLike = {

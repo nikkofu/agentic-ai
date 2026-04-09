@@ -175,6 +175,29 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     });
   };
 
+  const persistProjectMemory = async (entry: {
+    kind: string;
+    body: string;
+    taskId?: string;
+    tags?: string[];
+    sourceRefs?: string[];
+  }) => {
+    if (!entry.body.trim()) {
+      return;
+    }
+
+    await deps.memoryStore?.recordEntry?.({
+      layer: "project",
+      state: "raw",
+      kind: entry.kind,
+      body: entry.body,
+      taskId: entry.taskId,
+      tags: entry.tags,
+      sourceRefs: entry.sourceRefs,
+      confidence: "medium"
+    });
+  };
+
   return {
     async execute(input: ExecuteInput): Promise<ExecuteResult> {
       const taskId = deps.taskIdFactory?.() ?? crypto.randomUUID();
@@ -404,6 +427,12 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskId,
         taskInput: input.input,
         delivery
+      });
+      await persistProjectMemory({
+        kind: "task_summary",
+        body: `${input.input}\n\n${finalizedDelivery.final_result}`.trim(),
+        taskId,
+        tags: [family ?? "general", "execution-summary"]
       });
       let familyDelivery = finalizeTaskFamilyDelivery({
         delivery: finalizedDelivery,
