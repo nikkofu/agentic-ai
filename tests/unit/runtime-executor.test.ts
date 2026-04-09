@@ -816,7 +816,11 @@ describe("runtime executor", () => {
       taskId: "task-resume-1"
     });
 
-    expect(orchestrator.resumeTask).toHaveBeenCalledWith("task-resume-1", 2);
+    expect(orchestrator.resumeTask).toHaveBeenCalledWith(
+      "task-resume-1",
+      2,
+      expect.any(Function)
+    );
     expect(result.finalState).toBe("completed");
     expect(result.delivery.final_result).toBe("resumed output");
     expect(eventBus.publish).toHaveBeenCalledWith(

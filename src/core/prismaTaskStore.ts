@@ -84,12 +84,13 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
       const nodes = await prisma.taskNode.findMany({
         where: { task_id: taskId }
       });
+      type PersistedNode = (typeof nodes)[number];
 
       return {
         taskId: graph.task_id,
         rootNodeId: graph.root_node_id,
         status: graph.status as any,
-        nodes: Object.fromEntries(nodes.map(n => [n.node_id, {
+        nodes: Object.fromEntries(nodes.map((n: PersistedNode) => [n.node_id, {
           nodeId: n.node_id,
           role: n.role as any,
           state: n.state as any,
@@ -119,7 +120,8 @@ export function createPrismaTaskStore(prisma: PrismaClient): TaskStore {
         where: { task_id: taskId },
         orderBy: { ts: "asc" }
       });
-      return events.map(e => ({
+      type PersistedEvent = (typeof events)[number];
+      return events.map((e: PersistedEvent) => ({
         type: e.type,
         payload: JSON.parse(e.payload),
         ts: Number(e.ts)
