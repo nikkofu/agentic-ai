@@ -178,4 +178,76 @@ describe("deliveryHarness", () => {
     expect(delivery.status).toBe("completed");
     expect(delivery.blocking_reason).toBeUndefined();
   });
+
+  it("preserves an existing blocking reason instead of overwriting it with policy gates", () => {
+    const delivery = applyFamilyDeliveryPolicy({
+      delivery: {
+        status: "blocked",
+        final_result: "",
+        artifacts: [],
+        verification: [],
+        risks: [],
+        blocking_reason: "join_blocked",
+        next_actions: [],
+        family: "research_writing",
+        delivery_proof: {
+          family: "research_writing",
+          steps: []
+        }
+      },
+      familyPolicy: {
+        family: "research_writing",
+        automationPriority: "low",
+        trustPriority: "high",
+        requireVerification: true,
+        requireArtifacts: true,
+        sourceCoverageMinimum: 2
+      }
+    });
+
+    expect(delivery.status).toBe("blocked");
+    expect(delivery.blocking_reason).toBe("join_blocked");
+  });
+
+  it("counts distinct source ids toward research source coverage", () => {
+    const delivery = applyFamilyDeliveryPolicy({
+      delivery: {
+        status: "completed",
+        final_result: "ok",
+        artifacts: ["artifacts/final.md"],
+        verification: [
+          {
+            kind: "source",
+            summary: "source-a primary claim",
+            sourceId: "source-a",
+            passed: true
+          },
+          {
+            kind: "source",
+            summary: "source-a secondary claim",
+            sourceId: "source-a",
+            passed: true
+          }
+        ],
+        risks: [],
+        next_actions: [],
+        family: "research_writing",
+        delivery_proof: {
+          family: "research_writing",
+          steps: []
+        }
+      },
+      familyPolicy: {
+        family: "research_writing",
+        automationPriority: "low",
+        trustPriority: "high",
+        requireVerification: true,
+        requireArtifacts: true,
+        sourceCoverageMinimum: 2
+      }
+    });
+
+    expect(delivery.status).toBe("blocked");
+    expect(delivery.blocking_reason).toBe("policy_source_coverage_required");
+  });
 });

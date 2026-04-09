@@ -65,6 +65,10 @@ export function applyFamilyDeliveryPolicy(args: {
     return delivery;
   }
 
+  if (delivery.status === "blocked" || delivery.status === "failed") {
+    return delivery;
+  }
+
   if (familyPolicy.requireVerification && !hasPassingVerificationRecords(delivery.verification)) {
     return {
       ...delivery,
@@ -101,7 +105,13 @@ export function hasPassingVerificationRecords(records: VerificationRecord[]): bo
 }
 
 function countPassingSourceRecords(records: VerificationRecord[]): number {
-  return records.filter((record) => record.passed && record.kind === "source").length;
+  const distinctSources = new Set(
+    records
+      .filter((record) => record.passed && record.kind === "source" && typeof record.sourceId === "string" && record.sourceId.trim().length > 0)
+      .map((record) => record.sourceId as string)
+  );
+
+  return distinctSources.size;
 }
 
 function buildDeliveryStep(delivery?: Partial<DeliveryBundle | FamilyDeliveryBundle> | null): DeliveryProofStep {
