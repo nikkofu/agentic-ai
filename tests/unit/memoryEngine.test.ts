@@ -79,4 +79,28 @@ describe("memory engine", () => {
     expect(compressed.body).toContain("Use verifier-enforced delivery.");
     expect(compressed.body).toContain("Keep memory summaries visible.");
   });
+
+  it("demotes curated memory back to raw and forgets removed entries", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "phase16-repo-"));
+    const userHome = fs.mkdtempSync(path.join(os.tmpdir(), "phase16-user-"));
+    tempRoots.push(repoRoot, userHome);
+
+    const engine = createMemoryEngine({ repoRoot, userHome });
+    const entry = await engine.record({
+      layer: "project",
+      state: "curated",
+      kind: "known_issue",
+      body: "Retry with lower concurrency."
+    });
+
+    const demoted = await engine.demote({ id: entry.id, toState: "raw" });
+    expect(demoted.state).toBe("raw");
+
+    await engine.forget({ id: entry.id });
+    const curated = await engine.retrieve({ layer: "project", state: "curated" });
+    const raw = await engine.retrieve({ layer: "project", state: "raw" });
+
+    expect(curated.some((candidate) => candidate.id === entry.id)).toBe(false);
+    expect(raw.some((candidate) => candidate.id === entry.id)).toBe(false);
+  });
 });

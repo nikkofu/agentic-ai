@@ -51,6 +51,13 @@ export function createMemoryEngine(args: {
     layer: MemoryLayer;
     taskId?: string;
   }) => Promise<MemoryEngineEntry | null>;
+  demote: (input: {
+    id: string;
+    toState: Extract<MemoryState, "raw" | "curated">;
+  }) => Promise<MemoryEngineEntry>;
+  forget: (input: {
+    id: string;
+  }) => Promise<void>;
 } {
   const roots = resolveMemoryRoot(args.repoRoot, args.userHome);
   const index = createMemoryIndex();
@@ -220,6 +227,32 @@ export function createMemoryEngine(args: {
       });
     };
 
+  const demote = async ({ id, toState }: {
+    id: string;
+    toState: Extract<MemoryState, "raw" | "curated">;
+  }) => {
+      const existing = index.get(id);
+      if (!existing) {
+        throw new Error(`Memory entry not found: ${id}`);
+      }
+      const current = await readEntry(existing.path);
+      return await writeEntry({
+        ...current,
+        state: toState
+      });
+    };
+
+  const forget = async ({ id }: {
+    id: string;
+  }) => {
+      const existing = index.get(id);
+      if (!existing) {
+        return;
+      }
+      await fs.rm(existing.path, { force: true });
+      index.remove(id);
+    };
+
   const loadWorkingMemory = async ({ taskId }: { taskId: string }) => {
       const taskEntries = await retrieve({ layer: "task", state: "raw", taskId });
       return taskEntries.map((entry) => entry.body);
@@ -285,6 +318,8 @@ export function createMemoryEngine(args: {
     promote,
     curate,
     compress,
+    demote,
+    forget,
     loadWorkingMemory,
     loadMemoryRefs,
     appendEntry,
