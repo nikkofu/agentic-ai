@@ -27,6 +27,7 @@ describe("event stream state", () => {
     expect(details.lastEventType).toBe("AsyncTaskSettled");
     expect(details.finalResult).toBe("async final answer");
     expect(details.blockingReason).toBe("");
+    expect(details.explanation).toBe("Task completed successfully");
   });
 
   it("captures async node ownership details for the banner", () => {
@@ -66,5 +67,28 @@ describe("event stream state", () => {
     expect(details.lastEventType).toBe("AsyncTaskFailed");
     expect(details.lastError).toContain("queue worker offline");
     expect(details.currentPath).toBe("task-stream-2");
+    expect(details.explanation).toBe("Task failed: queue worker offline");
+  });
+
+  it("renders a blocked explanation from delivery blocking reason", () => {
+    const details = applyRuntimeEventToStreamState({
+      taskId: "task-stream-3",
+      current: createInitialEventStreamDetails(),
+      event: {
+        type: "TaskClosed",
+        payload: {
+          task_id: "task-stream-3",
+          state: "aborted",
+          delivery: {
+            status: "blocked",
+            final_result: "",
+            blocking_reason: "verification_missing"
+          }
+        }
+      }
+    });
+
+    expect(details.blockingReason).toBe("verification_missing");
+    expect(details.explanation).toBe("Task blocked: verification_missing");
   });
 });

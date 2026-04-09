@@ -18,6 +18,7 @@ export type EventStreamDetails = {
   currentPath: string;
   finalResult: string;
   blockingReason: string;
+  explanation: string;
 };
 
 export function createInitialEventStreamDetails(): EventStreamDetails {
@@ -40,7 +41,8 @@ export function createInitialEventStreamDetails(): EventStreamDetails {
     lastTotalTokens: null,
     currentPath: '',
     finalResult: '',
-    blockingReason: ''
+    blockingReason: '',
+    explanation: ''
   };
 }
 
@@ -56,6 +58,12 @@ export function applyRuntimeEventToStreamState(args: {
   const payload = readRecord(event.payload);
   const eventType = readString(event.type);
 
+  const finalResult = readTaskFinalResult(payload);
+  const blockingReason = readTaskBlockingReason(payload);
+  const lastError = eventType === "AsyncTaskFailed"
+    ? readString(payload.error) || current.lastError
+    : current.lastError;
+
   return {
     ...current,
     lastEventAt: new Date().toISOString(),
@@ -70,11 +78,15 @@ export function applyRuntimeEventToStreamState(args: {
     lastLatencyMs: readNumber(payload.latency_ms),
     lastTotalTokens: readNumber(readRecord(payload.usage).total_tokens) ?? readNumber(payload.tokens),
     currentPath: buildPath(taskId, readString(payload.node_id)),
-    finalResult: readTaskFinalResult(payload),
-    blockingReason: readTaskBlockingReason(payload),
-    lastError: eventType === "AsyncTaskFailed"
-      ? readString(payload.error) || current.lastError
-      : current.lastError
+    finalResult,
+    blockingReason,
+    explanation: buildTaskExplanation({
+      eventType,
+      finalResult,
+      blockingReason,
+      lastError
+    }),
+    lastError
   };
 }
 
@@ -114,4 +126,25 @@ function readTaskBlockingReason(payload: Record<string, unknown>) {
   const delivery = readRecord(payload.delivery);
   const nested = delivery.blocking_reason;
   return typeof nested === 'string' ? nested : '';
+}
+
+function buildTaskExplanation(args: {
+  eventType: string;
+  finalResult: string;
+  blockingReason: string;
+  lastError: string;
+}) {
+  if (args.blockingReason) {
+    return `Task blocked: ${args.blockingReason}`;
+  }
+
+  if (args.eventType === "AsyncTaskFailed" && args.lastError) {
+    return `Task failed: ${args.lastError}`;
+  }
+
+  if ((args.eventType === "TaskClosed" || args.eventType === "AsyncTaskSettled") && args.finalResult) {
+    return "Task completed successfully";
+  }
+
+  return "";
 }

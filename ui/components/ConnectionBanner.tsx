@@ -23,6 +23,7 @@ type ConnectionBannerProps = {
     currentPath: string;
     finalResult: string;
     blockingReason: string;
+    explanation: string;
   };
   onReconnect: () => void;
 };
@@ -65,6 +66,7 @@ export function ConnectionBanner({ taskId, status, details, onReconnect }: Conne
         {details.lastError ? <span className="text-amber-300">error={details.lastError}</span> : null}
         {details.finalResult ? <span className="text-emerald-300 break-all">result={details.finalResult}</span> : null}
         {details.blockingReason ? <span className="text-rose-300">blocking_reason={details.blockingReason}</span> : null}
+        {details.explanation ? <span className="text-sky-200 break-all">explain={details.explanation}</span> : null}
         {details.lastCloseCode !== null ? (
           <span>
             close={details.lastCloseCode} {details.lastCloseReason ? `reason=${details.lastCloseReason}` : ""}

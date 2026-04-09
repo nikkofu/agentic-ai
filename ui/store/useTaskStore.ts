@@ -31,10 +31,19 @@ function summarizeDelivery(payload: Record<string, unknown>) {
   }
 
   if (blockingReason.trim()) {
-    return `blocked: ${blockingReason}`;
+    return `Task blocked: ${blockingReason}`;
   }
 
   return '';
+}
+
+function summarizeFailure(payload: Record<string, unknown>) {
+  const error =
+    typeof payload.error === 'string'
+      ? payload.error
+      : '';
+
+  return error.trim() ? `Task failed: ${error}` : '';
 }
 
 const dagreGraph = new dagre.graphlib.Graph();
@@ -196,7 +205,7 @@ export const useTaskStore = create<TaskState>((set) => ({
                 ownerId: payload.owner_id as string | undefined,
                 dedupeKey: payload.dedupe_key as string | undefined,
                 status: 'failed',
-                outputSummary: (payload.error as string) || '',
+                outputSummary: summarizeFailure(payload) || (payload.error as string) || '',
                 children: []
               },
               position: { x: 0, y: 0 },
@@ -209,7 +218,7 @@ export const useTaskStore = create<TaskState>((set) => ({
               data: {
                 ...n.data,
                 status: 'failed',
-                outputSummary: (payload.error as string) || n.data.outputSummary
+                outputSummary: summarizeFailure(payload) || (payload.error as string) || n.data.outputSummary
               }
             } : n
           );
@@ -228,7 +237,7 @@ export const useTaskStore = create<TaskState>((set) => ({
             const targetId = newNodes.find((n) => n.id === 'node-root')?.id ?? newNodes[0].id;
             const outputSummary =
               type === 'AsyncTaskFailed'
-                ? String(payload.error ?? '')
+                ? summarizeFailure(payload) || String(payload.error ?? '')
                 : summarizeDelivery(payload);
             newNodes = newNodes.map((n) =>
               n.id === targetId

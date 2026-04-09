@@ -114,4 +114,76 @@ describe("useTaskStore async node events", () => {
     expect(root?.data.status).toBe("failed");
     expect(root?.data.outputSummary).toContain("queue worker offline");
   });
+
+  it("uses user-facing blocked explanations instead of raw blocking reason fragments", () => {
+    const store = useTaskStore.getState();
+
+    store.processEvent({
+      type: "TaskSubmitted",
+      payload: { task_id: "task-ui-3" },
+      timestamp: new Date().toISOString()
+    });
+
+    store.processEvent({
+      type: "NodeScheduled",
+      payload: {
+        task_id: "task-ui-3",
+        node_id: "node-root",
+        role: "planner"
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    store.processEvent({
+      type: "TaskClosed",
+      payload: {
+        task_id: "task-ui-3",
+        state: "aborted",
+        delivery: {
+          status: "blocked",
+          final_result: "",
+          blocking_reason: "verification_missing"
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    const root = useTaskStore.getState().nodes.find((entry) => entry.id === "node-root");
+    expect(root?.data.status).toBe("failed");
+    expect(root?.data.outputSummary).toBe("Task blocked: verification_missing");
+  });
+
+  it("uses user-facing failed explanations for async task failures", () => {
+    const store = useTaskStore.getState();
+
+    store.processEvent({
+      type: "TaskSubmitted",
+      payload: { task_id: "task-ui-4" },
+      timestamp: new Date().toISOString()
+    });
+
+    store.processEvent({
+      type: "NodeScheduled",
+      payload: {
+        task_id: "task-ui-4",
+        node_id: "node-root",
+        role: "planner"
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    store.processEvent({
+      type: "AsyncTaskFailed",
+      payload: {
+        task_id: "task-ui-4",
+        job_kind: "resume",
+        error: "queue worker offline"
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    const root = useTaskStore.getState().nodes.find((entry) => entry.id === "node-root");
+    expect(root?.data.status).toBe("failed");
+    expect(root?.data.outputSummary).toBe("Task failed: queue worker offline");
+  });
 });

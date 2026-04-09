@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`0.9.0`
+当前版本：`1.0.0`
 
 ## 🚀 核心特性
 
@@ -25,6 +25,9 @@
 - **Typed Invalid Output Taxonomy**：runtime 会显式分类 `invalid_protocol`、`empty_delivery`、`verification_missing` 等无效输出，并决定 repair 或 block。
 - **Evaluator 唯一收敛权威**：节点只有在 evaluator 明确给出 `deliver` 时才会完成，避免隐式 stop 路径伪完成。
 - **Typed Planner Join Decisions**：planner/join 决策开始统一到 `deliver / revise_child / spawn_more / block / queued`，减少 stringly-typed 分支漂移。
+- **产品化 Runtime Inspector**：Dashboard 开始按 `Intent / Plan / Delivery / Runtime` 分区展示任务状态、证据、artifact 真值和解释链路。
+- **交付物真值展示**：inspection 会返回 artifact 是否存在、是否非空，以及 verification 预览，不再只展示计数。
+- **可执行解释层**：UI 已统一展示 `explanation + actionHint`，把完成、阻断、失败转成更可读且可执行的用户提示。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -72,6 +75,8 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md`](docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md)
 - Phase 12 的 Agent 智能化内核计划见：
   [`docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md`](docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md)
+- Phase 13 的用户产品化计划见：
+  [`docs/superpowers/plans/2026-04-09-phase13-user-productization.md`](docs/superpowers/plans/2026-04-09-phase13-user-productization.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-04-09
+### Added
+- **Phase 13 Runtime Inspector**: `taskLifecycle.inspectTask()` now produces a structured product-facing inspector with intent, planner policy, plan summary, delivery truth, explanation, and action hint.
+- **Artifact Truth & Evidence Preview**: Inspection now includes artifact existence/non-empty truth and verification previews for completed or blocked tasks.
+- **Gold-Path Product Proofs**: Added Phase 13 inspection tests that prove both successful and verification-blocked research-writing tasks surface understandable product state.
+
+### Changed
+- **Dashboard Lifecycle Panel**: Reworked the lifecycle panel into `Intent / Plan / Delivery / Runtime` sections instead of a flat stream of key-value telemetry.
+- **Unified User-Facing Explanations**: Banner, lifecycle inspection, and graph/store summaries now use the same human-readable blocked/failed phrasing instead of raw status fragments.
+
 ## [0.9.0] - 2026-04-09
 ### Added
 - **Phase 12 Prompt Pipeline**: Added a single production prompt path rooted in `composePromptPayload(ExecutionContext)` plus a focused integration test for prompt payload propagation.

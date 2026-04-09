@@ -13,6 +13,38 @@ type InspectionResult = {
     status: string;
     nodes: Record<string, { state: string; role: string }>;
   } | null;
+  runtimeInspector: {
+    intent: {
+      taskKind: string;
+      executionMode: string;
+      needsVerification: boolean;
+    } | null;
+    plannerPolicy: {
+      recommendedTools: string[];
+      requiredCapabilities: string[];
+      verificationPolicy: string;
+    } | null;
+    finalDelivery: {
+      status: string;
+      finalResult: string;
+      blockingReason: string;
+      verificationCount: number;
+      artifactCount: number;
+      artifacts: Array<{
+        path: string;
+        exists: boolean;
+        nonEmpty: boolean;
+      }>;
+      verificationPreview: string[];
+    } | null;
+    plan: {
+      nodeCount: number;
+      latestJoinDecision: string;
+      activeNodePath: string;
+    } | null;
+    explanation: string;
+    actionHint: string;
+  } | null;
   distributedSummary: {
     queuedNodes: number;
     activeJoinState: string | null;
@@ -126,65 +158,95 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           Resume
         </button>
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-400">
-        {inspection?.graph ? <span className="font-mono">graph_status={inspection.graph.status}</span> : null}
-        {inspection ? <span className="font-mono">events={inspection.eventCount}</span> : null}
-        {inspection?.graph ? (
-          <span className="font-mono">nodes={Object.keys(inspection.graph.nodes).length}</span>
-        ) : null}
-        {inspection?.distributedSummary ? (
-          <span className="font-mono">
-            queued={inspection.distributedSummary.queuedNodes}
-          </span>
-        ) : null}
-        {inspection?.distributedSummary ? (
-          <span className="font-mono">
-            settled={inspection.distributedSummary.settledWorkerNodes}
-          </span>
-        ) : null}
-        {inspection?.distributedSummary?.activeJoinState ? (
-          <span className="font-mono">
-            join={inspection.distributedSummary.activeJoinState}
-          </span>
-        ) : null}
-        {inspection?.latestClose ? (
-          <span className="font-mono">last_close={String(inspection.latestClose.payload.state ?? "unknown")}</span>
-        ) : null}
-        {inspection?.latestAsync ? (
-          <span className="font-mono">
-            last_async=
-            {inspection.latestAsync.type === "AsyncTaskFailed"
-              ? String(inspection.latestAsync.payload.error ?? "failed")
-              : String(inspection.latestAsync.payload.final_state ?? "unknown")}
-          </span>
-        ) : null}
-        {inspection?.latestAsyncNode ? (
-          <span className="font-mono">
-            last_async_node=
-            {inspection.latestAsyncNode.type}
-          </span>
-        ) : null}
-        {inspection?.latestAsyncNode?.payload.owner_id ? (
-          <span className="font-mono">
-            owner={String(inspection.latestAsyncNode.payload.owner_id)}
-          </span>
-        ) : null}
-        {inspection?.latestAsyncNode?.payload.dedupe_key ? (
-          <span className="font-mono">
-            dedupe={String(inspection.latestAsyncNode.payload.dedupe_key)}
-          </span>
-        ) : null}
-        {inspection?.latestAsync && inspection.latestAsync.type !== "AsyncTaskFailed" ? (
-          <span className="font-mono">
-            async_result=
-            {String(
-              (inspection.latestAsync.payload.final_result as string)
-              ?? ((inspection.latestAsync.payload.delivery as Record<string, unknown> | undefined)?.final_result ?? "")
-            ).slice(0, 80)}
-          </span>
-        ) : null}
-        {error ? <span className="text-rose-300">error={error}</span> : null}
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <InspectorCard title="Intent">
+          <InspectorLine label="intent" value={inspection?.runtimeInspector?.intent ? `${inspection.runtimeInspector.intent.taskKind}/${inspection.runtimeInspector.intent.executionMode}` : ""} />
+          <InspectorLine label="needs verification" value={inspection?.runtimeInspector?.intent ? String(inspection.runtimeInspector.intent.needsVerification) : ""} />
+          <InspectorLine label="tools" value={inspection?.runtimeInspector?.plannerPolicy?.recommendedTools.join(", ") ?? ""} />
+          <InspectorLine label="capabilities" value={inspection?.runtimeInspector?.plannerPolicy?.requiredCapabilities.join(", ") ?? ""} />
+          <InspectorLine label="verification policy" value={inspection?.runtimeInspector?.plannerPolicy?.verificationPolicy ?? ""} />
+        </InspectorCard>
+
+        <InspectorCard title="Plan">
+          <InspectorLine label="graph status" value={inspection?.graph?.status ?? ""} />
+          <InspectorLine label="events" value={inspection ? String(inspection.eventCount) : ""} />
+          <InspectorLine label="nodes" value={inspection?.graph ? String(Object.keys(inspection.graph.nodes).length) : ""} />
+          <InspectorLine label="plan nodes" value={inspection?.runtimeInspector?.plan ? String(inspection.runtimeInspector.plan.nodeCount) : ""} />
+          <InspectorLine label="active path" value={inspection?.runtimeInspector?.plan?.activeNodePath ?? ""} />
+          <InspectorLine label="join decision" value={inspection?.runtimeInspector?.plan?.latestJoinDecision ?? ""} />
+        </InspectorCard>
+
+        <InspectorCard title="Delivery">
+          <InspectorLine label="status" value={inspection?.runtimeInspector?.finalDelivery?.status ?? ""} />
+          <InspectorLine label="artifacts" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.artifactCount) : ""} />
+          <InspectorLine label="verification" value={inspection?.runtimeInspector?.finalDelivery ? String(inspection.runtimeInspector.finalDelivery.verificationCount) : ""} />
+          <InspectorLine label="blocking" value={inspection?.runtimeInspector?.finalDelivery?.blockingReason ?? ""} tone="danger" />
+          <InspectorLine label="result" value={inspection?.runtimeInspector?.finalDelivery?.finalResult.slice(0, 80) ?? ""} />
+          <InspectorLine
+            label="verification preview"
+            value={inspection?.runtimeInspector?.finalDelivery?.verificationPreview.join(", ") ?? ""}
+          />
+          <InspectorLine
+            label="artifact truth"
+            value={
+              inspection?.runtimeInspector?.finalDelivery?.artifacts
+                .map((artifact) => `${artifact.path}:${artifact.exists ? (artifact.nonEmpty ? "ok" : "empty") : "missing"}`)
+                .join(", ") ?? ""
+            }
+          />
+        </InspectorCard>
+
+        <InspectorCard title="Runtime">
+          <InspectorLine label="queued" value={inspection?.distributedSummary ? String(inspection.distributedSummary.queuedNodes) : ""} />
+          <InspectorLine label="settled" value={inspection?.distributedSummary ? String(inspection.distributedSummary.settledWorkerNodes) : ""} />
+          <InspectorLine label="distributed join" value={inspection?.distributedSummary?.activeJoinState ?? ""} />
+          <InspectorLine label="last close" value={inspection?.latestClose ? String(inspection.latestClose.payload.state ?? "unknown") : ""} />
+          <InspectorLine label="last async" value={inspection?.latestAsync ? (inspection.latestAsync.type === "AsyncTaskFailed" ? String(inspection.latestAsync.payload.error ?? "failed") : String(inspection.latestAsync.payload.final_state ?? "unknown")) : ""} />
+          <InspectorLine label="owner" value={inspection?.latestAsyncNode?.payload.owner_id ? String(inspection.latestAsyncNode.payload.owner_id) : ""} />
+          <InspectorLine label="dedupe" value={inspection?.latestAsyncNode?.payload.dedupe_key ? String(inspection.latestAsyncNode.payload.dedupe_key) : ""} />
+        </InspectorCard>
       </div>
+
+      <div className="mt-3 flex flex-col gap-2 text-xs">
+        {inspection?.runtimeInspector?.explanation ? (
+          <div className="rounded border border-white/10 bg-black/40 px-3 py-2 text-neutral-200">
+            <span className="font-semibold text-white">Explain:</span> {inspection.runtimeInspector.explanation}
+          </div>
+        ) : null}
+        {inspection?.runtimeInspector?.actionHint ? (
+          <div className="rounded border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-amber-100">
+            <span className="font-semibold">Next:</span> {inspection.runtimeInspector.actionHint}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="rounded border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-rose-200">
+            <span className="font-semibold">Error:</span> {error}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function InspectorCard(props: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded border border-white/10 bg-black/30 p-3">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">{props.title}</div>
+      <div className="space-y-1">{props.children}</div>
+    </div>
+  );
+}
+
+function InspectorLine(props: { label: string; value: string; tone?: "default" | "danger" }) {
+  if (!props.value) {
+    return null;
+  }
+
+  const valueTone = props.tone === "danger" ? "text-rose-300" : "text-neutral-200";
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">{props.label}</span>
+      <span className={`font-mono text-[11px] break-all ${valueTone}`}>{props.value}</span>
     </div>
   );
 }
