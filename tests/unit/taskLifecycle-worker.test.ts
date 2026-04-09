@@ -131,6 +131,8 @@ describe("task lifecycle worker", () => {
       data: {
         taskId: "task-node-1",
         nodeId: "node-a",
+        ownerId: "worker-alpha",
+        dedupeKey: "task-node-1-node-a",
         runtimeInput: { input: "queued node" }
       }
     } as any);
@@ -141,6 +143,8 @@ describe("task lifecycle worker", () => {
         payload: expect.objectContaining({
           task_id: "task-node-1",
           node_id: "node-a",
+          owner_id: "worker-alpha",
+          dedupe_key: "task-node-1-node-a",
           final_state: "completed",
           final_result: "queued node output",
           delivery: expect.objectContaining({
@@ -178,6 +182,8 @@ describe("task lifecycle worker", () => {
       data: {
         taskId: "task-node-2",
         nodeId: "node-b",
+        ownerId: "worker-beta",
+        dedupeKey: "task-node-2-node-b",
         runtimeInput: { input: "queued node" }
       }
     } as any);
@@ -188,6 +194,8 @@ describe("task lifecycle worker", () => {
         payload: expect.objectContaining({
           task_id: "task-node-2",
           node_id: "node-b",
+          owner_id: "worker-beta",
+          dedupe_key: "task-node-2-node-b",
           final_state: "aborted",
           blocking_reason: "empty_delivery"
         })

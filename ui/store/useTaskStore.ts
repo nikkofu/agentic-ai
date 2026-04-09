@@ -112,6 +112,8 @@ export const useTaskStore = create<TaskState>((set) => ({
               data: { 
                 label: nodeId, 
                 role: (payload.role as string) || 'planner', 
+                ownerId: payload.owner_id as string | undefined,
+                dedupeKey: payload.dedupe_key as string | undefined,
                 status: nodeType === 'hitl' ? 'waiting_hitl' : 'pending',
                 children: []
               },
@@ -191,6 +193,8 @@ export const useTaskStore = create<TaskState>((set) => ({
               data: {
                 label: nodeId,
                 role: (payload.role as string) || 'planner',
+                ownerId: payload.owner_id as string | undefined,
+                dedupeKey: payload.dedupe_key as string | undefined,
                 status: 'failed',
                 outputSummary: (payload.error as string) || '',
                 children: []

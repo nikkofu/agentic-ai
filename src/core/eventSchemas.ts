@@ -18,16 +18,30 @@ export const eventSchemaRegistry = {
   ToolReturned: z.object({ task_id: z.string(), node_id: z.string(), ok: z.boolean() }),
   ExecutionContextPrepared: z.object({ task_id: z.string(), node_id: z.string(), context: z.any() }),
   TaskMemoryStored: z.object({ task_id: z.string(), source_id: z.string(), content: z.string(), tags: z.array(z.string()).optional() }),
-  AsyncNodeQueued: z.object({ task_id: z.string(), node_id: z.string(), role: z.string() }),
+  AsyncNodeQueued: z.object({
+    task_id: z.string(),
+    node_id: z.string(),
+    role: z.string(),
+    owner_id: z.string().optional(),
+    dedupe_key: z.string().optional()
+  }),
   AsyncNodeSettled: z.object({
     task_id: z.string(),
     node_id: z.string(),
     final_state: z.string(),
+    owner_id: z.string().optional(),
+    dedupe_key: z.string().optional(),
     delivery: z.any().optional(),
     final_result: z.string().optional(),
     blocking_reason: z.string().optional()
   }),
-  AsyncNodeFailed: z.object({ task_id: z.string(), node_id: z.string(), error: z.string() }),
+  AsyncNodeFailed: z.object({
+    task_id: z.string(),
+    node_id: z.string(),
+    owner_id: z.string().optional(),
+    dedupe_key: z.string().optional(),
+    error: z.string()
+  }),
   AsyncTaskSettled: z.object({
     task_id: z.string(),
     job_kind: z.string(),

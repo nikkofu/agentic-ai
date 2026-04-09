@@ -29,6 +29,26 @@ describe("event stream state", () => {
     expect(details.blockingReason).toBe("");
   });
 
+  it("captures async node ownership details for the banner", () => {
+    const details = applyRuntimeEventToStreamState({
+      taskId: "task-stream-owners",
+      current: createInitialEventStreamDetails(),
+      event: {
+        type: "AsyncNodeQueued",
+        payload: {
+          task_id: "task-stream-owners",
+          node_id: "node-research",
+          owner_id: "worker-alpha",
+          dedupe_key: "task-stream-owners-node-research"
+        }
+      }
+    });
+
+    expect(details.lastEventType).toBe("AsyncNodeQueued");
+    expect(details.lastOwnerId).toBe("worker-alpha");
+    expect(details.lastDedupeKey).toBe("task-stream-owners-node-research");
+  });
+
   it("captures async task failures as banner errors", () => {
     const details = applyRuntimeEventToStreamState({
       taskId: "task-stream-2",

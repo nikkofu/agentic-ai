@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`0.7.0`
+当前版本：`0.8.0`
 
 ## 🚀 核心特性
 
@@ -20,6 +20,7 @@
 - **能力与记忆底座**：已接入 capability routing、retrieval provider、task-scoped memory write-back 和 tree-wide summary persistence。
 - **任务控制面闭环**：已提供统一 `task lifecycle` 服务，支持 `start / resume / inspect / close`，并通过 CLI、queue worker 与 Dashboard API 共享同一条控制链。
 - **异步执行可视化**：queue-backed parallel node execution、worker 回流事件、Dashboard 生命周期面板与异步任务状态展示已经打通。
+- **分布式闭环增强**：queued node 具备 ownership/dedupe 元数据，shared task graph 会同步 async node/task writeback、distributed join readiness 与 resume/replay 恢复语义。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -62,6 +63,9 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md`](docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md)
 - 当前阶段的可恢复架构升级交接记录见：
   [`docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md`](docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md)
+- Phase 11 的分布式闭环设计与计划见：
+  [`docs/superpowers/specs/2026-04-09-phase11-13-iteration-design.md`](docs/superpowers/specs/2026-04-09-phase11-13-iteration-design.md)
+  [`docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md`](docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 

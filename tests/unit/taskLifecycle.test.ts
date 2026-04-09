@@ -82,4 +82,72 @@ describe("task lifecycle", () => {
     expect(inspection.latestAsync?.type).toBe("AsyncTaskSettled");
     expect(inspection.latestAsync?.payload.final_state).toBe("completed");
   });
+
+  it("exposes the latest async node event for distributed inspection", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-node-async",
+          status: "running",
+          nodes: {}
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          { type: "TaskSubmitted", payload: { task_id: "task-node-async" } },
+          {
+            type: "AsyncNodeSettled",
+            payload: {
+              task_id: "task-node-async",
+              node_id: "node-research",
+              owner_id: "worker-alpha",
+              dedupe_key: "task-node-async-node-research",
+              final_state: "completed",
+              final_result: "research complete"
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-node-async");
+
+    expect(inspection.latestAsyncNode?.type).toBe("AsyncNodeSettled");
+    expect(inspection.latestAsyncNode?.payload.owner_id).toBe("worker-alpha");
+    expect(inspection.latestAsyncNode?.payload.dedupe_key).toBe("task-node-async-node-research");
+  });
+
+  it("summarizes distributed queue and join readiness from the task graph", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-distributed-summary",
+          status: "running",
+          nodes: {
+            "node-root": { state: "completed", role: "planner" },
+            "node-a": { state: "pending", role: "researcher" },
+            "node-b": { state: "completed", role: "writer" },
+            "join-task-distributed-summary": { state: "pending", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          { type: "TaskSubmitted", payload: { task_id: "task-distributed-summary" } }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-distributed-summary");
+
+    expect(inspection.distributedSummary).toEqual({
+      queuedNodes: 1,
+      activeJoinState: "pending",
+      settledWorkerNodes: 2
+    });
+  });
 });

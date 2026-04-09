@@ -7,6 +7,8 @@ export type EventStreamDetails = {
   lastEventAt: string | null;
   lastEventType: string;
   lastNodeId: string;
+  lastOwnerId: string;
+  lastDedupeKey: string;
   lastRole: string;
   lastModel: string;
   lastTool: string;
@@ -28,6 +30,8 @@ export function createInitialEventStreamDetails(): EventStreamDetails {
     lastEventAt: null,
     lastEventType: '',
     lastNodeId: '',
+    lastOwnerId: '',
+    lastDedupeKey: '',
     lastRole: '',
     lastModel: '',
     lastTool: '',
@@ -57,6 +61,8 @@ export function applyRuntimeEventToStreamState(args: {
     lastEventAt: new Date().toISOString(),
     lastEventType: eventType,
     lastNodeId: readString(payload.node_id),
+    lastOwnerId: readString(payload.owner_id),
+    lastDedupeKey: readString(payload.dedupe_key),
     lastRole: readString(payload.role),
     lastModel: readString(payload.model),
     lastTool: readString(payload.tool),

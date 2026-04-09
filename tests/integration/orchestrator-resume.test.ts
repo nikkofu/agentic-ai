@@ -202,4 +202,77 @@ describe("Orchestrator Resume Integration", () => {
     expect(graph?.nodes["node-root"].state).toBe("completed");
     expect(graph?.nodes["node-research"].state).toBe("completed");
   });
+
+  it("resumes only unfinished distributed worker nodes and skips join placeholders", async () => {
+    const eventBus = createInMemoryEventBus();
+    const eventLogStore = createInMemoryEventLogStore();
+    const taskStore = createInMemoryTaskStore();
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          final_result: "remaining node completed",
+          verification: ["source-b"],
+          artifacts: [],
+          risks: [],
+          next_actions: []
+        })
+      })
+    };
+
+    const orchestrator = createOrchestrator({
+      eventBus: eventBus as any,
+      eventLogStore: eventLogStore as any,
+      taskStore,
+      guardrails: { max_depth: 5, max_branch: 5, max_steps: 10, max_budget: 100 },
+      runtime: runtime as any
+    });
+
+    const taskId = "task-distributed-resume";
+    await taskStore.createGraph({ taskId, rootNodeId: "node-root" });
+    await taskStore.upsertNode(taskId, {
+      nodeId: "node-root",
+      role: "planner",
+      state: "completed",
+      depth: 0,
+      attempt: 1,
+      inputSummary: "root"
+    });
+    await taskStore.upsertNode(taskId, {
+      nodeId: "node-a",
+      parentNodeId: "node-root",
+      role: "researcher",
+      state: "completed",
+      depth: 1,
+      attempt: 1,
+      inputSummary: "settled child"
+    });
+    await taskStore.upsertNode(taskId, {
+      nodeId: "node-b",
+      parentNodeId: "node-root",
+      role: "writer",
+      state: "pending",
+      depth: 1,
+      attempt: 1,
+      inputSummary: "unfinished child"
+    });
+    await taskStore.upsertNode(taskId, {
+      nodeId: "join-task-distributed-resume",
+      role: "planner",
+      state: "pending",
+      depth: 0,
+      attempt: 1,
+      inputSummary: "Await queued join"
+    });
+
+    const result = await orchestrator.resumeTask(taskId, 2);
+
+    expect(result.completedNodes).toBe(1);
+    expect(result.status).toBe("completed");
+    expect(runtime.run).toHaveBeenCalledTimes(1);
+
+    const graph = await taskStore.getGraph(taskId);
+    expect(graph?.nodes["node-a"].state).toBe("completed");
+    expect(graph?.nodes["node-b"].state).toBe("completed");
+    expect(graph?.nodes["join-task-distributed-resume"].state).toBe("completed");
+  });
 });

@@ -13,6 +13,8 @@ export interface NodeData {
   label: string;
   role: string;
   status: 'pending' | 'running' | 'waiting_tool' | 'waiting_hitl' | 'evaluating' | 'completed' | 'failed' | 'aborted';
+  ownerId?: string;
+  dedupeKey?: string;
   inputSummary?: string;
   outputSummary?: string;
   decision?: string;

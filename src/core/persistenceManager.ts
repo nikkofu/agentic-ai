@@ -29,6 +29,43 @@ function summarizeAsyncDelivery(payload: Record<string, unknown>) {
   return "";
 }
 
+async function syncJoinPlaceholder(taskStore: TaskStore, taskId: string) {
+  const graph = await taskStore.getGraph(taskId);
+  if (!graph) {
+    return;
+  }
+
+  const joinNodeId = `join-${taskId}`;
+  const joinNode = graph.nodes[joinNodeId];
+  if (!joinNode) {
+    return;
+  }
+
+  const siblingNodes = Object.values(graph.nodes).filter((node) => node.nodeId !== joinNodeId);
+  if (siblingNodes.length === 0) {
+    return;
+  }
+
+  const unsettled = siblingNodes.some((node) =>
+    node.state === "pending" || node.state === "running" || node.state === "waiting_tool" || node.state === "evaluating"
+  );
+  if (unsettled) {
+    return;
+  }
+
+  const hasAbort = siblingNodes.some((node) => node.state === "aborted" || node.state === "failed");
+  await taskStore.upsertNode(taskId, {
+    nodeId: joinNodeId,
+    parentNodeId: joinNode.parentNodeId,
+    role: joinNode.role,
+    state: hasAbort ? "aborted" : "completed",
+    depth: joinNode.depth,
+    attempt: joinNode.attempt,
+    inputSummary: joinNode.inputSummary,
+    outputSummary: hasAbort ? "distributed join blocked by child failure" : "distributed join ready"
+  });
+}
+
 export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStore) {
   // 1. 全量记录事件日志
   eventBus.subscribe("*", (event: RuntimeEvent) => {
@@ -109,6 +146,7 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
       inputSummary: String(event.payload.input_summary ?? ""),
       outputSummary: summarizeAsyncDelivery(event.payload)
     });
+    void syncJoinPlaceholder(taskStore, event.payload.task_id as string);
   });
 
   eventBus.subscribe("AsyncNodeFailed", (event: RuntimeEvent) => {
@@ -122,6 +160,7 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
       inputSummary: String(event.payload.input_summary ?? ""),
       outputSummary: String(event.payload.error ?? "")
     });
+    void syncJoinPlaceholder(taskStore, event.payload.task_id as string);
   });
 
   eventBus.subscribe("TaskClosed", (event: RuntimeEvent) => {
@@ -130,5 +169,16 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
     if (validStates.includes(state as any)) {
       taskStore.updateGraphStatus(event.payload.task_id as string, state as any);
     }
+  });
+
+  eventBus.subscribe("AsyncTaskSettled", (event: RuntimeEvent) => {
+    const finalState = String(event.payload.final_state ?? "completed");
+    const graphState: TaskGraph["status"] =
+      finalState === "completed" ? "completed" : "aborted";
+    taskStore.updateGraphStatus(event.payload.task_id as string, graphState);
+  });
+
+  eventBus.subscribe("AsyncTaskFailed", (event: RuntimeEvent) => {
+    taskStore.updateGraphStatus(event.payload.task_id as string, "failed");
   });
 }

@@ -12,6 +12,8 @@ type ConnectionBannerProps = {
     lastEventAt: string | null;
     lastEventType: string;
     lastNodeId: string;
+    lastOwnerId: string;
+    lastDedupeKey: string;
     lastRole: string;
     lastModel: string;
     lastTool: string;
@@ -51,6 +53,8 @@ export function ConnectionBanner({ taskId, status, details, onReconnect }: Conne
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {details.lastEventType ? <span className="font-mono">event={details.lastEventType}</span> : null}
           {details.lastNodeId ? <span className="font-mono">node={details.lastNodeId}</span> : null}
+          {details.lastOwnerId ? <span className="font-mono">owner={details.lastOwnerId}</span> : null}
+          {details.lastDedupeKey ? <span className="font-mono break-all">dedupe={details.lastDedupeKey}</span> : null}
           {details.lastRole ? <span className="font-mono">role={details.lastRole}</span> : null}
           {details.lastModel ? <span className="font-mono break-all">model={details.lastModel}</span> : null}
           {details.lastTool ? <span className="font-mono">tool={details.lastTool}</span> : null}

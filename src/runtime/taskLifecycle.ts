@@ -43,6 +43,14 @@ type TaskLifecycleDeps = {
   taskStore: TaskStore;
 };
 
+type TaskGraph = Awaited<ReturnType<TaskStore["getGraph"]>>;
+
+type DistributedSummary = {
+  queuedNodes: number;
+  activeJoinState: string | null;
+  settledWorkerNodes: number;
+};
+
 export function createTaskLifecycle(deps: TaskLifecycleDeps) {
   return {
     startTask(input: { input: string; workflow?: DagWorkflow }) {
@@ -62,12 +70,17 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
       const latestAsync = [...events].reverse().find((event) =>
         event.type === "AsyncTaskSettled" || event.type === "AsyncTaskFailed"
       );
+      const latestAsyncNode = [...events].reverse().find((event) =>
+        event.type === "AsyncNodeQueued" || event.type === "AsyncNodeSettled" || event.type === "AsyncNodeFailed"
+      );
 
       return {
         taskId,
         graph,
         latestClose: latestClose ?? null,
         latestAsync: latestAsync ?? null,
+        latestAsyncNode: latestAsyncNode ?? null,
+        distributedSummary: summarizeDistributedGraph(graph),
         eventCount: events.length
       };
     },
@@ -80,5 +93,37 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         closed: inspection.latestClose !== null
       };
     }
+  };
+}
+
+function summarizeDistributedGraph(graph: TaskGraph): DistributedSummary | null {
+  if (!graph) {
+    return null;
+  }
+
+  let queuedNodes = 0;
+  let settledWorkerNodes = 0;
+  let activeJoinState: string | null = null;
+
+  for (const [nodeId, node] of Object.entries(graph.nodes)) {
+    if (nodeId.startsWith("join-")) {
+      activeJoinState = node.state;
+      continue;
+    }
+
+    if (node.state === "pending" || node.state === "running" || node.state === "waiting_tool" || node.state === "evaluating") {
+      queuedNodes += 1;
+      continue;
+    }
+
+    if (node.state === "completed" || node.state === "aborted" || node.state === "failed") {
+      settledWorkerNodes += 1;
+    }
+  }
+
+  return {
+    queuedNodes,
+    activeJoinState,
+    settledWorkerNodes
   };
 }

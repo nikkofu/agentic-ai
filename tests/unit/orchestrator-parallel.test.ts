@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createOrchestrator } from "../../src/core/orchestrator";
 import { createInMemoryEventBus } from "../../src/core/eventBus";
 import { createInMemoryEventLogStore } from "../../src/core/eventLogStore";
+import { createInMemoryTaskStore } from "../../src/core/taskStore";
 
 describe("orchestrator bounded parallel", () => {
   it("respects max_parallel and records join evaluation", async () => {
@@ -40,13 +41,20 @@ describe("orchestrator bounded parallel", () => {
   it("can queue parallel execution contexts through the shared task queue", async () => {
     const eventBus = createInMemoryEventBus();
     const eventLogStore = createInMemoryEventLogStore();
+    const taskStore = createInMemoryTaskStore();
     const taskQueue = {
       addJob: vi.fn().mockResolvedValue(undefined)
     };
 
+    await taskStore.createGraph({
+      taskId: "task-par-queue",
+      rootNodeId: "node-root"
+    });
+
     const orchestrator = createOrchestrator({
       eventBus,
       eventLogStore,
+      taskStore,
       taskQueue: taskQueue as any,
       guardrails: {
         max_depth: 4,
@@ -88,5 +96,10 @@ describe("orchestrator bounded parallel", () => {
     expect(result.joinDecision).toBe("queued");
     expect(taskQueue.addJob).toHaveBeenCalledTimes(2);
     expect(eventLogStore.getAll().map((event) => event.type)).toContain("AsyncNodeQueued");
+
+    const graph = await taskStore.getGraph("task-par-queue");
+    expect(graph?.nodes["n1"]?.state).toBe("pending");
+    expect(graph?.nodes["n2"]?.state).toBe("pending");
+    expect(graph?.nodes["join-task-par-queue"]?.state).toBe("pending");
   });
 });
