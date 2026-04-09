@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-04-09
+### Changed
+- **Release Diary Refinement**: Refined the `v1.3.1` diary entry to better match the intended quieter, more inward release-note voice and updated its music backdrop.
+
 ## [1.3.1] - 2026-04-09
 ### Changed
 - **Release Diary Tone Update**: Refined the `v1.3.0` release diary toward a more reflective, relationship-aware INFJ-style voice while keeping the engineering facts intact.
