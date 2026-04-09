@@ -37,7 +37,6 @@ export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
 export function inferTaskFamily(args: {
   intent?: Pick<TaskIntent, "task_kind"> | null;
   task?: string;
-  workflow?: unknown;
 }): TaskFamily | undefined {
   const taskKind = normalizeTaskFamily(args.intent?.task_kind);
   if (taskKind) {
@@ -49,7 +48,7 @@ export function inferTaskFamily(args: {
     return "research_writing";
   }
 
-  if (args.workflow || matchesBrowserTask(task)) {
+  if (matchesBrowserTask(task)) {
     return "browser_workflow";
   }
 

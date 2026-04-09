@@ -199,6 +199,98 @@ describe("runtime executor", () => {
     expect((result.delivery as any).delivery_proof.family).toBe("research_writing");
   });
 
+  it("does not default explicit workflows to browser family policy", async () => {
+    const eventBus = {
+      publish: vi.fn(),
+      subscribe: vi.fn()
+    };
+    const eventLogStore = {
+      append: vi.fn(),
+      getAll: vi.fn().mockReturnValue([])
+    };
+    const runtime = {
+      run: vi.fn()
+    };
+    const orchestrator = {
+      runParallelContexts: vi.fn().mockResolvedValue({
+        completedNodes: 1,
+        joinDecision: "deliver",
+        nodeResults: [
+          {
+            nodeId: "node-root",
+            finalState: "completed",
+            delivery: {
+              status: "completed",
+              final_result: "explicit workflow result",
+              artifacts: [],
+              verification: [],
+              risks: [],
+              next_actions: []
+            }
+          }
+        ]
+      })
+    };
+
+    const executor = createTaskExecutor({
+      config: {
+        models: {
+          default: "test-model",
+          fallback: [],
+          by_agent_role: {
+            planner: "test-model",
+            researcher: "test-model",
+            coder: "test-model",
+            writer: "test-model"
+          },
+          embeddings: { default: "embed-model" }
+        },
+        reasoner: {
+          default: "medium",
+          by_agent_role: {
+            planner: "medium",
+            researcher: "medium",
+            coder: "medium",
+            writer: "medium"
+          }
+        },
+        scheduler: { default_policy: "bfs", policy_overrides: {} },
+        guardrails: { max_depth: 4, max_branch: 3, max_steps: 60, max_budget: 5 },
+        evaluator: { weights: { quality: 0.6, cost: 0.2, latency: 0.2 } },
+        retry: { max_retries: 3, base_delay_ms: 1000 },
+        mcp_servers: {}
+      } as any,
+      runtime: runtime as any,
+      eventBus: eventBus as any,
+      eventLogStore: eventLogStore as any,
+      orchestrator: orchestrator as any,
+      finalizeDelivery: vi.fn().mockImplementation(async ({ delivery }) => delivery),
+      resolveModelRoute: vi.fn().mockReturnValue({
+        model: "test-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      }),
+      taskIdFactory: () => "task-executor-explicit-workflow-1"
+    });
+
+    await executor.execute({
+      input: "revise this outline",
+      workflow: {
+        nodes: [
+          {
+            id: "node-root",
+            role: "planner",
+            input: "revise this outline",
+            depends_on: []
+          }
+        ]
+      }
+    });
+
+    expect(orchestrator.runParallelContexts).toHaveBeenCalledTimes(1);
+    expect(orchestrator.runParallelContexts.mock.calls[0][0].contexts[0].policy?.family).toBeUndefined();
+  });
+
   it("blocks family delivery when trust-first requirements are not met", async () => {
     const eventBus = {
       publish: vi.fn(),

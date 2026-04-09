@@ -86,4 +86,15 @@ describe("taskFamily", () => {
       })
     ).toBe("browser_workflow");
   });
+
+  it("does not assign browser family just because a workflow is supplied", () => {
+    expect(
+      inferTaskFamily({
+        task: "Revise this outline",
+        workflow: {
+          nodes: []
+        }
+      } as any)
+    ).toBeUndefined();
+  });
 });

@@ -5,8 +5,7 @@ import { allowsToolByCapabilities } from "../runtime/capabilities";
 import { enrichExecutionContext, replayTaskMemoryFromEvents, type MemoryStore, type RetrievalProvider } from "../runtime/memory";
 import { composePromptPayload } from "../prompt/promptComposer";
 import type { AgentRole, DeliveryBundle, ToolIntent } from "../types/runtime";
-import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle } from "../runtime/deliveryHarness";
-import type { ExecutionContext, FamilyDeliveryBundle, InvalidOutputClassification, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "../runtime/contracts";
+import type { ExecutionContext, InvalidOutputClassification, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "../runtime/contracts";
 import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
@@ -46,7 +45,7 @@ type OrchestratorDeps = {
   };
   taskQueue?: TaskQueue;
   evaluator?: (input: {
-    delivery: DeliveryBundle | FamilyDeliveryBundle;
+    delivery: DeliveryBundle;
     role: AgentRole;
     policy: RuntimePolicyMetadata;
     iteration: number;
@@ -86,7 +85,7 @@ type RuntimePolicyMetadata = {
 };
 
 type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "completed" | "aborted";
-type NodeResult = { finalState: "completed" | "aborted"; stateTrace: NodeState[]; delivery: DeliveryBundle | FamilyDeliveryBundle };
+type NodeResult = { finalState: "completed" | "aborted"; stateTrace: NodeState[]; delivery: DeliveryBundle };
 
 type ParallelNodeInput = {
   nodeId: string;
@@ -119,7 +118,7 @@ type ParallelContextInput = {
 type ParallelNodeResult = {
   nodeId: string;
   finalState: "completed" | "aborted";
-  delivery: DeliveryBundle | FamilyDeliveryBundle;
+  delivery: DeliveryBundle;
 };
 
 type ParallelRunResult = {
@@ -141,7 +140,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   const runNodeCore = async (input: RunTaskInput): Promise<NodeResult> => {
     const stateTrace: NodeState[] = ["pending"];
     const baseRuntimeInput = { ...(input.runtimeInput ?? {}) };
-    let delivery: DeliveryBundle | FamilyDeliveryBundle = {
+    let delivery: DeliveryBundle = {
       status: "completed",
       final_result: "",
       artifacts: [],
@@ -320,16 +319,6 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       if (invalidOutput?.kind === "verification_missing") {
         delivery.status = "blocked";
         delivery.blocking_reason = "policy_verification_required";
-      }
-
-      if (policy.family && policy.familyPolicy) {
-        delivery = applyFamilyDeliveryPolicy({
-          delivery: createFamilyDeliveryBundle({
-            family: policy.family,
-            delivery
-          }),
-          familyPolicy: policy.familyPolicy
-        });
       }
 
       const evaluatorDecision = deps.evaluator

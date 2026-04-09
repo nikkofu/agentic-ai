@@ -45,7 +45,7 @@ type ExecuteResult = {
   taskId: string;
   finalState: "completed" | "aborted";
   outputText?: string;
-  delivery: FamilyDeliveryBundle;
+  delivery: DeliveryBundle | FamilyDeliveryBundle;
   summary: {
     nodeCount: number;
     childSpawns: number;
@@ -81,7 +81,7 @@ type TaskExecutorDeps = {
   }) => Promise<{
       finalState: "completed" | "aborted";
       stateTrace: string[];
-      delivery: DeliveryBundle | FamilyDeliveryBundle;
+      delivery: DeliveryBundle;
     }>;
     runParallelContexts: (input: {
       taskId: string;
@@ -99,7 +99,7 @@ type TaskExecutorDeps = {
       nodeResults?: Array<{
         nodeId: string;
         finalState: "completed" | "aborted";
-        delivery: DeliveryBundle | FamilyDeliveryBundle;
+        delivery: DeliveryBundle;
       }>;
     }>;
     resumeTask: (
@@ -119,8 +119,8 @@ type TaskExecutorDeps = {
   finalizeDelivery: (args: {
     taskId: string;
     taskInput: string;
-    delivery: DeliveryBundle | FamilyDeliveryBundle;
-  }) => Promise<DeliveryBundle | FamilyDeliveryBundle>;
+    delivery: DeliveryBundle;
+  }) => Promise<DeliveryBundle>;
   resolveModelRoute: ResolveModelRoute;
   taskIdFactory?: () => string;
   availableLocalTools?: string[];
@@ -190,7 +190,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       let finalState: "completed" | "aborted" = "completed";
       let stateTrace: string[] = [];
       let outputText = "";
-      let delivery: DeliveryBundle | FamilyDeliveryBundle = {
+      let delivery: DeliveryBundle = {
         status: "completed",
         final_result: "",
         artifacts: [],
@@ -233,8 +233,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
 
       const family = inferTaskFamily({
         intent,
-        task: input.input,
-        workflow: input.workflow
+        task: input.input
       });
       const familyPolicy = family ? buildTaskFamilyPolicy(family) : undefined;
 
@@ -393,33 +392,33 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
             outputText = String(event.payload.output_text);
           }
           if (event.payload.delivery) {
-            delivery = event.payload.delivery as DeliveryBundle | FamilyDeliveryBundle;
+            delivery = event.payload.delivery as DeliveryBundle;
           }
         }
       }
 
-      delivery = await deps.finalizeDelivery({
+      const finalizedDelivery = await deps.finalizeDelivery({
         taskId,
         taskInput: input.input,
         delivery
       });
-      delivery = finalizeTaskFamilyDelivery({
-        delivery,
+      const familyDelivery = finalizeTaskFamilyDelivery({
+        delivery: finalizedDelivery,
         family,
         familyPolicy
       });
-      finalState = delivery.status === "completed" ? "completed" : "aborted";
-      outputText = delivery.final_result;
+      finalState = familyDelivery.status === "completed" ? "completed" : "aborted";
+      outputText = familyDelivery.final_result;
 
       deps.eventBus.publish({
         type: "TaskClosed",
         payload: {
           task_id: taskId,
           state: finalState,
-          delivery,
-          final_result: delivery.final_result,
-          artifacts: delivery.artifacts,
-          blocking_reason: delivery.blocking_reason
+          delivery: familyDelivery,
+          final_result: familyDelivery.final_result,
+          artifacts: familyDelivery.artifacts,
+          blocking_reason: familyDelivery.blocking_reason
         },
         ts: Date.now()
       });
@@ -428,7 +427,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskId,
         finalState,
         outputText,
-        delivery,
+        delivery: familyDelivery,
         summary: {
           nodeCount: totalNodes,
           childSpawns: events
@@ -474,15 +473,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         next_actions: []
       };
 
-      let delivery = await deps.finalizeDelivery({
+      const delivery = await deps.finalizeDelivery({
         taskId: input.taskId,
         taskInput,
         delivery: restoredDelivery
-      });
-      delivery = finalizeTaskFamilyDelivery({
-        delivery,
-        family: restoredDelivery.family,
-        familyPolicy: restoredDelivery.family ? buildTaskFamilyPolicy(restoredDelivery.family) : undefined
       });
       const finalState = delivery.status === "completed" ? "completed" : "aborted";
 
@@ -557,14 +551,14 @@ function restoreTaskInput(events: RuntimeEvent[]): string | undefined {
   return undefined;
 }
 
-function restoreLatestDelivery(events: RuntimeEvent[]): DeliveryBundle | FamilyDeliveryBundle | undefined {
+function restoreLatestDelivery(events: RuntimeEvent[]): DeliveryBundle | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (event.type === "TaskClosed" && event.payload.delivery && typeof event.payload.delivery === "object") {
-      return event.payload.delivery as DeliveryBundle | FamilyDeliveryBundle;
+      return event.payload.delivery as DeliveryBundle;
     }
     if (event.type === "Evaluated" && event.payload.delivery && typeof event.payload.delivery === "object") {
-      return event.payload.delivery as DeliveryBundle | FamilyDeliveryBundle;
+      return event.payload.delivery as DeliveryBundle;
     }
   }
   return undefined;
@@ -575,7 +569,7 @@ function formatJoinSummary(
   nodeResults: Array<{
     nodeId: string;
     finalState: "completed" | "aborted";
-  delivery: DeliveryBundle | FamilyDeliveryBundle;
+    delivery: DeliveryBundle;
   }>
 ) {
   return JSON.stringify(
@@ -616,7 +610,7 @@ function buildFamilyAwarePolicy(
 }
 
 function finalizeTaskFamilyDelivery(args: {
-  delivery: DeliveryBundle | FamilyDeliveryBundle;
+  delivery: DeliveryBundle;
   family?: TaskFamily;
   familyPolicy?: TaskFamilyPolicy;
 }): DeliveryBundle | FamilyDeliveryBundle {
