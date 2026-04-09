@@ -29,4 +29,27 @@ describe("memory panel", () => {
     expect(html).toContain("Task Memory");
     expect(html).toContain("Dream");
   });
+
+  it("renders empty-state and dream freshness truth", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MemoryPanel, {
+        inspection: {
+          memory: {
+            personal: { count: 0, latest: [] },
+            project: { count: 0, latest: [] },
+            task: { count: 0, latest: [] }
+          },
+          dream: {
+            reflectionsCount: 2,
+            latestReflections: ["Observed repeated failures."],
+            recommendationsCount: 1,
+            latestRecommendations: ["Add validation."]
+          }
+        }
+      })
+    );
+
+    expect(html).toContain("No memory recorded yet.");
+    expect(html).toContain("freshness=dream-active");
+  });
 });

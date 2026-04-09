@@ -9,9 +9,10 @@ export function buildMemoryInjectionSet(input: {
   taskCurated?: InjectionEntry[];
   taskRaw?: InjectionEntry[];
 }) {
-  const personal = (input.personalCompressed ?? []).map((entry) => `personal:${entry.id}:${entry.body}`);
-  const project = (input.projectCompressed ?? []).map((entry) => `project:${entry.id}:${entry.body}`);
-  const task = (input.taskCurated ?? []).map((entry) => `task:${entry.id}:${entry.body}`);
+  const seenBodies = new Set<string>();
+  const personal = injectLayer("personal", input.personalCompressed ?? [], seenBodies);
+  const project = injectLayer("project", input.projectCompressed ?? [], seenBodies);
+  const task = injectLayer("task", input.taskCurated ?? [], seenBodies);
 
   return {
     personal,
@@ -19,4 +20,17 @@ export function buildMemoryInjectionSet(input: {
     task,
     combined: [...personal, ...project, ...task]
   };
+}
+
+function injectLayer(prefix: "personal" | "project" | "task", entries: InjectionEntry[], seenBodies: Set<string>) {
+  const injected: string[] = [];
+  for (const entry of entries) {
+    const normalizedBody = entry.body.trim();
+    if (!normalizedBody || seenBodies.has(normalizedBody)) {
+      continue;
+    }
+    seenBodies.add(normalizedBody);
+    injected.push(`${prefix}:${entry.id}:${entry.body}`);
+  }
+  return injected;
 }

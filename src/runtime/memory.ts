@@ -50,7 +50,7 @@ export type MemoryStore = {
   }) => Promise<Array<{
     id: string;
     body: string;
-    state: "curated";
+    state: "raw" | "curated" | "compressed";
   }>>;
   compress?: (input: {
     layer: "personal" | "project" | "task";
@@ -58,7 +58,7 @@ export type MemoryStore = {
   }) => Promise<{
     id: string;
     body: string;
-    state: "compressed";
+    state: "raw" | "curated" | "compressed";
   } | null>;
 };
 

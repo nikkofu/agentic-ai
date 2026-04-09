@@ -15,16 +15,19 @@ type MemoryPanelProps = {
 };
 
 export function MemoryPanel({ inspection }: MemoryPanelProps) {
+  const dreamEntries = [
+    ...inspection.dream.latestReflections,
+    ...inspection.dream.latestRecommendations
+  ];
+  const dreamFreshness = dreamEntries.length > 0 ? "dream-active" : "dream-idle";
+
   return (
     <div className="rounded border border-white/10 bg-black/30 p-3">
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">Memory</div>
       <MemorySection title="Personal Memory" count={inspection.memory.personal.count} entries={inspection.memory.personal.latest} />
       <MemorySection title="Project Memory" count={inspection.memory.project.count} entries={inspection.memory.project.latest} />
       <MemorySection title="Task Memory" count={inspection.memory.task.count} entries={inspection.memory.task.latest} />
-      <MemorySection title="Dream" count={inspection.dream.reflectionsCount + inspection.dream.recommendationsCount} entries={[
-        ...inspection.dream.latestReflections,
-        ...inspection.dream.latestRecommendations
-      ]} />
+      <MemorySection title="Dream" count={inspection.dream.reflectionsCount + inspection.dream.recommendationsCount} entries={dreamEntries} freshness={dreamFreshness} />
     </div>
   );
 }
@@ -33,11 +36,18 @@ function MemorySection(props: {
   title: string;
   count: number;
   entries: string[];
+  freshness?: string;
 }) {
   return (
     <div className="mb-3 last:mb-0">
       <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">{props.title}</div>
       <div className="font-mono text-[11px] text-neutral-200">count={props.count}</div>
+      {props.freshness ? (
+        <div className="font-mono text-[11px] text-neutral-400">freshness={props.freshness}</div>
+      ) : null}
+      {props.entries.length === 0 ? (
+        <div className="font-mono text-[11px] text-neutral-500">No memory recorded yet.</div>
+      ) : null}
       {props.entries.map((entry) => (
         <div key={`${props.title}-${entry}`} className="font-mono text-[11px] text-neutral-300 break-all">
           {entry}
