@@ -46,6 +46,21 @@ type TaskLifecycleDeps = {
     resume: (input: { taskId: string; maxParallel?: number }) => Promise<ExecuteResult>;
   };
   taskStore: TaskStore;
+  memoryInspector?: {
+    inspect: (taskId: string) => Promise<{
+      personal: { count: number; latest: string[] };
+      project: { count: number; latest: string[] };
+      task: { count: number; latest: string[] };
+    }>;
+  };
+  dreamInspector?: {
+    inspect: (taskId: string) => Promise<{
+      reflectionsCount: number;
+      latestReflections: string[];
+      recommendationsCount: number;
+      latestRecommendations: string[];
+    }>;
+  };
 };
 
 type TaskGraph = Awaited<ReturnType<TaskStore["getGraph"]>>;
@@ -93,6 +108,17 @@ type RuntimeInspector = {
     verificationPreview: string[];
     referencesPreview: string[];
   } | null;
+  memory: {
+    personal: { count: number; latest: string[] };
+    project: { count: number; latest: string[] };
+    task: { count: number; latest: string[] };
+  };
+  dream: {
+    reflectionsCount: number;
+    latestReflections: string[];
+    recommendationsCount: number;
+    latestRecommendations: string[];
+  };
   plan: {
     nodeCount: number;
     latestJoinDecision: string;
@@ -113,9 +139,20 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
     },
 
     async inspectTask(taskId: string) {
-      const [graph, events] = await Promise.all([
+      const [graph, events, memorySummary, dreamSummary] = await Promise.all([
         deps.taskStore.getGraph(taskId),
-        deps.taskStore.getEvents(taskId)
+        deps.taskStore.getEvents(taskId),
+        deps.memoryInspector?.inspect(taskId) ?? Promise.resolve({
+          personal: { count: 0, latest: [] },
+          project: { count: 0, latest: [] },
+          task: { count: 0, latest: [] }
+        }),
+        deps.dreamInspector?.inspect(taskId) ?? Promise.resolve({
+          reflectionsCount: 0,
+          latestReflections: [],
+          recommendationsCount: 0,
+          latestRecommendations: []
+        })
       ]);
       const latestClose = [...events].reverse().find((event) => event.type === "TaskClosed");
       const latestAsync = [...events].reverse().find((event) =>
@@ -131,7 +168,7 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         latestClose: latestClose ?? null,
         latestAsync: latestAsync ?? null,
         latestAsyncNode: latestAsyncNode ?? null,
-        runtimeInspector: await summarizeRuntimeInspector(events, graph),
+        runtimeInspector: await summarizeRuntimeInspector(events, graph, memorySummary, dreamSummary),
         distributedSummary: summarizeDistributedGraph(graph),
         eventCount: events.length
       };
@@ -150,7 +187,18 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
 
 async function summarizeRuntimeInspector(
   events: Array<{ type: string; payload: Record<string, unknown> }>,
-  graph?: TaskGraph
+  graph?: TaskGraph,
+  memorySummary: RuntimeInspector["memory"] = {
+    personal: { count: 0, latest: [] },
+    project: { count: 0, latest: [] },
+    task: { count: 0, latest: [] }
+  },
+  dreamSummary: RuntimeInspector["dream"] = {
+    reflectionsCount: 0,
+    latestReflections: [],
+    recommendationsCount: 0,
+    latestRecommendations: []
+  }
 ): Promise<RuntimeInspector> {
   const latestIntent = [...events].reverse().find((event) => event.type === "IntentClassified");
   const latestPlanner = [...events].reverse().find((event) => event.type === "PlannerExpanded");
@@ -216,6 +264,8 @@ async function summarizeRuntimeInspector(
           verificationPolicy: String(latestPlanner.payload.verification_policy ?? "")
         }
       : null,
+    memory: memorySummary,
+    dream: dreamSummary,
     finalDelivery,
     plan: graph
       ? {

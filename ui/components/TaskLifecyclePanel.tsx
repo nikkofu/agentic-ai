@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { MemoryPanel } from "./MemoryPanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -50,6 +51,17 @@ type InspectionResult = {
       verificationPreview: string[];
       referencesPreview: string[];
     } | null;
+    memory: {
+      personal: { count: number; latest: string[] };
+      project: { count: number; latest: string[] };
+      task: { count: number; latest: string[] };
+    };
+    dream: {
+      reflectionsCount: number;
+      latestReflections: string[];
+      recommendationsCount: number;
+      latestRecommendations: string[];
+    };
     plan: {
       nodeCount: number;
       latestJoinDecision: string;
@@ -246,6 +258,17 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           <InspectorLine label="dedupe" value={inspection?.latestAsyncNode?.payload.dedupe_key ? String(inspection.latestAsyncNode.payload.dedupe_key) : ""} />
         </InspectorCard>
       </div>
+
+      {inspection?.runtimeInspector ? (
+        <div className="mt-3">
+          <MemoryPanel
+            inspection={{
+              memory: inspection.runtimeInspector.memory,
+              dream: inspection.runtimeInspector.dream
+            }}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-3 flex flex-col gap-2 text-xs">
         {inspection?.runtimeInspector?.explanation ? (

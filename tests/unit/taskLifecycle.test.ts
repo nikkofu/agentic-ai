@@ -164,6 +164,21 @@ describe("task lifecycle", () => {
         execute: vi.fn(),
         resume: vi.fn()
       } as any,
+      memoryInspector: {
+        inspect: vi.fn().mockResolvedValue({
+          personal: { count: 1, latest: ["Prefers concise responses."] },
+          project: { count: 2, latest: ["Use acceptance proof.", "Keep verifier findings visible."] },
+          task: { count: 3, latest: ["Task summary", "Join summary"] }
+        })
+      } as any,
+      dreamInspector: {
+        inspect: vi.fn().mockResolvedValue({
+          reflectionsCount: 1,
+          latestReflections: ["Observed repeated browser outcome mismatches."],
+          recommendationsCount: 1,
+          latestRecommendations: ["Add pre-submit validation."]
+        })
+      } as any,
       taskStore: {
         getGraph: vi.fn().mockResolvedValue({
           taskId: "task-inspector",
@@ -222,6 +237,17 @@ describe("task lifecycle", () => {
         recommendedTools: ["web_search", "verify_sources"],
         requiredCapabilities: ["research", "verification"],
         verificationPolicy: "cite urls"
+      },
+      memory: {
+        personal: { count: 1, latest: ["Prefers concise responses."] },
+        project: { count: 2, latest: ["Use acceptance proof.", "Keep verifier findings visible."] },
+        task: { count: 3, latest: ["Task summary", "Join summary"] }
+      },
+      dream: {
+        reflectionsCount: 1,
+        latestReflections: ["Observed repeated browser outcome mismatches."],
+        recommendationsCount: 1,
+        latestRecommendations: ["Add pre-submit validation."]
       },
       finalDelivery: {
         family: "",
