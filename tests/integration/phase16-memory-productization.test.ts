@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTaskExecutor } from "../../src/runtime/executor";
 import { createMemoryEngine } from "../../src/runtime/memoryEngine";
+import { composePromptPayload } from "../../src/prompt/promptComposer";
 
 const tempRoots: string[] = [];
 
@@ -63,5 +64,29 @@ describe("phase16 memory productization", () => {
 
     expect(taskEntries.some((entry) => entry.body.includes("researched result"))).toBe(true);
     expect(projectEntries.some((entry) => entry.body.includes("research and write summary"))).toBe(true);
+  });
+
+  it("keeps prompt memory bounded to curated and compressed layers", () => {
+    const payload = composePromptPayload({
+      context: {
+        intent: null,
+        plan: null,
+        policy: undefined,
+        node: {
+          id: "node-root",
+          role: "planner",
+          input: "plan next steps",
+          depends_on: []
+        },
+        task: "plan next steps",
+        dependencyOutputs: [],
+        memoryRefs: ["personal:compressed:p1", "project:compressed:proj1"],
+        workingMemory: ["project summary"],
+        retrievalContext: []
+      }
+    });
+
+    expect(payload.memory.some((entry) => entry.includes("personal"))).toBe(true);
+    expect(payload.memory.some((entry) => entry.includes("project"))).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import type { AgentRole, RuntimeConfig } from "../types/runtime";
 import type { ExecutionContext } from "../runtime/contracts";
+import { buildMemoryInjectionSet } from "../runtime/memoryInjection";
 
 type PromptPayload = {
   system: string;
@@ -64,11 +65,27 @@ function composePromptPayloadFromExecutionContext(context: ExecutionContext): Pr
     ...context.dependencyOutputs.map((entry) => `dependency:${entry}`)
   ];
 
-  const memory = [
-    ...context.memoryRefs.map((entry) => `memref:${entry}`),
-    ...context.workingMemory.map((entry) => `working:${entry}`),
-    ...context.retrievalContext.map((entry) => `retrieved:${entry.sourceId}:${entry.content}`)
-  ];
+  const injectedMemory = buildMemoryInjectionSet({
+    personalCompressed: context.memoryRefs
+      .filter((entry) => entry.startsWith("personal:compressed:"))
+      .map((entry) => {
+        const [, , id] = entry.split(":");
+        return { id, body: entry };
+      }),
+    projectCompressed: [
+      ...context.memoryRefs
+        .filter((entry) => entry.startsWith("project:compressed:"))
+        .map((entry) => {
+          const [, , id] = entry.split(":");
+          return { id, body: entry };
+        }),
+      ...context.workingMemory.map((entry, index) => ({ id: `working-${index + 1}`, body: entry }))
+    ],
+    taskCurated: context.retrievalContext.map((entry) => ({
+      id: entry.sourceId,
+      body: entry.content
+    }))
+  });
 
   return {
     system: [
@@ -81,7 +98,7 @@ function composePromptPayloadFromExecutionContext(context: ExecutionContext): Pr
     task: context.task,
     context: promptContext,
     tools,
-    memory,
+    memory: injectedMemory.combined,
     constraints,
     output_schema: {
       type: "json",
