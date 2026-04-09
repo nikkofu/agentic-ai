@@ -1,11 +1,12 @@
 import type { RuntimeConfig } from "../types/runtime";
 import type { AgentRole } from "../types/runtime";
 import type { DagWorkflow } from "../types/dag";
+import type { DeliveryBundle } from "../types/runtime";
 import type { RuntimeEvent } from "../core/eventBus";
 import { buildWorkflowFromIntent, normalizeJoinDecision, planWorkflowFromPlanner } from "./plan";
 import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
-import { normalizeDeliveryProof } from "./deliveryHarness";
+import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "./deliveryHarness";
 import { buildTaskFamilyPolicy, inferTaskFamily } from "./taskFamily";
 import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "./contracts";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
@@ -77,10 +78,10 @@ type TaskExecutorDeps = {
         context: ExecutionContext;
         runtimeInput: Record<string, unknown>;
       }) => Record<string, unknown>;
-    }) => Promise<{
+  }) => Promise<{
       finalState: "completed" | "aborted";
       stateTrace: string[];
-      delivery: FamilyDeliveryBundle;
+      delivery: DeliveryBundle | FamilyDeliveryBundle;
     }>;
     runParallelContexts: (input: {
       taskId: string;
@@ -98,7 +99,7 @@ type TaskExecutorDeps = {
       nodeResults?: Array<{
         nodeId: string;
         finalState: "completed" | "aborted";
-        delivery: FamilyDeliveryBundle;
+        delivery: DeliveryBundle | FamilyDeliveryBundle;
       }>;
     }>;
     resumeTask: (
@@ -118,8 +119,8 @@ type TaskExecutorDeps = {
   finalizeDelivery: (args: {
     taskId: string;
     taskInput: string;
-    delivery: FamilyDeliveryBundle;
-  }) => Promise<FamilyDeliveryBundle>;
+    delivery: DeliveryBundle | FamilyDeliveryBundle;
+  }) => Promise<DeliveryBundle | FamilyDeliveryBundle>;
   resolveModelRoute: ResolveModelRoute;
   taskIdFactory?: () => string;
   availableLocalTools?: string[];
@@ -189,7 +190,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       let finalState: "completed" | "aborted" = "completed";
       let stateTrace: string[] = [];
       let outputText = "";
-      let delivery: FamilyDeliveryBundle = {
+      let delivery: DeliveryBundle | FamilyDeliveryBundle = {
         status: "completed",
         final_result: "",
         artifacts: [],
@@ -392,7 +393,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
             outputText = String(event.payload.output_text);
           }
           if (event.payload.delivery) {
-            delivery = event.payload.delivery as FamilyDeliveryBundle;
+            delivery = event.payload.delivery as DeliveryBundle | FamilyDeliveryBundle;
           }
         }
       }
@@ -402,7 +403,11 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskInput: input.input,
         delivery
       });
-      delivery = attachFamilyDeliveryMetadata(delivery, family);
+      delivery = finalizeTaskFamilyDelivery({
+        delivery,
+        family,
+        familyPolicy
+      });
       finalState = delivery.status === "completed" ? "completed" : "aborted";
       outputText = delivery.final_result;
 
@@ -474,7 +479,11 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskInput,
         delivery: restoredDelivery
       });
-      delivery = attachFamilyDeliveryMetadata(delivery, restoredDelivery.family);
+      delivery = finalizeTaskFamilyDelivery({
+        delivery,
+        family: restoredDelivery.family,
+        familyPolicy: restoredDelivery.family ? buildTaskFamilyPolicy(restoredDelivery.family) : undefined
+      });
       const finalState = delivery.status === "completed" ? "completed" : "aborted";
 
       deps.eventBus.publish({
@@ -548,14 +557,14 @@ function restoreTaskInput(events: RuntimeEvent[]): string | undefined {
   return undefined;
 }
 
-function restoreLatestDelivery(events: RuntimeEvent[]): FamilyDeliveryBundle | undefined {
+function restoreLatestDelivery(events: RuntimeEvent[]): DeliveryBundle | FamilyDeliveryBundle | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (event.type === "TaskClosed" && event.payload.delivery && typeof event.payload.delivery === "object") {
-      return event.payload.delivery as FamilyDeliveryBundle;
+      return event.payload.delivery as DeliveryBundle | FamilyDeliveryBundle;
     }
     if (event.type === "Evaluated" && event.payload.delivery && typeof event.payload.delivery === "object") {
-      return event.payload.delivery as FamilyDeliveryBundle;
+      return event.payload.delivery as DeliveryBundle | FamilyDeliveryBundle;
     }
   }
   return undefined;
@@ -566,7 +575,7 @@ function formatJoinSummary(
   nodeResults: Array<{
     nodeId: string;
     finalState: "completed" | "aborted";
-    delivery: FamilyDeliveryBundle;
+  delivery: DeliveryBundle | FamilyDeliveryBundle;
   }>
 ) {
   return JSON.stringify(
@@ -606,21 +615,30 @@ function buildFamilyAwarePolicy(
   };
 }
 
-function attachFamilyDeliveryMetadata(
-  delivery: FamilyDeliveryBundle,
-  family?: TaskFamily
-): FamilyDeliveryBundle {
-  if (!family) {
-    return delivery;
+function finalizeTaskFamilyDelivery(args: {
+  delivery: DeliveryBundle | FamilyDeliveryBundle;
+  family?: TaskFamily;
+  familyPolicy?: TaskFamilyPolicy;
+}): DeliveryBundle | FamilyDeliveryBundle {
+  if (!args.family) {
+    return args.delivery;
   }
 
+  const familyDelivery = createFamilyDeliveryBundle({
+    family: args.family,
+    delivery: args.delivery
+  });
+  const policyAppliedDelivery = applyFamilyDeliveryPolicy({
+    delivery: familyDelivery,
+    familyPolicy: args.familyPolicy
+  });
+
   return {
-    ...delivery,
-    family,
+    ...policyAppliedDelivery,
     delivery_proof: normalizeDeliveryProof({
-      family,
-      proof: delivery.delivery_proof,
-      delivery
+      family: args.family,
+      proof: policyAppliedDelivery.delivery_proof,
+      delivery: policyAppliedDelivery
     })
   };
 }

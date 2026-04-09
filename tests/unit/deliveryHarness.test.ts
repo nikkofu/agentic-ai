@@ -10,7 +10,14 @@ describe("deliveryHarness", () => {
         status: "blocked",
         final_result: "",
         artifacts: ["artifacts/draft.md"],
-        verification: ["source-a"],
+        verification: [
+          {
+            kind: "source",
+            summary: "source-a",
+            sourceId: "source-a",
+            passed: true
+          }
+        ],
         risks: ["missing evidence"],
         blocking_reason: "verification_missing",
         next_actions: ["add citations"]

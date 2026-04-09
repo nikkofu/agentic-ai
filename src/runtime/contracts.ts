@@ -29,6 +29,14 @@ export type DeliveryProof = {
   replayHints?: string[];
 };
 
+export type VerificationRecord = {
+  kind: "source" | "page_state" | "form_result" | "artifact_check";
+  summary: string;
+  passed: boolean;
+  sourceId?: string;
+  locator?: string;
+};
+
 export type TaskIntent = {
   task_kind: string;
   execution_mode: "single_node" | "tree" | "dag" | "async";
@@ -69,9 +77,10 @@ export type InvalidOutputClassification = {
   recoverable: boolean;
 };
 
-export type FamilyDeliveryBundle = DeliveryBundle & {
-  family?: TaskFamily;
-  delivery_proof?: DeliveryProof;
+export type FamilyDeliveryBundle = Omit<DeliveryBundle, "verification"> & {
+  family: TaskFamily;
+  verification: VerificationRecord[];
+  delivery_proof: DeliveryProof;
 };
 
 export type ExecutionContext = {

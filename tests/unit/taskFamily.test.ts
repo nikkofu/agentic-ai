@@ -6,6 +6,7 @@ import {
   inferTaskFamily,
   normalizeTaskFamily
 } from "../../src/runtime/taskFamily";
+import type { FamilyDeliveryBundle, VerificationRecord } from "../../src/runtime/contracts";
 
 describe("taskFamily", () => {
   it("exposes the explicit phase 14 families", () => {
@@ -35,6 +36,38 @@ describe("taskFamily", () => {
       requireArtifacts: true,
       browserRecoveryBudget: 3
     });
+  });
+
+  it("uses structured verification records in the family-aware delivery bundle", () => {
+    const verification: VerificationRecord[] = [
+      {
+        kind: "source",
+        summary: "verified claim against source",
+        sourceId: "source-a",
+        passed: true
+      }
+    ];
+    const familyBundle: FamilyDeliveryBundle = {
+      status: "completed",
+      final_result: "ok",
+      artifacts: ["artifacts/final.md"],
+      verification,
+      risks: [],
+      next_actions: [],
+      family: "research_writing",
+      delivery_proof: {
+        family: "research_writing",
+        steps: []
+      }
+    };
+
+    expect(familyBundle.verification[0]).toMatchObject({
+      kind: "source",
+      sourceId: "source-a",
+      passed: true
+    });
+    expect(familyBundle.family).toBe("research_writing");
+    expect(familyBundle.delivery_proof.family).toBe("research_writing");
   });
 
   it("infers the family from task intent and browser cues", () => {
