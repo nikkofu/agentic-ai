@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.2.0`
+当前版本：`1.3.0`
 
 ## 🚀 核心特性
 
@@ -40,6 +40,9 @@
 - **QA / Verifier Harness**：新增 verifier acceptance boundary，开始区分 “已产出 delivery” 与 “已通过 verifier 接受的 delivery”。
 - **Acceptance Proof**：research/browser 两类任务都会生成 verifier decision、verifier summary、typed findings，并在 inspector 中可见。
 - **拒收与修订语义**：research/browser 交付现在可以被 verifier 标记为 `accept / revise / reject`，最终 handoff 只在接受后完成。
+- **Phase 16 三层记忆系统**：新增 `personal / project / task` 三层 memory productization，支持 `raw / curated / compressed` 状态、markdown-first 存储和层级化检索注入。
+- **Dream Runtime**：新增安全的空闲期 Dream runtime，可在后台生成 reflections、hypotheses、skill drafts 和 recommendations，默认不执行外部动作。
+- **Memory Inspector**：Dashboard 现在会展示 personal/project/task memory 摘要以及 Dream 输出预览。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -97,6 +100,10 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/specs/2026-04-09-phase15-qa-verifier-harness-design.md`](docs/superpowers/specs/2026-04-09-phase15-qa-verifier-harness-design.md)
 - Phase 15 的实现计划见：
   [`docs/superpowers/plans/2026-04-09-phase15-qa-verifier-harness.md`](docs/superpowers/plans/2026-04-09-phase15-qa-verifier-harness.md)
+- Phase 16 的 Memory Productization & Dream Runtime 设计见：
+  [`docs/superpowers/specs/2026-04-09-phase16-memory-productization-and-dream-runtime-design.md`](docs/superpowers/specs/2026-04-09-phase16-memory-productization-and-dream-runtime-design.md)
+- Phase 16 的实现计划见：
+  [`docs/superpowers/plans/2026-04-09-phase16-memory-productization-and-dream-runtime.md`](docs/superpowers/plans/2026-04-09-phase16-memory-productization-and-dream-runtime.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 
@@ -122,6 +129,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 13**: 用户产品化，runtime inspector、artifact truth、统一 explanation、gold-path 产品证明。
 - [x] **Phase 14**: 真实交付平台，task-family-aware delivery harness、research trust pipeline、browser workflow automation、family-aware product surface。
 - [x] **Phase 15**: QA / Verifier Harness，acceptance proof、typed findings、research/browser verifier flow、verifier-enforced handoff。
+- [x] **Phase 16**: Memory Productization & Dream Runtime，三层记忆、memory engine、bounded memory injection、Dream 反思与产品化 memory surface。
 
 ## 📄 开源协议
 

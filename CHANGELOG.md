@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-09
+### Added
+- **Phase 16 Memory Productization**: Added first-class `personal`, `project`, and `task` memory layers with markdown-first storage, JSON indexing, promotion, and retrieval primitives.
+- **Layered Memory Engine**: Added a shared memory engine that writes task raw memory, project summaries, and supports promotion to curated/compressed states.
+- **Bounded Memory Injection**: Added explicit memory injection ordering so personal/project compressed memory and task curated memory enter prompts ahead of raw task detail.
+- **Dream Runtime**: Added an idle-time Dream runtime that generates reflections, hypotheses, recommendations, and skill drafts without performing external actions by default.
+- **Memory Product Surface**: Added memory and Dream summaries to runtime inspection plus a dedicated dashboard `MemoryPanel`.
+
+### Changed
+- **Runtime Services Memory Wiring**: Runtime services now build the Phase 16 memory engine and Dream runtime instead of using the earlier task-only in-memory store.
+- **Prompt Memory Rendering**: Prompt composition now uses explicit memory-injection output rather than ad hoc memory string assembly.
+
 ## [1.2.0] - 2026-04-09
 ### Added
 - **Phase 15 QA / Verifier Harness**: Added shared verifier contracts, QA finding taxonomy, acceptance proof, and family-aware audit flow for `research_writing` and `browser_workflow`.
