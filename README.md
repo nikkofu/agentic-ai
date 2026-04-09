@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.0.0`
+当前版本：`1.1.0`
 
 ## 🚀 核心特性
 
@@ -33,6 +33,10 @@
   - research-writing 成功/阻断
   - code edit + test 成功交付
   - async resume after interruption
+- **Phase 14 真实交付平台**：新增 `research_writing` 与 `browser_workflow` 两类一等公民任务族，开始围绕可信内容交付与高自动化流程交付构建 family-aware delivery harness。
+- **Research Trust Pipeline**：research 任务现在会统计 distinct source coverage、输出 `references.json`，并在 inspector 里展示 `sourceCoverage / verifiedClaimCount / referencesPreview`。
+- **Browser Automation Proof**：browser workflow 任务现在会记录 `stepCount / lastSuccessfulStep / validationSummary / recoveryAttempts`，并在 inspector 中以 run-proof 形式展示。
+- **Family-Aware 解释层**：research 与 browser 的阻断/完成解释和下一步建议现在按任务族分别表达，不再只用通用 blocked/completed 文案。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -82,6 +86,10 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md`](docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md)
 - Phase 13 的用户产品化计划见：
   [`docs/superpowers/plans/2026-04-09-phase13-user-productization.md`](docs/superpowers/plans/2026-04-09-phase13-user-productization.md)
+- Phase 14 的真实交付平台设计见：
+  [`docs/superpowers/specs/2026-04-09-phase14-real-world-delivery-platform-design.md`](docs/superpowers/specs/2026-04-09-phase14-real-world-delivery-platform-design.md)
+- Phase 14 的实现计划见：
+  [`docs/superpowers/plans/2026-04-09-phase14-real-world-delivery-platform.md`](docs/superpowers/plans/2026-04-09-phase14-real-world-delivery-platform.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 
@@ -102,6 +110,10 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 8**: 极致 DX、交互脚手架、OpenAI 兼容本地沙盒。
 - [x] **Phase 9**: 分布式架构基建、凭证保险箱、RBAC 管控。
 - [x] **Phase 10**: 社区增长、用例画廊、交互文档、WhatsApp 集成。
+- [x] **Phase 11**: 分布式闭环，queued ownership/dedupe、async writeback、distributed join、resume/replay 恢复。
+- [x] **Phase 12**: Agent 智能化内核，统一 prompt pipeline、typed invalid-output taxonomy、evaluator authority、planner policy enforcement。
+- [x] **Phase 13**: 用户产品化，runtime inspector、artifact truth、统一 explanation、gold-path 产品证明。
+- [x] **Phase 14**: 真实交付平台，task-family-aware delivery harness、research trust pipeline、browser workflow automation、family-aware product surface。
 
 ## 📄 开源协议
 

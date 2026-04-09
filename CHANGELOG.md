@@ -3,11 +3,19 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [1.1.0] - 2026-04-09
 ### Added
+- **Phase 14 Task Family Contracts**: Added shared `research_writing` and `browser_workflow` delivery contracts, family-aware policies, delivery proof bundles, and verification records.
+- **Research Writing Trust Pipeline**: Added source-aware research finalization with distinct-source coverage, `references.json` artifacts, trust-oriented blocking, and research gold-path coverage.
+- **Browser Workflow Automation Pipeline**: Added browser workflow tools, run-proof summarization, blocked/success browser proofs, and browser-aware inspection data.
+- **Family-Aware Product Surface**: Runtime inspector and dashboard lifecycle panel now expose family-specific delivery truth, run-proof summaries, research trust signals, and browser execution signals.
 - **Phase 13 Code Edit Gold Path**: Added a product-facing proof that completed code-edit tasks surface artifact truth, verification preview, and user-facing delivery explanations.
 - **Phase 13 Async Resume Gold Path**: Added a product-facing proof that interrupted tasks can be resumed and then inspected through the same delivery/explanation surface.
 
 ### Changed
+- **Family-Aware Completion Rules**: Delivery gating now respects task-family trust/automation policies without overwriting real blocking reasons.
+- **Inspector Explanations**: Research and browser tasks now produce family-specific explanations and next-action hints instead of generic blocked/completed text.
 - **Phase 12 Taxonomy Closure**: Runtime now classifies repeated identical tool loops as `semantic_tool_loop` instead of only falling through to generic loop exhaustion.
 - **Resume Runtime Routing**: Resumed nodes now reuse the same resolved model/runtime route as normal execution, preserving model/apiKey injection during replay.
 
