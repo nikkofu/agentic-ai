@@ -196,6 +196,14 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       sourceRefs: entry.sourceRefs,
       confidence: "medium"
     });
+    const curated = await deps.memoryStore?.curate?.({
+      layer: "project"
+    });
+    if (curated && curated.length > 1) {
+      await deps.memoryStore?.compress?.({
+        layer: "project"
+      });
+    }
   };
 
   return {

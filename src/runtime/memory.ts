@@ -44,6 +44,22 @@ export type MemoryStore = {
     sourceRefs?: string[];
     confidence?: string;
   }) => Promise<unknown>;
+  curate?: (input: {
+    layer: "personal" | "project" | "task";
+    taskId?: string;
+  }) => Promise<Array<{
+    id: string;
+    body: string;
+    state: "curated";
+  }>>;
+  compress?: (input: {
+    layer: "personal" | "project" | "task";
+    taskId?: string;
+  }) => Promise<{
+    id: string;
+    body: string;
+    state: "compressed";
+  } | null>;
 };
 
 type RuntimeEventLike = {

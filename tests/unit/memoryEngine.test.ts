@@ -50,4 +50,33 @@ describe("memory engine", () => {
     expect(promoted.state).toBe("curated");
     expect(promoted.path).toContain("/memory/project/curated/");
   });
+
+  it("curates raw entries and compresses curated entries for a layer", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "phase16-repo-"));
+    const userHome = fs.mkdtempSync(path.join(os.tmpdir(), "phase16-user-"));
+    tempRoots.push(repoRoot, userHome);
+
+    const engine = createMemoryEngine({ repoRoot, userHome });
+    await engine.record({
+      layer: "project",
+      state: "raw",
+      kind: "decision",
+      body: "Use verifier-enforced delivery."
+    });
+    await engine.record({
+      layer: "project",
+      state: "raw",
+      kind: "decision",
+      body: "Keep memory summaries visible."
+    });
+
+    const curated = await engine.curate({ layer: "project" });
+    const compressed = await engine.compress({ layer: "project" });
+
+    expect(curated.length).toBe(2);
+    expect(curated.every((entry) => entry.state === "curated")).toBe(true);
+    expect(compressed.state).toBe("compressed");
+    expect(compressed.body).toContain("Use verifier-enforced delivery.");
+    expect(compressed.body).toContain("Keep memory summaries visible.");
+  });
 });

@@ -22,6 +22,12 @@ describe("phase16 memory productization", () => {
     tempRoots.push(repoRoot, userHome);
 
     const memoryEngine = createMemoryEngine({ repoRoot, userHome });
+    await memoryEngine.record({
+      layer: "project",
+      state: "curated",
+      kind: "architecture_decision",
+      body: "Existing curated memory."
+    });
     const executor = createTaskExecutor({
       config: {
         models: { default: "m", fallback: [], by_agent_role: { planner: "m", researcher: "m", coder: "m", writer: "m" }, embeddings: { default: "e" } },
@@ -60,10 +66,12 @@ describe("phase16 memory productization", () => {
     await executor.execute({ input: "research and write summary" });
 
     const taskEntries = await memoryEngine.retrieve({ layer: "task", state: "raw", taskId: "task-phase16-1" });
-    const projectEntries = await memoryEngine.retrieve({ layer: "project", state: "raw" });
+    const curatedProjectEntries = await memoryEngine.retrieve({ layer: "project", state: "curated" });
+    const compressedProjectEntries = await memoryEngine.retrieve({ layer: "project", state: "compressed" });
 
     expect(taskEntries.some((entry) => entry.body.includes("researched result"))).toBe(true);
-    expect(projectEntries.some((entry) => entry.body.includes("research and write summary"))).toBe(true);
+    expect(curatedProjectEntries.some((entry) => entry.body.includes("research and write summary"))).toBe(true);
+    expect(compressedProjectEntries.some((entry) => entry.body.includes("Existing curated memory."))).toBe(true);
   });
 
   it("keeps prompt memory bounded to curated and compressed layers", () => {

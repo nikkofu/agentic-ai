@@ -43,6 +43,14 @@ export function createMemoryEngine(args: {
     id: string;
     toState: Exclude<MemoryState, "raw">;
   }) => Promise<MemoryEngineEntry>;
+  curate: (input: {
+    layer: MemoryLayer;
+    taskId?: string;
+  }) => Promise<MemoryEngineEntry[]>;
+  compress: (input: {
+    layer: MemoryLayer;
+    taskId?: string;
+  }) => Promise<MemoryEngineEntry | null>;
 } {
   const roots = resolveMemoryRoot(args.repoRoot, args.userHome);
   const index = createMemoryIndex();
@@ -160,6 +168,58 @@ export function createMemoryEngine(args: {
       });
     };
 
+  const curate = async ({ layer, taskId }: {
+    layer: MemoryLayer;
+    taskId?: string;
+  }) => {
+      const rawEntries = await retrieve({ layer, state: "raw", taskId });
+      const curatedEntries = await retrieve({ layer, state: "curated", taskId });
+      const seenBodies = new Set(curatedEntries.map((entry) => entry.body.trim()));
+      const promoted: MemoryEngineEntry[] = [];
+
+      for (const entry of rawEntries) {
+        const normalizedBody = entry.body.trim();
+        if (!normalizedBody || seenBodies.has(normalizedBody)) {
+          continue;
+        }
+        seenBodies.add(normalizedBody);
+        promoted.push(await writeEntry({
+          ...entry,
+          state: "curated"
+        }));
+      }
+
+      return [...curatedEntries, ...promoted];
+    };
+
+  const compress = async ({ layer, taskId }: {
+    layer: MemoryLayer;
+    taskId?: string;
+  }) => {
+      const curatedEntries = await retrieve({ layer, state: "curated", taskId });
+      const uniqueBodies = [...new Set(
+        curatedEntries
+          .map((entry) => entry.body.trim())
+          .filter((body) => body.length > 0)
+      )];
+
+      if (uniqueBodies.length === 0) {
+        return null;
+      }
+
+      return await writeEntry({
+        id: `${layer}-compressed-${Date.now()}-${++idCounter}`,
+        layer,
+        state: "compressed",
+        kind: `${layer}_compressed_summary`,
+        body: uniqueBodies.join("\n\n"),
+        taskId,
+        tags: ["compressed-summary"],
+        confidence: "medium",
+        sourceRefs: []
+      });
+    };
+
   const loadWorkingMemory = async ({ taskId }: { taskId: string }) => {
       const taskEntries = await retrieve({ layer: "task", state: "raw", taskId });
       return taskEntries.map((entry) => entry.body);
@@ -223,6 +283,8 @@ export function createMemoryEngine(args: {
     record,
     retrieve,
     promote,
+    curate,
+    compress,
     loadWorkingMemory,
     loadMemoryRefs,
     appendEntry,
