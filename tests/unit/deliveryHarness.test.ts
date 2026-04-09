@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeDeliveryProof } from "../../src/runtime/deliveryHarness";
+import { applyFamilyDeliveryPolicy, normalizeDeliveryProof } from "../../src/runtime/deliveryHarness";
 
 describe("deliveryHarness", () => {
   it("derives a normalized proof from a blocked delivery bundle", () => {
@@ -72,5 +72,46 @@ describe("deliveryHarness", () => {
         evidenceRefs: []
       }
     ]);
+  });
+
+  it("blocks research families that do not meet the source coverage minimum", () => {
+    const delivery = applyFamilyDeliveryPolicy({
+      delivery: {
+        status: "completed",
+        final_result: "ok",
+        artifacts: ["artifacts/final.md"],
+        verification: [
+          {
+            kind: "source",
+            summary: "source-a",
+            sourceId: "source-a",
+            passed: true
+          },
+          {
+            kind: "artifact_check",
+            summary: "artifact check",
+            passed: true
+          }
+        ],
+        risks: [],
+        next_actions: [],
+        family: "research_writing",
+        delivery_proof: {
+          family: "research_writing",
+          steps: []
+        }
+      },
+      familyPolicy: {
+        family: "research_writing",
+        automationPriority: "low",
+        trustPriority: "high",
+        requireVerification: true,
+        requireArtifacts: true,
+        sourceCoverageMinimum: 2
+      }
+    });
+
+    expect(delivery.status).toBe("blocked");
+    expect(delivery.blocking_reason).toBe("policy_source_coverage_required");
   });
 });

@@ -12,7 +12,6 @@ export type TaskFamilyPolicy = {
   trustPriority: "high" | "medium" | "low";
   requireVerification: boolean;
   requireArtifacts: boolean;
-  browserRecoveryBudget?: number;
   sourceCoverageMinimum?: number;
 };
 

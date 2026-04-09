@@ -81,11 +81,27 @@ export function applyFamilyDeliveryPolicy(args: {
     };
   }
 
+  if (
+    typeof familyPolicy.sourceCoverageMinimum === "number" &&
+    familyPolicy.sourceCoverageMinimum > 0 &&
+    countPassingSourceRecords(delivery.verification) < familyPolicy.sourceCoverageMinimum
+  ) {
+    return {
+      ...delivery,
+      status: "blocked",
+      blocking_reason: "policy_source_coverage_required"
+    };
+  }
+
   return delivery;
 }
 
 export function hasPassingVerificationRecords(records: VerificationRecord[]): boolean {
   return records.some((record) => record.passed);
+}
+
+function countPassingSourceRecords(records: VerificationRecord[]): number {
+  return records.filter((record) => record.passed && record.kind === "source").length;
 }
 
 function buildDeliveryStep(delivery?: Partial<DeliveryBundle | FamilyDeliveryBundle> | null): DeliveryProofStep {

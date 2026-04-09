@@ -34,7 +34,7 @@ describe("taskFamily", () => {
       trustPriority: "medium",
       requireVerification: true,
       requireArtifacts: true,
-      browserRecoveryBudget: 3
+      sourceCoverageMinimum: 1
     });
   });
 
@@ -70,7 +70,7 @@ describe("taskFamily", () => {
     expect(familyBundle.delivery_proof.family).toBe("research_writing");
   });
 
-  it("infers the family from task intent and browser cues", () => {
+  it("infers the family from task intent and research/browser cues", () => {
     expect(
       inferTaskFamily({
         intent: {
@@ -85,6 +85,20 @@ describe("taskFamily", () => {
         task: "Open a website, fill the form, and click submit"
       })
     ).toBe("browser_workflow");
+  });
+
+  it("does not classify generic review or scripting work as research writing", () => {
+    expect(
+      inferTaskFamily({
+        task: "Review the pull request and leave comments"
+      })
+    ).toBeUndefined();
+
+    expect(
+      inferTaskFamily({
+        task: "Write a migration script for the database"
+      })
+    ).toBeUndefined();
   });
 
   it("does not assign browser family just because a workflow is supplied", () => {

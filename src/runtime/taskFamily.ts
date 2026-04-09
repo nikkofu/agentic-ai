@@ -18,8 +18,7 @@ export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
         trustPriority: "high",
         requireVerification: true,
         requireArtifacts: true,
-        sourceCoverageMinimum: 2,
-        browserRecoveryBudget: 0
+        sourceCoverageMinimum: 2
       };
     case "browser_workflow":
       return {
@@ -28,7 +27,6 @@ export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
         trustPriority: "medium",
         requireVerification: true,
         requireArtifacts: true,
-        browserRecoveryBudget: 3,
         sourceCoverageMinimum: 1
       };
   }
@@ -56,7 +54,7 @@ export function inferTaskFamily(args: {
 }
 
 function matchesResearchTask(task: string): boolean {
-  return /research|write|article|summary|report|citation|source|verify|analysis|review/.test(task);
+  return /research|article|summary|report|citation|source|analysis|paper|essay|literature|study/.test(task);
 }
 
 function matchesBrowserTask(task: string): boolean {

@@ -1123,8 +1123,7 @@ describe("runtime executor", () => {
                 trustPriority: "high",
                 requireVerification: true,
                 requireArtifacts: true,
-                sourceCoverageMinimum: 2,
-                browserRecoveryBudget: 0
+                sourceCoverageMinimum: 2
               }
             }
           }
@@ -1145,6 +1144,12 @@ describe("runtime executor", () => {
                 kind: "source",
                 summary: "source-a",
                 sourceId: "source-a",
+                passed: true
+              },
+              {
+                kind: "source",
+                summary: "source-b",
+                sourceId: "source-b",
                 passed: true
               }
             ],
