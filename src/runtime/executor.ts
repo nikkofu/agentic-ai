@@ -1,12 +1,13 @@
 import type { RuntimeConfig } from "../types/runtime";
 import type { AgentRole } from "../types/runtime";
 import type { DagWorkflow } from "../types/dag";
-import type { DeliveryBundle } from "../types/runtime";
 import type { RuntimeEvent } from "../core/eventBus";
 import { buildWorkflowFromIntent, normalizeJoinDecision, planWorkflowFromPlanner } from "./plan";
 import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
-import type { ExecutionContext, JoinDecision, PlannerPolicy } from "./contracts";
+import { normalizeDeliveryProof } from "./deliveryHarness";
+import { buildTaskFamilyPolicy, inferTaskFamily } from "./taskFamily";
+import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "./contracts";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
 
@@ -43,7 +44,7 @@ type ExecuteResult = {
   taskId: string;
   finalState: "completed" | "aborted";
   outputText?: string;
-  delivery: DeliveryBundle;
+  delivery: FamilyDeliveryBundle;
   summary: {
     nodeCount: number;
     childSpawns: number;
@@ -79,7 +80,7 @@ type TaskExecutorDeps = {
     }) => Promise<{
       finalState: "completed" | "aborted";
       stateTrace: string[];
-      delivery: DeliveryBundle;
+      delivery: FamilyDeliveryBundle;
     }>;
     runParallelContexts: (input: {
       taskId: string;
@@ -97,7 +98,7 @@ type TaskExecutorDeps = {
       nodeResults?: Array<{
         nodeId: string;
         finalState: "completed" | "aborted";
-        delivery: DeliveryBundle;
+        delivery: FamilyDeliveryBundle;
       }>;
     }>;
     resumeTask: (
@@ -117,8 +118,8 @@ type TaskExecutorDeps = {
   finalizeDelivery: (args: {
     taskId: string;
     taskInput: string;
-    delivery: DeliveryBundle;
-  }) => Promise<DeliveryBundle>;
+    delivery: FamilyDeliveryBundle;
+  }) => Promise<FamilyDeliveryBundle>;
   resolveModelRoute: ResolveModelRoute;
   taskIdFactory?: () => string;
   availableLocalTools?: string[];
@@ -188,7 +189,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       let finalState: "completed" | "aborted" = "completed";
       let stateTrace: string[] = [];
       let outputText = "";
-      let delivery: DeliveryBundle = {
+      let delivery: FamilyDeliveryBundle = {
         status: "completed",
         final_result: "",
         artifacts: [],
@@ -229,6 +230,13 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         });
       }
 
+      const family = inferTaskFamily({
+        intent,
+        task: input.input,
+        workflow: input.workflow
+      });
+      const familyPolicy = family ? buildTaskFamilyPolicy(family) : undefined;
+
       const plannerWorkflow = !input.workflow && intent?.execution_mode === "tree"
         ? await planWorkflowFromPlanner({
             task: input.input,
@@ -250,7 +258,9 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         plannerPolicy = {
           recommendedTools: plannerWorkflow.recommendedTools,
           requiredCapabilities: plannerWorkflow.requiredCapabilities,
-          verificationPolicy: plannerWorkflow.verificationPolicy
+          verificationPolicy: plannerWorkflow.verificationPolicy,
+          family,
+          familyPolicy
         };
         deps.eventBus.publish({
           type: "PlannerExpanded",
@@ -288,7 +298,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
               context: createExecutionContext({
                 intent,
                 plan: workflow,
-                policy: plannerPolicy,
+                policy: buildFamilyAwarePolicy(plannerPolicy, family, familyPolicy),
                 node: normalizeExecutionNode(node),
                 task: input.input,
                 dependencyOutputs: []
@@ -343,7 +353,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
             context: createExecutionContext({
               intent,
               plan: null,
-              policy: plannerPolicy,
+              policy: buildFamilyAwarePolicy(plannerPolicy, family, familyPolicy),
               node: {
                 id: "node-root",
                 role: "planner",
@@ -382,7 +392,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
             outputText = String(event.payload.output_text);
           }
           if (event.payload.delivery) {
-            delivery = event.payload.delivery as DeliveryBundle;
+            delivery = event.payload.delivery as FamilyDeliveryBundle;
           }
         }
       }
@@ -392,6 +402,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskInput: input.input,
         delivery
       });
+      delivery = attachFamilyDeliveryMetadata(delivery, family);
       finalState = delivery.status === "completed" ? "completed" : "aborted";
       outputText = delivery.final_result;
 
@@ -458,11 +469,12 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         next_actions: []
       };
 
-      const delivery = await deps.finalizeDelivery({
+      let delivery = await deps.finalizeDelivery({
         taskId: input.taskId,
         taskInput,
         delivery: restoredDelivery
       });
+      delivery = attachFamilyDeliveryMetadata(delivery, restoredDelivery.family);
       const finalState = delivery.status === "completed" ? "completed" : "aborted";
 
       deps.eventBus.publish({
@@ -536,14 +548,14 @@ function restoreTaskInput(events: RuntimeEvent[]): string | undefined {
   return undefined;
 }
 
-function restoreLatestDelivery(events: RuntimeEvent[]): DeliveryBundle | undefined {
+function restoreLatestDelivery(events: RuntimeEvent[]): FamilyDeliveryBundle | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (event.type === "TaskClosed" && event.payload.delivery && typeof event.payload.delivery === "object") {
-      return event.payload.delivery as DeliveryBundle;
+      return event.payload.delivery as FamilyDeliveryBundle;
     }
     if (event.type === "Evaluated" && event.payload.delivery && typeof event.payload.delivery === "object") {
-      return event.payload.delivery as DeliveryBundle;
+      return event.payload.delivery as FamilyDeliveryBundle;
     }
   }
   return undefined;
@@ -554,7 +566,7 @@ function formatJoinSummary(
   nodeResults: Array<{
     nodeId: string;
     finalState: "completed" | "aborted";
-    delivery: DeliveryBundle;
+    delivery: FamilyDeliveryBundle;
   }>
 ) {
   return JSON.stringify(
@@ -572,6 +584,45 @@ function formatJoinSummary(
     null,
     2
   );
+}
+
+function buildFamilyAwarePolicy(
+  policy: PlannerPolicy | undefined,
+  family: TaskFamily | undefined,
+  familyPolicy: TaskFamilyPolicy | undefined
+): PlannerPolicy | undefined {
+  if (!policy && !family) {
+    return undefined;
+  }
+
+  return {
+    recommendedTools: policy?.recommendedTools ?? [],
+    requiredCapabilities: policy?.requiredCapabilities ?? [],
+    verificationPolicy: policy?.verificationPolicy ?? "",
+    maxRevisions: policy?.maxRevisions,
+    requireArtifacts: policy?.requireArtifacts,
+    family,
+    familyPolicy
+  };
+}
+
+function attachFamilyDeliveryMetadata(
+  delivery: FamilyDeliveryBundle,
+  family?: TaskFamily
+): FamilyDeliveryBundle {
+  if (!family) {
+    return delivery;
+  }
+
+  return {
+    ...delivery,
+    family,
+    delivery_proof: normalizeDeliveryProof({
+      family,
+      proof: delivery.delivery_proof,
+      delivery
+    })
+  };
 }
 
 function resolveExecutionTiers(workflow: DagWorkflow) {

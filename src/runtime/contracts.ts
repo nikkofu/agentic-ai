@@ -1,5 +1,33 @@
 import type { DagNode, DagWorkflow } from "../types/dag";
 import type { AgentRole } from "../types/runtime";
+import type { DeliveryBundle } from "../types/runtime";
+
+export const TASK_FAMILIES = ["research_writing", "browser_workflow"] as const;
+
+export type TaskFamily = (typeof TASK_FAMILIES)[number];
+
+export type TaskFamilyPolicy = {
+  family: TaskFamily;
+  automationPriority: "high" | "medium" | "low";
+  trustPriority: "high" | "medium" | "low";
+  requireVerification: boolean;
+  requireArtifacts: boolean;
+  browserRecoveryBudget?: number;
+  sourceCoverageMinimum?: number;
+};
+
+export type DeliveryProofStep = {
+  kind: string;
+  status: "completed" | "failed" | "blocked";
+  summary: string;
+  evidenceRefs?: string[];
+};
+
+export type DeliveryProof = {
+  family: TaskFamily;
+  steps: DeliveryProofStep[];
+  replayHints?: string[];
+};
 
 export type TaskIntent = {
   task_kind: string;
@@ -15,6 +43,8 @@ export type PlannerPolicy = {
   verificationPolicy: string;
   maxRevisions?: number;
   requireArtifacts?: boolean;
+  family?: TaskFamily;
+  familyPolicy?: TaskFamilyPolicy;
 };
 
 export type PlannedWorkflow = DagWorkflow & PlannerPolicy;
@@ -37,6 +67,11 @@ export type InvalidOutputKind =
 export type InvalidOutputClassification = {
   kind: InvalidOutputKind;
   recoverable: boolean;
+};
+
+export type FamilyDeliveryBundle = DeliveryBundle & {
+  family?: TaskFamily;
+  delivery_proof?: DeliveryProof;
 };
 
 export type ExecutionContext = {

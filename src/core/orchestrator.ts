@@ -5,7 +5,8 @@ import { allowsToolByCapabilities } from "../runtime/capabilities";
 import { enrichExecutionContext, replayTaskMemoryFromEvents, type MemoryStore, type RetrievalProvider } from "../runtime/memory";
 import { composePromptPayload } from "../prompt/promptComposer";
 import type { AgentRole, DeliveryBundle, ToolIntent } from "../types/runtime";
-import type { ExecutionContext, InvalidOutputClassification, JoinDecision, PlannerPolicy } from "../runtime/contracts";
+import { normalizeDeliveryProof } from "../runtime/deliveryHarness";
+import type { ExecutionContext, FamilyDeliveryBundle, InvalidOutputClassification, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "../runtime/contracts";
 import type { RuntimeEvent } from "./eventBus";
 import { TaskStore } from "./taskStore";
 import { createPersistenceManager } from "./persistenceManager";
@@ -78,12 +79,14 @@ type RuntimePolicyMetadata = {
   verificationPolicy?: string;
   maxRevisions?: number;
   requireArtifacts?: boolean;
+  family?: TaskFamily;
+  familyPolicy?: TaskFamilyPolicy;
   needsVerification?: boolean;
   taskKind?: string;
 };
 
 type NodeState = "pending" | "running" | "waiting_tool" | "evaluating" | "completed" | "aborted";
-type NodeResult = { finalState: "completed" | "aborted"; stateTrace: NodeState[]; delivery: DeliveryBundle };
+type NodeResult = { finalState: "completed" | "aborted"; stateTrace: NodeState[]; delivery: FamilyDeliveryBundle };
 
 type ParallelNodeInput = {
   nodeId: string;
@@ -116,7 +119,7 @@ type ParallelContextInput = {
 type ParallelNodeResult = {
   nodeId: string;
   finalState: "completed" | "aborted";
-  delivery: DeliveryBundle;
+  delivery: FamilyDeliveryBundle;
 };
 
 type ParallelRunResult = {
@@ -138,7 +141,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   const runNodeCore = async (input: RunTaskInput): Promise<NodeResult> => {
     const stateTrace: NodeState[] = ["pending"];
     const baseRuntimeInput = { ...(input.runtimeInput ?? {}) };
-    const delivery: DeliveryBundle = {
+    const delivery: FamilyDeliveryBundle = {
       status: "completed",
       final_result: "",
       artifacts: [],
@@ -427,13 +430,15 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       });
     }
 
+    const family = extractRuntimePolicy(loopInput).family;
+    const enrichedDelivery = attachFamilyDeliveryMetadata(delivery, family);
     stateTrace.push(finalState === "completed" ? "completed" : "aborted");
     publish(deps.eventBus, finalState === "completed" ? "NodeCompleted" : "NodeAborted", {
       task_id: input.taskId,
       node_id: input.nodeId
     });
 
-    return { finalState, stateTrace, delivery };
+    return { finalState, stateTrace, delivery: enrichedDelivery };
   };
 
   const runNode = async (input: RunTaskInput): Promise<NodeResult> => {
@@ -838,6 +843,8 @@ function buildRuntimeInputFromContext(context: ExecutionContext): Record<string,
       verificationPolicy: context.policy?.verificationPolicy ?? "",
       maxRevisions: context.policy?.maxRevisions,
       requireArtifacts: context.policy?.requireArtifacts ?? false,
+      family: context.policy?.family,
+      familyPolicy: context.policy?.familyPolicy,
       needsVerification: context.intent?.needs_verification ?? false,
       taskKind: context.intent?.task_kind ?? ""
     },
@@ -867,6 +874,25 @@ function extractRuntimePolicy(runtimeInput: Record<string, unknown>): RuntimePol
     return {};
   }
   return raw as RuntimePolicyMetadata;
+}
+
+function attachFamilyDeliveryMetadata(
+  delivery: FamilyDeliveryBundle,
+  family?: TaskFamily
+): FamilyDeliveryBundle {
+  if (!family) {
+    return delivery;
+  }
+
+  return {
+    ...delivery,
+    family,
+    delivery_proof: normalizeDeliveryProof({
+      family,
+      proof: delivery.delivery_proof,
+      delivery
+    })
+  };
 }
 
 function isAllowedToolCall(toolCall: ToolIntent, policy: RuntimePolicyMetadata): boolean {
