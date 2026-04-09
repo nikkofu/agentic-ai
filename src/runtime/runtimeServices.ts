@@ -17,7 +17,8 @@ import { createBrowserTools } from "../tools/browserTools";
 import { createResearchTools } from "../tools/researchTools";
 import { createTaskExecutor } from "./executor";
 import { createTaskLifecycle } from "./taskLifecycle";
-import { createTaskMemoryStore } from "./memory";
+import { createMemoryEngine } from "./memoryEngine";
+import { createDreamRuntime } from "./dreamRuntime";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 
 export async function createRuntimeServices(args?: {
@@ -32,7 +33,14 @@ export async function createRuntimeServices(args?: {
     ? createInMemoryTaskStore()
     : createPrismaTaskStore(prisma!);
   const mcpHub = new McpHub(config.mcp_servers);
-  const memoryStore = createTaskMemoryStore();
+  const memoryStore = createMemoryEngine({
+    repoRoot: process.cwd(),
+    userHome: process.env.HOME ?? process.cwd()
+  });
+  const dreamRuntime = createDreamRuntime({
+    repoRoot: process.cwd(),
+    userHome: process.env.HOME ?? process.cwd()
+  });
 
   let limiter: RequestLimiter | undefined;
   if (config.scheduler.rate_limit) {
@@ -103,6 +111,7 @@ export async function createRuntimeServices(args?: {
     taskStore,
     mcpHub,
     memoryStore,
+    dreamRuntime,
     orchestrator,
     executor,
     taskLifecycle,
