@@ -43,6 +43,7 @@
 - **Phase 16 三层记忆系统**：新增 `personal / project / task` 三层 memory productization，支持 `raw / curated / compressed` 状态、markdown-first 存储和层级化检索注入。
 - **Dream Runtime**：新增安全的空闲期 Dream runtime，可在后台生成 reflections、hypotheses、skill drafts 和 recommendations，默认不执行外部动作。
 - **Memory Inspector**：Dashboard 现在会展示 personal/project/task memory 摘要以及 Dream 输出预览。
+- **Phase 16 Closure**：默认 runtime 现在会接通 live memory / Dream inspector，project memory 会自动 curate/compress，Dream 具备安全 idle trigger，MemoryPanel 会展示空态与 freshness truth。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -130,6 +131,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 14**: 真实交付平台，task-family-aware delivery harness、research trust pipeline、browser workflow automation、family-aware product surface。
 - [x] **Phase 15**: QA / Verifier Harness，acceptance proof、typed findings、research/browser verifier flow、verifier-enforced handoff。
 - [x] **Phase 16**: Memory Productization & Dream Runtime，三层记忆、memory engine、bounded memory injection、Dream 反思与产品化 memory surface。
+- [x] **Phase 16 Closure**: 默认 memory/dream inspector 接线、auto-curate/compress、demote/forget、safe Dream idle trigger、memory product truth。
 
 ## 📄 开源协议
 

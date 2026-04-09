@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Changed
+- **Phase 16 Closure**: Wired default runtime memory and Dream inspectors so the dashboard now shows live memory and Dream summaries without test-only injection.
+- **Auto-Curation Pipeline**: Added automatic project-memory curation and compression after successful execution, plus explicit demote/forget support in the memory engine.
+- **Dream Idle Trigger**: Added a safe Dream scheduler that runs idle reflection only after the configured threshold and never performs external actions.
+- **Memory Product Truth**: Added de-duplicated memory injection ordering, empty-state messaging, and Dream freshness signals in the dashboard memory surface.
 
 ## [1.3.2] - 2026-04-09
 ### Changed
