@@ -6,6 +6,76 @@ export type AgentRole = z.infer<typeof agentRoleSchema>;
 export const schedulerPolicySchema = z.enum(["bfs", "dfs"]);
 export type SchedulerPolicy = z.infer<typeof schedulerPolicySchema>;
 
+const memoryLayerStorageSchema = z.enum(["repo", "user_home"]);
+const memoryAutomationModeSchema = z.enum(["full_auto", "assisted", "manual"]);
+const sensitivityFilterSchema = z.enum(["strict", "balanced", "off"]);
+
+const memoryLayerConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  storage: memoryLayerStorageSchema,
+  auto_record: z.boolean().default(true),
+  auto_curate: z.boolean().default(true),
+  auto_compress: z.boolean().default(true),
+  sensitivity_filter: sensitivityFilterSchema.optional(),
+  sync_to_repo: z.boolean().optional(),
+  retain_days: z.number().int().positive().optional()
+});
+
+const memoryConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  automation: memoryAutomationModeSchema.default("full_auto"),
+  personal: memoryLayerConfigSchema.default({
+    enabled: true,
+    storage: "user_home",
+    auto_record: true,
+    auto_curate: true,
+    auto_compress: true,
+    sensitivity_filter: "strict"
+  }),
+  project: memoryLayerConfigSchema.default({
+    enabled: true,
+    storage: "repo",
+    auto_record: true,
+    auto_curate: true,
+    auto_compress: true,
+    sync_to_repo: true
+  }),
+  task: memoryLayerConfigSchema.default({
+    enabled: true,
+    storage: "repo",
+    auto_record: true,
+    auto_curate: true,
+    auto_compress: true,
+    retain_days: 30
+  }),
+  retrieval: z.object({
+    inject_personal_compressed: z.boolean().default(true),
+    inject_project_compressed: z.boolean().default(true),
+    inject_task_curated: z.boolean().default(true),
+    max_items_per_layer: z.number().int().positive().default(5)
+  }).default({
+    inject_personal_compressed: true,
+    inject_project_compressed: true,
+    inject_task_curated: true,
+    max_items_per_layer: 5
+  })
+});
+
+const dreamConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  mode: z.enum(["background", "manual"]).default("background"),
+  idle_threshold_minutes: z.number().int().positive().default(20),
+  auto_reflect: z.boolean().default(true),
+  auto_compress_memory: z.boolean().default(true),
+  auto_generate_skills: z.boolean().default(true),
+  auto_reorder_backlog: z.boolean().default(true),
+  auto_generate_hypotheses: z.boolean().default(true),
+  allow_external_actions: z.boolean().default(false),
+  allow_code_changes: z.boolean().default(false),
+  allow_network_execution: z.boolean().default(false),
+  allow_message_sending: z.boolean().default(false)
+});
+
 export const runtimeConfigSchema = z.object({
   models: z.object({
     default: z.string(),
@@ -46,6 +116,8 @@ export const runtimeConfigSchema = z.object({
     max_retries: z.number().int().nonnegative().default(3),
     base_delay_ms: z.number().int().nonnegative().default(1000)
   }),
+  memory: memoryConfigSchema.optional(),
+  dream: dreamConfigSchema.optional(),
   providers: z.record(z.string(), z.object({
     base_url: z.string().url(),
     api_key_env: z.string()
