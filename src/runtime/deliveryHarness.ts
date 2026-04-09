@@ -167,9 +167,8 @@ function normalizeVerificationRecords(values: unknown): VerificationRecord[] {
     .map((value): VerificationRecord | null => {
       if (typeof value === "string") {
         return {
-          kind: "source",
+          kind: "artifact_check",
           summary: value,
-          sourceId: value,
           passed: true
         };
       }

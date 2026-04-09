@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { applyFamilyDeliveryPolicy, normalizeDeliveryProof } from "../../src/runtime/deliveryHarness";
+import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "../../src/runtime/deliveryHarness";
 
 describe("deliveryHarness", () => {
   it("derives a normalized proof from a blocked delivery bundle", () => {
@@ -113,5 +113,69 @@ describe("deliveryHarness", () => {
 
     expect(delivery.status).toBe("blocked");
     expect(delivery.blocking_reason).toBe("policy_source_coverage_required");
+  });
+
+  it("does not count legacy string verification entries as source coverage", () => {
+    const familyBundle = createFamilyDeliveryBundle({
+      family: "research_writing",
+      delivery: {
+        status: "completed",
+        final_result: "ok",
+        artifacts: ["artifacts/final.md"],
+        verification: ["citation-needed"],
+        risks: [],
+        next_actions: []
+      }
+    });
+
+    const delivery = applyFamilyDeliveryPolicy({
+      delivery: familyBundle,
+      familyPolicy: {
+        family: "research_writing",
+        automationPriority: "low",
+        trustPriority: "high",
+        requireVerification: true,
+        requireArtifacts: true,
+        sourceCoverageMinimum: 1
+      }
+    });
+
+    expect(delivery.status).toBe("blocked");
+    expect(delivery.blocking_reason).toBe("policy_source_coverage_required");
+  });
+
+  it("allows browser families to pass with browser-native verification records", () => {
+    const delivery = applyFamilyDeliveryPolicy({
+      delivery: {
+        status: "completed",
+        final_result: "ok",
+        artifacts: ["artifacts/browser-run.png"],
+        verification: [
+          {
+            kind: "page_state",
+            summary: "form submitted",
+            locator: "#confirmation",
+            passed: true
+          }
+        ],
+        risks: [],
+        next_actions: [],
+        family: "browser_workflow",
+        delivery_proof: {
+          family: "browser_workflow",
+          steps: []
+        }
+      },
+      familyPolicy: {
+        family: "browser_workflow",
+        automationPriority: "high",
+        trustPriority: "medium",
+        requireVerification: true,
+        requireArtifacts: true
+      }
+    });
+
+    expect(delivery.status).toBe("completed");
+    expect(delivery.blocking_reason).toBeUndefined();
   });
 });

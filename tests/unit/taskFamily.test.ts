@@ -33,8 +33,7 @@ describe("taskFamily", () => {
       automationPriority: "high",
       trustPriority: "medium",
       requireVerification: true,
-      requireArtifacts: true,
-      sourceCoverageMinimum: 1
+      requireArtifacts: true
     });
   });
 
@@ -99,6 +98,14 @@ describe("taskFamily", () => {
         task: "Write a migration script for the database"
       })
     ).toBeUndefined();
+  });
+
+  it("infers browser workflow from browser-native cues", () => {
+    expect(
+      inferTaskFamily({
+        task: "Navigate the website and confirm the form state"
+      })
+    ).toBe("browser_workflow");
   });
 
   it("does not assign browser family just because a workflow is supplied", () => {
