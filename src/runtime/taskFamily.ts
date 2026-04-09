@@ -26,8 +26,7 @@ export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
         automationPriority: "high",
         trustPriority: "medium",
         requireVerification: true,
-        requireArtifacts: true,
-        sourceCoverageMinimum: 1
+        requireArtifacts: true
       };
   }
 }
