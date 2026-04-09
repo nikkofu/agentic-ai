@@ -494,6 +494,14 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
     runParallelContexts: async (input: ParallelContextInput) => {
       if (input.dispatchMode === "queue" && deps.taskQueue) {
+        const joinNodeId = `join-${input.taskId}`;
+        publish(deps.eventBus, "NodeScheduled", {
+          task_id: input.taskId,
+          node_id: joinNodeId,
+          role: "planner",
+          input_summary: `Await queued join for ${input.contexts.length} nodes`
+        });
+
         for (const context of input.contexts) {
           publish(deps.eventBus, "ExecutionContextPrepared", {
             task_id: input.taskId,
@@ -592,9 +600,12 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       if (!graph) throw new Error(`Task ${taskId} not found`);
       const events = await deps.taskStore.getEvents(taskId);
 
-      const incompleteNodes = Object.values(graph.nodes).filter(
-        (node) => node.state === "pending" || node.state === "running"
-      );
+      const incompleteNodes = Object.values(graph.nodes).filter((node) => {
+        if (node.nodeId.startsWith("join-")) {
+          return false;
+        }
+        return node.state === "pending" || node.state === "running";
+      });
 
       if (incompleteNodes.length === 0) {
         return { completedNodes: 0, status: "completed", message: "No nodes to resume" };
@@ -645,6 +656,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
       await Promise.all(workers);
 
+      await finalizeDistributedJoinState(deps.taskStore, taskId);
+
       const status = results.some((result) => result.finalState === "aborted") ? "aborted" : "completed";
       publish(deps.eventBus, "TaskClosed", { task_id: taskId, state: status, resumed: true });
       return {
@@ -657,6 +670,47 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       publish(deps.eventBus, "HumanActionResolved", { task_id: taskId, node_id: nodeId, feedback });
     }
   };
+}
+
+async function finalizeDistributedJoinState(taskStore: TaskStore | undefined, taskId: string) {
+  if (!taskStore) {
+    return;
+  }
+
+  const graph = await taskStore.getGraph(taskId);
+  if (!graph) {
+    return;
+  }
+
+  const joinNodeId = `join-${taskId}`;
+  const joinNode = graph.nodes[joinNodeId];
+  if (!joinNode) {
+    return;
+  }
+
+  const siblingNodes = Object.values(graph.nodes).filter((node) => node.nodeId !== joinNodeId);
+  if (siblingNodes.length === 0) {
+    return;
+  }
+
+  const unsettled = siblingNodes.some((node) =>
+    node.state === "pending" || node.state === "running" || node.state === "waiting_tool" || node.state === "evaluating"
+  );
+  if (unsettled) {
+    return;
+  }
+
+  const hasAbort = siblingNodes.some((node) => node.state === "aborted" || node.state === "failed");
+  await taskStore.upsertNode(taskId, {
+    nodeId: joinNodeId,
+    parentNodeId: joinNode.parentNodeId,
+    role: joinNode.role,
+    state: hasAbort ? "aborted" : "completed",
+    depth: joinNode.depth,
+    attempt: joinNode.attempt,
+    inputSummary: joinNode.inputSummary,
+    outputSummary: hasAbort ? "distributed join blocked by child failure" : "distributed join ready"
+  });
 }
 
 function restoreExecutionContexts(events: RuntimeEvent[]): Map<string, ExecutionContext> {

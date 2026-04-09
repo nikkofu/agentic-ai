@@ -29,9 +29,11 @@ export function createObservedNodeProcessor(args: {
       return null;
     }
 
-    const { taskId, nodeId, runtimeInput } = job.data as {
+    const { taskId, nodeId, ownerId, dedupeKey, runtimeInput } = job.data as {
       taskId: string;
       nodeId: string;
+      ownerId?: string;
+      dedupeKey?: string;
       runtimeInput: unknown;
     };
 
@@ -60,6 +62,8 @@ export function createObservedNodeProcessor(args: {
         payload: {
           task_id: taskId,
           node_id: nodeId,
+          owner_id: ownerId,
+          dedupe_key: dedupeKey,
           final_state: finalState,
           delivery,
           final_result: finalResult,
@@ -74,6 +78,8 @@ export function createObservedNodeProcessor(args: {
         payload: {
           task_id: taskId,
           node_id: nodeId,
+          owner_id: ownerId,
+          dedupe_key: dedupeKey,
           error: error instanceof Error ? error.message : String(error)
         },
         ts: Date.now()

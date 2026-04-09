@@ -21,13 +21,17 @@ describe("useTaskStore async node events", () => {
       payload: {
         task_id: "task-ui-1",
         node_id: "node-async",
-        role: "researcher"
+        role: "researcher",
+        owner_id: "worker-alpha",
+        dedupe_key: "task-ui-1-node-async"
       },
       timestamp: new Date().toISOString()
     });
 
     let node = useTaskStore.getState().nodes.find((entry) => entry.id === "node-async");
     expect(node?.data.status).toBe("pending");
+    expect(node?.data.ownerId).toBe("worker-alpha");
+    expect(node?.data.dedupeKey).toBe("task-ui-1-node-async");
 
     store.processEvent({
       type: "AsyncNodeSettled",

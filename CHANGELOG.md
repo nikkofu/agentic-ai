@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-04-09
+### Added
+- **Distributed Queue Metadata**: Queued lifecycle and node jobs now carry `ownerId`, `dedupeKey`, and enqueue metadata so workers and inspection tools can reason about ownership and deduplication.
+- **Distributed Join Inspection**: `taskLifecycle.inspectTask()` now exposes `latestAsyncNode` and `distributedSummary`, and the dashboard lifecycle panel surfaces queue, settled-node, join, owner, and dedupe facts.
+- **Async Writeback Coverage**: Async node/task worker events now persist richer delivery, final-result, and blocking details into the shared task graph.
+
+### Changed
+- **Shared Graph Convergence**: Queue-backed parallel execution now creates a distributed join placeholder and updates it to `completed` or `aborted` once all queued children settle.
+- **Resume Semantics**: `resumeTask()` now respects persisted distributed state, skips join placeholders, and finalizes distributed join state after unfinished nodes are rerun.
+- **Dashboard Distributed Observability**: Connection banner and lifecycle panel now reflect async node ownership, dedupe keys, and distributed queue readiness instead of only task-level async state.
+
 ## [0.7.0] - 2026-04-08
 ### Added
 - **Task Lifecycle Control Plane**: Added `src/runtime/taskLifecycle.ts` and `src/runtime/runtimeServices.ts`, giving the runtime a shared `start / resume / inspect / close` control surface that CLI, workers, and API routes can reuse.

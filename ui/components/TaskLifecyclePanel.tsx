@@ -13,11 +13,20 @@ type InspectionResult = {
     status: string;
     nodes: Record<string, { state: string; role: string }>;
   } | null;
+  distributedSummary: {
+    queuedNodes: number;
+    activeJoinState: string | null;
+    settledWorkerNodes: number;
+  } | null;
   latestClose: {
     type: string;
     payload: Record<string, unknown>;
   } | null;
   latestAsync: {
+    type: string;
+    payload: Record<string, unknown>;
+  } | null;
+  latestAsyncNode: {
     type: string;
     payload: Record<string, unknown>;
   } | null;
@@ -123,6 +132,21 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
         {inspection?.graph ? (
           <span className="font-mono">nodes={Object.keys(inspection.graph.nodes).length}</span>
         ) : null}
+        {inspection?.distributedSummary ? (
+          <span className="font-mono">
+            queued={inspection.distributedSummary.queuedNodes}
+          </span>
+        ) : null}
+        {inspection?.distributedSummary ? (
+          <span className="font-mono">
+            settled={inspection.distributedSummary.settledWorkerNodes}
+          </span>
+        ) : null}
+        {inspection?.distributedSummary?.activeJoinState ? (
+          <span className="font-mono">
+            join={inspection.distributedSummary.activeJoinState}
+          </span>
+        ) : null}
         {inspection?.latestClose ? (
           <span className="font-mono">last_close={String(inspection.latestClose.payload.state ?? "unknown")}</span>
         ) : null}
@@ -132,6 +156,22 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
             {inspection.latestAsync.type === "AsyncTaskFailed"
               ? String(inspection.latestAsync.payload.error ?? "failed")
               : String(inspection.latestAsync.payload.final_state ?? "unknown")}
+          </span>
+        ) : null}
+        {inspection?.latestAsyncNode ? (
+          <span className="font-mono">
+            last_async_node=
+            {inspection.latestAsyncNode.type}
+          </span>
+        ) : null}
+        {inspection?.latestAsyncNode?.payload.owner_id ? (
+          <span className="font-mono">
+            owner={String(inspection.latestAsyncNode.payload.owner_id)}
+          </span>
+        ) : null}
+        {inspection?.latestAsyncNode?.payload.dedupe_key ? (
+          <span className="font-mono">
+            dedupe={String(inspection.latestAsyncNode.payload.dedupe_key)}
           </span>
         ) : null}
         {inspection?.latestAsync && inspection.latestAsync.type !== "AsyncTaskFailed" ? (
