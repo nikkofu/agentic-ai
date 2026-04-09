@@ -229,8 +229,10 @@ describe("task lifecycle", () => {
         blockingReason: "policy_verification_required",
         verificationCount: 1,
         artifactCount: 0,
+        sourceCoverage: 0,
         artifacts: [],
-        verificationPreview: ["https://example.com/source"]
+        verificationPreview: ["https://example.com/source"],
+        referencesPreview: []
       },
       plan: {
         nodeCount: 1,

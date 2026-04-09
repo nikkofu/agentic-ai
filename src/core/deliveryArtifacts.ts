@@ -82,6 +82,24 @@ export async function archiveDeliveryArtifacts(args: ArchiveDeliveryArgs): Promi
   };
 }
 
+export async function archiveSupplementalArtifact(args: {
+  taskId: string;
+  taskInput?: string;
+  suffix: string;
+  content: string;
+  artifactsRoot?: string;
+}): Promise<string> {
+  const artifactsRoot = path.resolve(args.artifactsRoot ?? "artifacts");
+  await fs.mkdir(artifactsRoot, { recursive: true });
+
+  const artifactPath = path.join(
+    artifactsRoot,
+    `${buildArtifactBaseName(args.taskInput, args.taskId)}-${args.suffix}`
+  );
+  await fs.writeFile(artifactPath, args.content, "utf8");
+  return toRelativeArtifactPath(artifactPath);
+}
+
 export async function verifyArtifactFiles(artifacts: string[]): Promise<VerifyArtifactResult> {
   const invalidArtifacts: string[] = [];
 

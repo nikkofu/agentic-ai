@@ -8,6 +8,7 @@ import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
 import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "./deliveryHarness";
 import { buildTaskFamilyPolicy, inferTaskFamily, normalizeTaskFamily } from "./taskFamily";
+import { finalizeResearchWritingDelivery } from "./researchWriting";
 import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "./contracts";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
@@ -402,11 +403,18 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskInput: input.input,
         delivery
       });
-      const familyDelivery = finalizeTaskFamilyDelivery({
+      let familyDelivery = finalizeTaskFamilyDelivery({
         delivery: finalizedDelivery,
         family,
         familyPolicy
       });
+      if ("family" in familyDelivery && familyDelivery.family === "research_writing") {
+        familyDelivery = await finalizeResearchWritingDelivery({
+          taskId,
+          taskInput: input.input,
+          delivery: familyDelivery
+        });
+      }
       finalState = familyDelivery.status === "completed" ? "completed" : "aborted";
       outputText = familyDelivery.final_result;
 
@@ -480,11 +488,18 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         taskInput,
         delivery: restoredDelivery
       });
-      const familyDelivery = finalizeTaskFamilyDelivery({
+      let familyDelivery = finalizeTaskFamilyDelivery({
         delivery,
         family,
         familyPolicy
       });
+      if ("family" in familyDelivery && familyDelivery.family === "research_writing") {
+        familyDelivery = await finalizeResearchWritingDelivery({
+          taskId: input.taskId,
+          taskInput,
+          delivery: familyDelivery
+        });
+      }
       const finalState = familyDelivery.status === "completed" ? "completed" : "aborted";
 
       deps.eventBus.publish({

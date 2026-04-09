@@ -49,6 +49,7 @@ async function runWebSearch(fetchImpl: FetchLike, input: unknown) {
     return {
       query,
       results: payload.web.results.map((result) => ({
+        source_id: result.url ?? "",
         title: result.title ?? result.url ?? "untitled",
         url: result.url ?? "",
         snippet: result.description ?? ""
@@ -60,6 +61,7 @@ async function runWebSearch(fetchImpl: FetchLike, input: unknown) {
   return {
     query,
     results: related.map((item) => ({
+      source_id: item.FirstURL ?? "",
       title: item.Text ?? item.FirstURL ?? "untitled",
       url: item.FirstURL ?? "",
       snippet: item.Text ?? ""
@@ -95,6 +97,7 @@ async function runGithubReadme(fetchImpl: FetchLike, input: unknown) {
   return {
     repo: `${owner}/${repo}`,
     url,
+    source_id: `github:${owner}/${repo}:README`,
     content: await response.text()
   };
 }
@@ -109,6 +112,7 @@ async function runGithubFile(fetchImpl: FetchLike, input: unknown) {
     repo: `${owner}/${repo}`,
     path: file_path,
     url,
+    source_id: `github:${owner}/${repo}:${String(file_path).replace(/^\//, "")}`,
     content: await response.text()
   };
 }

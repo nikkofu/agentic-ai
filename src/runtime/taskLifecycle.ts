@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
+import { computeResearchSourceCoverage } from "./researchWriting";
+import type { VerificationRecord } from "./contracts";
 
 type ExecuteResult = {
   taskId: string;
@@ -70,12 +72,14 @@ type RuntimeInspector = {
     blockingReason: string;
     verificationCount: number;
     artifactCount: number;
+    sourceCoverage: number;
     artifacts: Array<{
       path: string;
       exists: boolean;
       nonEmpty: boolean;
     }>;
     verificationPreview: string[];
+    referencesPreview: string[];
   } | null;
   plan: {
     nodeCount: number;
@@ -145,16 +149,23 @@ async function summarizeRuntimeInspector(
   );
   const deliveryPayload = (latestTerminal?.payload.delivery as Record<string, unknown> | undefined) ?? undefined;
   const deliveryArtifacts = normalizeStringArray(deliveryPayload?.artifacts);
-  const verificationPreview = normalizeStringArray(deliveryPayload?.verification).slice(0, 3);
+  const normalizedVerification = normalizeVerificationRecords(deliveryPayload?.verification);
+  const verificationPreview = normalizedVerification.map((record) => record.summary).slice(0, 3);
+  const referencesPreview = normalizedVerification
+    .filter((record) => record.kind === "source")
+    .map((record) => record.summary)
+    .slice(0, 3);
   const finalDelivery = latestTerminal
     ? {
         status: String(deliveryPayload?.status ?? latestTerminal.payload.state ?? latestTerminal.payload.final_state ?? ""),
         finalResult: String(deliveryPayload?.final_result ?? latestTerminal.payload.final_result ?? ""),
         blockingReason: String(deliveryPayload?.blocking_reason ?? latestTerminal.payload.blocking_reason ?? latestTerminal.payload.error ?? ""),
-        verificationCount: normalizeStringArray(deliveryPayload?.verification).length,
+        verificationCount: normalizedVerification.length,
         artifactCount: deliveryArtifacts.length,
+        sourceCoverage: computeResearchSourceCoverage(normalizedVerification),
         artifacts: await inspectArtifacts(deliveryArtifacts),
-        verificationPreview
+        verificationPreview,
+        referencesPreview
       }
     : null;
 
@@ -194,6 +205,39 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     : [];
+}
+
+function normalizeVerificationRecords(value: unknown): VerificationRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry): VerificationRecord[] => {
+    if (typeof entry === "string" && entry.trim().length > 0) {
+      return [{
+        kind: "artifact_check",
+        summary: entry,
+        passed: true
+      }];
+    }
+
+    if (!entry || typeof entry !== "object") {
+      return [];
+    }
+
+    const record = entry as Partial<VerificationRecord>;
+    if (typeof record.summary !== "string" || record.summary.trim().length === 0) {
+      return [];
+    }
+
+    return [{
+      kind: record.kind === "page_state" || record.kind === "form_result" || record.kind === "artifact_check" ? record.kind : "source",
+      summary: record.summary,
+      passed: record.passed === true,
+      sourceId: typeof record.sourceId === "string" ? record.sourceId : undefined,
+      locator: typeof record.locator === "string" ? record.locator : undefined
+    }];
+  });
 }
 
 function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"]) {

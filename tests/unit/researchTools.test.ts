@@ -26,6 +26,7 @@ describe("researchTools", () => {
       query: "openclaw github",
       results: [
         {
+          source_id: "https://github.com/example/openclaw",
           title: "OpenClaw",
           url: "https://github.com/example/openclaw",
           snippet: "A distributed crawler"
@@ -49,6 +50,7 @@ describe("researchTools", () => {
     expect(output).toEqual({
       repo: "example/openclaw",
       url: "https://raw.githubusercontent.com/example/openclaw/HEAD/README.md",
+      source_id: "github:example/openclaw:README",
       content: "# OpenClaw\n\nREADME body"
     });
   });
