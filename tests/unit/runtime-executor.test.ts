@@ -1171,6 +1171,7 @@ describe("runtime executor", () => {
         status: "completed"
       })
     };
+    const finalizeDelivery = vi.fn().mockImplementation(async ({ delivery }) => delivery);
 
     const executor = createTaskExecutor({
       config: {
@@ -1204,7 +1205,7 @@ describe("runtime executor", () => {
       eventLogStore: { getAll: vi.fn().mockReturnValue([]) } as any,
       orchestrator: orchestrator as any,
       taskStore: taskStore as any,
-      finalizeDelivery: vi.fn().mockImplementation(async ({ delivery }) => delivery),
+      finalizeDelivery,
       resolveModelRoute: vi.fn().mockReturnValue({
         model: "test-model",
         reasoner: "medium",
@@ -1216,6 +1217,7 @@ describe("runtime executor", () => {
       taskId: "task-resume-family-1"
     });
 
+    expect(finalizeDelivery).toHaveBeenCalledTimes(1);
     expect(result.finalState).toBe("completed");
     expect(result.delivery.family).toBe("research_writing");
     expect(result.delivery.delivery_proof.family).toBe("research_writing");
