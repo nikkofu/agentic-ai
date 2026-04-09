@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.4.0] - 2026-04-09
 ### Changed
 - **Phase 16 Closure**: Wired default runtime memory and Dream inspectors so the dashboard now shows live memory and Dream summaries without test-only injection.
 - **Auto-Curation Pipeline**: Added automatic project-memory curation and compression after successful execution, plus explicit demote/forget support in the memory engine.
