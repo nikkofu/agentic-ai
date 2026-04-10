@@ -15,6 +15,7 @@ import { MemoryEvolutionPanel } from "./MemoryEvolutionPanel";
 import { SkillCandidatePanel } from "./SkillCandidatePanel";
 import { CompletionHarnessPanel } from "./CompletionHarnessPanel";
 import { ExecutiveOverviewPanel } from "./ExecutiveOverviewPanel";
+import { OperatorDeepViewPanel } from "./OperatorDeepViewPanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -444,6 +445,16 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           <InspectorLine label="owner" value={inspection?.latestAsyncNode?.payload.owner_id ? String(inspection.latestAsyncNode.payload.owner_id) : ""} />
           <InspectorLine label="dedupe" value={inspection?.latestAsyncNode?.payload.dedupe_key ? String(inspection.latestAsyncNode.payload.dedupe_key) : ""} />
         </InspectorCard>
+      </div>
+
+      <div className="mt-3">
+        <OperatorDeepViewPanel
+          inspection={inspection?.runtimeInspector ? {
+            finalDelivery: inspection.runtimeInspector.finalDelivery,
+            plan: inspection.runtimeInspector.plan
+          } : null}
+          initialTab="runtime"
+        />
       </div>
 
       <div className="mt-3">
