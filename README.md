@@ -89,8 +89,8 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
 - 运行日志与阻断任务记录写入 `logs/runs/<taskId>/delivery.json`。
 - 若交付物是文件，runtime 会在退出前校验文件真实存在且非空。
 - 调研类任务如果没有来源验证信息，不会被标记为完成。
-- 发版个人日记会归档到：
-  [`diary/`](diary/)
+- `diary/` 与 `memory/` 为本地专用目录，默认被 `.gitignore` 忽略，不参与远端仓库同步。
+- `diary/` 可用于保存本地发版日记；`memory/` 可用于保存本地任务记忆、项目记忆和临时状态。
 
 ### 进入交互式 REPL
 ```bash
