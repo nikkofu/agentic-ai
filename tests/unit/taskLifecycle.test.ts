@@ -293,9 +293,15 @@ describe("task lifecycle", () => {
         risk: {
           blockedRate: 1
         },
+        humanLoad: {
+          interventionRate: 0,
+          totalInterventions: 0
+        },
         trust: {
-          evidenceBackedCompletionRate: 0
-        }
+          evidenceBackedCompletionRate: 0,
+          releaseGateReadiness: false
+        },
+        objectives: []
       },
       companionship: null,
       explanation: "Task blocked: policy_verification_required",
@@ -767,5 +773,6 @@ describe("task lifecycle", () => {
     expect(inspection.runtimeInspector?.operatorIntelligence.outcome.acceptanceRate).toBe(1);
     expect(inspection.runtimeInspector?.operatorIntelligence.economics.totalCostUsd).toBe(2.5);
     expect(inspection.runtimeInspector?.operatorIntelligence.trust.evidenceBackedCompletionRate).toBe(1);
+    expect(inspection.runtimeInspector?.operatorIntelligence.humanLoad.totalInterventions).toBe(0);
   });
 });

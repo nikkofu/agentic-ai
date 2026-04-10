@@ -37,6 +37,16 @@ export type ReleaseGateResult = {
   reasons: string[];
 };
 
+export type CompletionObjectiveSummary = {
+  id: string;
+  label: string;
+  family: string;
+  completionRate: number;
+  acceptanceRate: number;
+  totalRuns: number;
+  blockedRuns: number;
+};
+
 type CompletionHarness = ReturnType<typeof createCompletionHarness>;
 
 export function createCompletionHarness(args: {
@@ -167,6 +177,18 @@ function summarizeFamilies(records: CompletionRecord[]): FamilyCompletionSummary
       } satisfies FamilyCompletionSummary;
     })
     .sort((left, right) => left.family.localeCompare(right.family));
+}
+
+export function summarizeCompletionObjectives(families: FamilyCompletionSummary[]): CompletionObjectiveSummary[] {
+  return families.map((family) => ({
+    id: `family:${family.family}`,
+    label: family.family,
+    family: family.family,
+    completionRate: family.completionRate,
+    acceptanceRate: family.acceptanceRate,
+    totalRuns: family.totalRuns,
+    blockedRuns: family.blockedRuns
+  }));
 }
 
 function isSuccessfulCompletion(input: {

@@ -6,7 +6,12 @@ import { computeResearchSourceCoverage } from "./researchWriting";
 import { summarizeBrowserWorkflow } from "./browserWorkflow";
 import type { AcceptanceProof, DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
 import { buildCompanionshipSnapshot, type CompanionshipSnapshot } from "./companionshipMemory";
-import type { CompletionRecord, FamilyCompletionSummary, ReleaseGateResult } from "./completionHarness";
+import {
+  summarizeCompletionObjectives,
+  type CompletionRecord,
+  type FamilyCompletionSummary,
+  type ReleaseGateResult
+} from "./completionHarness";
 import { buildOperatorIntelligenceSnapshot, type OperatorIntelligenceSnapshot } from "./operatorIntelligence";
 
 type ExecuteResult = {
@@ -380,6 +385,9 @@ async function summarizeRuntimeInspector(
       }
     : null;
   const totalCostUsd = normalizeTelemetryCost(latestTerminal?.payload.telemetry);
+  const humanInterventions = events.filter((event) =>
+    event.type === "HumanActionRequired" || event.type === "HumanActionResolved"
+  ).length;
   const operatorIntelligence = buildOperatorIntelligenceSnapshot({
     tasks: [{
       family,
@@ -391,9 +399,11 @@ async function summarizeRuntimeInspector(
       deliveryStatus: finalDelivery?.status ?? "",
       acceptanceDecision: finalDelivery?.acceptanceDecision ?? "",
       totalCostUsd,
-      humanInterventions: 0,
+      humanInterventions,
       blocked: finalDelivery?.status === "blocked" || Boolean(finalDelivery?.blockingReason)
-    }]
+    }],
+    releaseGateReady: completionSummary?.releaseGate.ready ?? false,
+    objectives: summarizeCompletionObjectives(completionSummary?.families ?? [])
   });
 
   return {

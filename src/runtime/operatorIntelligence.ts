@@ -1,3 +1,5 @@
+import type { CompletionObjectiveSummary } from "./completionHarness";
+
 export type OperatorIntelligenceTaskInput = {
   family: string;
   finalState: "completed" | "aborted";
@@ -20,19 +22,28 @@ export type OperatorIntelligenceSnapshot = {
   risk: {
     blockedRate: number;
   };
+  humanLoad: {
+    interventionRate: number;
+    totalInterventions: number;
+  };
   trust: {
     evidenceBackedCompletionRate: number;
+    releaseGateReadiness: boolean;
   };
+  objectives: CompletionObjectiveSummary[];
 };
 
 export function buildOperatorIntelligenceSnapshot(input: {
   tasks: OperatorIntelligenceTaskInput[];
+  releaseGateReady?: boolean;
+  objectives?: CompletionObjectiveSummary[];
 }): OperatorIntelligenceSnapshot {
   const totalRuns = input.tasks.length;
   const completedRuns = input.tasks.filter((task) => task.finalState === "completed").length;
   const acceptedRuns = input.tasks.filter((task) => task.acceptanceDecision === "accept").length;
   const blockedRuns = input.tasks.filter((task) => task.blocked).length;
   const totalCostUsd = input.tasks.reduce((sum, task) => sum + task.totalCostUsd, 0);
+  const totalInterventions = input.tasks.reduce((sum, task) => sum + task.humanInterventions, 0);
 
   return {
     outcome: {
@@ -46,8 +57,14 @@ export function buildOperatorIntelligenceSnapshot(input: {
     risk: {
       blockedRate: totalRuns === 0 ? 0 : blockedRuns / totalRuns
     },
+    humanLoad: {
+      interventionRate: totalRuns === 0 ? 0 : totalInterventions / totalRuns,
+      totalInterventions
+    },
     trust: {
-      evidenceBackedCompletionRate: totalRuns === 0 ? 0 : acceptedRuns / totalRuns
-    }
+      evidenceBackedCompletionRate: totalRuns === 0 ? 0 : acceptedRuns / totalRuns,
+      releaseGateReadiness: input.releaseGateReady ?? false
+    },
+    objectives: input.objectives ?? []
   };
 }
