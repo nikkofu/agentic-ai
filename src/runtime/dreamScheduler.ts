@@ -11,6 +11,14 @@ type DreamRuntimeLike = {
     hypotheses: string[];
     recommendations: string[];
     skillDrafts: string[];
+    skillCandidates: Array<{
+      id: string;
+      sourceEntryIds: string[];
+      summary: string;
+      procedure: string[];
+      confidence: "low" | "medium" | "high";
+      status: "candidate" | "approved" | "rejected" | "published";
+    }>;
     externalActionsAttempted: number;
   }>;
 };
@@ -18,6 +26,16 @@ type DreamRuntimeLike = {
 export function createDreamScheduler(args: {
   dreamRuntime: DreamRuntimeLike;
   thresholdMinutes: number;
+  skillEvolution?: {
+    recordCandidates: (candidates: Array<{
+      id: string;
+      sourceEntryIds: string[];
+      summary: string;
+      procedure: string[];
+      confidence: "low" | "medium" | "high";
+      status: "candidate" | "approved" | "rejected" | "published";
+    }>) => Promise<unknown>;
+  };
 }) {
   return {
     async maybeRunIdleCycle(input: {
@@ -32,7 +50,11 @@ export function createDreamScheduler(args: {
         return null;
       }
 
-      return await args.dreamRuntime.runIdleCycle(input);
+      const result = await args.dreamRuntime.runIdleCycle(input);
+      if (result.skillCandidates.length > 0) {
+        await args.skillEvolution?.recordCandidates(result.skillCandidates);
+      }
+      return result;
     }
   };
 }

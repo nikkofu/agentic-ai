@@ -6,6 +6,7 @@ import { createMemoryIndex, type MemoryIndexEntry } from "./memoryIndex";
 import { serializeMemoryMarkdown, parseMemoryMarkdown } from "./memoryMarkdown";
 import type { MemoryLayer, MemoryState } from "./memoryContracts";
 import { resolveMemoryRoot } from "./memoryPaths";
+import { createMemoryHistory } from "./memoryHistory";
 
 export type MemoryEngineEntry = {
   id: string;
@@ -18,6 +19,10 @@ export type MemoryEngineEntry = {
   tags: string[];
   confidence: string;
   sourceRefs: string[];
+  updatedAt?: string;
+  status?: string;
+  supersedes?: string[];
+  supersededBy?: string;
 };
 
 export function createMemoryEngine(args: {
@@ -55,12 +60,28 @@ export function createMemoryEngine(args: {
     id: string;
     toState: Extract<MemoryState, "raw" | "curated">;
   }) => Promise<MemoryEngineEntry>;
+  archive: (input: {
+    id: string;
+    reason: string;
+  }) => Promise<MemoryEngineEntry>;
   forget: (input: {
     id: string;
   }) => Promise<void>;
+  markStale: (input: {
+    id: string;
+    reason: string;
+  }) => Promise<MemoryEngineEntry>;
+  markSuperseded: (input: {
+    id: string;
+    supersededBy: string;
+  }) => Promise<MemoryEngineEntry>;
+  restore: (input: {
+    id: string;
+  }) => Promise<MemoryEngineEntry>;
 } {
   const roots = resolveMemoryRoot(args.repoRoot, args.userHome);
   const index = createMemoryIndex();
+  const history = createMemoryHistory({ repoRoot: args.repoRoot });
   let idCounter = 0;
 
   const resolveLayerDir = (layer: MemoryLayer, state: MemoryState, taskId?: string) => {
@@ -91,7 +112,12 @@ export function createMemoryEngine(args: {
       taskId: typeof frontmatter.taskId === "string" ? frontmatter.taskId : undefined,
       tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
       confidence: String(frontmatter.confidence ?? "medium"),
-      sourceRefs: Array.isArray(frontmatter.source_refs) ? frontmatter.source_refs : []
+      sourceRefs: Array.isArray(frontmatter.source_refs) ? frontmatter.source_refs : [],
+      updatedAt: typeof frontmatter.updated_at === "string" ? frontmatter.updated_at : undefined
+      ,
+      status: typeof frontmatter.status === "string" ? frontmatter.status : "active",
+      supersedes: Array.isArray(frontmatter.supersedes) ? frontmatter.supersedes : [],
+      supersededBy: typeof frontmatter.superseded_by === "string" ? frontmatter.superseded_by : undefined
     };
   };
 
@@ -108,7 +134,11 @@ export function createMemoryEngine(args: {
         confidence: entry.confidence,
         tags: entry.tags,
         taskId: entry.taskId,
-        source_refs: entry.sourceRefs
+        source_refs: entry.sourceRefs,
+        updated_at: entry.updatedAt ?? new Date().toISOString(),
+        status: entry.status ?? "active",
+        supersedes: entry.supersedes ?? [],
+        superseded_by: entry.supersededBy
       } as any,
       body: entry.body
     }), "utf8");
@@ -146,7 +176,10 @@ export function createMemoryEngine(args: {
         taskId: input.taskId,
         tags: input.tags ?? [],
         confidence: input.confidence ?? "medium",
-        sourceRefs: input.sourceRefs ?? []
+        sourceRefs: input.sourceRefs ?? [],
+        updatedAt: new Date().toISOString(),
+        status: "active",
+        supersedes: []
       });
     };
 
@@ -192,7 +225,9 @@ export function createMemoryEngine(args: {
         seenBodies.add(normalizedBody);
         promoted.push(await writeEntry({
           ...entry,
-          state: "curated"
+          state: "curated",
+          updatedAt: new Date().toISOString(),
+          status: "active"
         }));
       }
 
@@ -214,7 +249,7 @@ export function createMemoryEngine(args: {
         return null;
       }
 
-      return await writeEntry({
+      const compressedEntry = await writeEntry({
         id: `${layer}-compressed-${Date.now()}-${++idCounter}`,
         layer,
         state: "compressed",
@@ -223,8 +258,17 @@ export function createMemoryEngine(args: {
         taskId,
         tags: ["compressed-summary"],
         confidence: "medium",
-        sourceRefs: []
+        sourceRefs: curatedEntries.map((entry) => entry.id),
+        updatedAt: new Date().toISOString(),
+        status: "active",
+        supersedes: curatedEntries.map((entry) => entry.id)
       });
+      await history.append({
+        kind: "compress",
+        entryId: compressedEntry.id,
+        sourceIds: curatedEntries.map((entry) => entry.id)
+      });
+      return compressedEntry;
     };
 
   const demote = async ({ id, toState }: {
@@ -236,10 +280,17 @@ export function createMemoryEngine(args: {
         throw new Error(`Memory entry not found: ${id}`);
       }
       const current = await readEntry(existing.path);
-      return await writeEntry({
+      const demoted = await writeEntry({
         ...current,
-        state: toState
+        state: toState,
+        updatedAt: new Date().toISOString()
       });
+      await history.append({
+        kind: "demote",
+        entryId: id,
+        toState
+      });
+      return demoted;
     };
 
   const forget = async ({ id }: {
@@ -251,6 +302,98 @@ export function createMemoryEngine(args: {
       }
       await fs.rm(existing.path, { force: true });
       index.remove(id);
+      await history.append({
+        kind: "forget",
+        entryId: id
+      });
+    };
+
+  const markStale = async ({ id, reason }: {
+      id: string;
+      reason: string;
+    }) => {
+      const existing = index.get(id);
+      if (!existing) {
+        throw new Error(`Memory entry not found: ${id}`);
+      }
+      const current = await readEntry(existing.path);
+      const updated = await writeEntry({
+        ...current,
+        status: "stale",
+        updatedAt: new Date().toISOString()
+      });
+      await history.append({
+        kind: "mark_stale",
+        entryId: id,
+        reason
+      });
+      return updated;
+    };
+
+  const markSuperseded = async ({ id, supersededBy }: {
+      id: string;
+      supersededBy: string;
+    }) => {
+      const existing = index.get(id);
+      if (!existing) {
+        throw new Error(`Memory entry not found: ${id}`);
+      }
+      const current = await readEntry(existing.path);
+      const updated = await writeEntry({
+        ...current,
+        status: "superseded",
+        supersededBy,
+        updatedAt: new Date().toISOString()
+      });
+      await history.append({
+        kind: "mark_superseded",
+        entryId: id,
+        supersededBy
+      });
+      return updated;
+    };
+
+  const archive = async ({ id, reason }: {
+      id: string;
+      reason: string;
+    }) => {
+      const existing = index.get(id);
+      if (!existing) {
+        throw new Error(`Memory entry not found: ${id}`);
+      }
+      const current = await readEntry(existing.path);
+      const updated = await writeEntry({
+        ...current,
+        status: "archived",
+        updatedAt: new Date().toISOString()
+      });
+      await history.append({
+        kind: "archive",
+        entryId: id,
+        reason
+      });
+      return updated;
+    };
+
+  const restore = async ({ id }: {
+      id: string;
+    }) => {
+      const existing = index.get(id);
+      if (!existing) {
+        throw new Error(`Memory entry not found: ${id}`);
+      }
+      const current = await readEntry(existing.path);
+      const restored = await writeEntry({
+        ...current,
+        status: "active",
+        supersededBy: undefined,
+        updatedAt: new Date().toISOString()
+      });
+      await history.append({
+        kind: "restore",
+        entryId: id
+      });
+      return restored;
     };
 
   const loadWorkingMemory = async ({ taskId }: { taskId: string }) => {
@@ -319,7 +462,11 @@ export function createMemoryEngine(args: {
     curate,
     compress,
     demote,
+    archive,
     forget,
+    markStale,
+    markSuperseded,
+    restore,
     loadWorkingMemory,
     loadMemoryRefs,
     appendEntry,

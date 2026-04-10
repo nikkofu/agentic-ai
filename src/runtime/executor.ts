@@ -14,6 +14,7 @@ import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolic
 import { evaluateAcceptanceProof } from "../eval/evaluator";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
+import { promoteExecutionSummaryToProjectMemory } from "./memoryEvolution";
 
 type EventBus = {
   publish: (event: RuntimeEvent) => void;
@@ -184,34 +185,18 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   };
 
   const persistProjectMemory = async (entry: {
-    kind: string;
-    body: string;
-    taskId?: string;
-    tags?: string[];
-    sourceRefs?: string[];
+    taskId: string;
+    family: string;
+    taskInput: string;
+    finalResult: string;
   }) => {
-    if (!entry.body.trim()) {
-      return;
-    }
-
-    await deps.memoryStore?.recordEntry?.({
-      layer: "project",
-      state: "raw",
-      kind: entry.kind,
-      body: entry.body,
+    await promoteExecutionSummaryToProjectMemory({
+      memoryStore: deps.memoryStore,
       taskId: entry.taskId,
-      tags: entry.tags,
-      sourceRefs: entry.sourceRefs,
-      confidence: "medium"
+      family: entry.family,
+      taskInput: entry.taskInput,
+      finalResult: entry.finalResult
     });
-    const curated = await deps.memoryStore?.curate?.({
-      layer: "project"
-    });
-    if (curated && curated.length > 1) {
-      await deps.memoryStore?.compress?.({
-        layer: "project"
-      });
-    }
   };
 
   return {
@@ -445,10 +430,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         delivery
       });
       await persistProjectMemory({
-        kind: "task_summary",
-        body: `${input.input}\n\n${finalizedDelivery.final_result}`.trim(),
         taskId,
-        tags: [family ?? "general", "execution-summary"]
+        family: family ?? "general",
+        taskInput: input.input,
+        finalResult: finalizedDelivery.final_result
       });
       let familyDelivery = finalizeTaskFamilyDelivery({
         delivery: finalizedDelivery,

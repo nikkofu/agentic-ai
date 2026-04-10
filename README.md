@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.6.0`
+当前版本：`1.7.0`
 
 ## 🚀 核心特性
 
@@ -48,6 +48,8 @@
 - **完整 Control Center**：Dashboard 现在已有 `Assistant / Work Queue / Thread Detail / Follow Up / Conversation / Conversation List / Companionship` 七块协同视图，支持 thread 导航、过滤、inspect、resume、approve、reject、clarify。
 - **更完整 HITL 闭环**：`awaiting_user_input` 线程现在能在 Work Queue 中触发真实 `approve / reject / clarify` 动作，并通过 `taskLifecycle -> executor -> orchestrator.resumeHitl` 贯通。
 - **生产级 WhatsApp Continuity**：Adapter 现在具备连接状态显式化、消息去重、assistant channel-state 暴露，以及 richer inbound flow proof。
+- **Phase 18 深度记忆演化**：三层记忆现在具备 trust gate、promotion/compression、history/rollback、stale/superseded 生命周期，以及由 Dream 驱动的 skill candidate 演化。
+- **记忆演化真值面板**：Dashboard 开始展示 memory evolution timeline、status truth、skill candidates 和 companionship memory，不再只展示静态 memory count。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -114,6 +116,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 16**: Memory Productization & Dream Runtime，三层记忆、memory engine、bounded memory injection、Dream 反思与产品化 memory surface。
 - [x] **Phase 16 Closure**: 默认 memory/dream inspector 接线、auto-curate/compress、demote/forget、safe Dream idle trigger、memory product truth。
 - [x] **Phase 17**: Persistent Assistant Surface 完成，WhatsApp continuity、durable conversation persistence、完整 Control Center、richer HITL workflow、Companionship Layer。
+- [x] **Phase 18**: Deep Memory Evolution，trust model、promotion/compression、history/rollback、Dream-to-skill candidate、companionship memory、memory evolution product surface。
 
 ## 📄 开源协议
 

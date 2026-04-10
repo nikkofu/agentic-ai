@@ -103,4 +103,29 @@ describe("memory engine", () => {
     expect(curated.some((candidate) => candidate.id === entry.id)).toBe(false);
     expect(raw.some((candidate) => candidate.id === entry.id)).toBe(false);
   });
+
+  it("keeps compression source ids in compressed summaries", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "phase18-repo-"));
+    const userHome = fs.mkdtempSync(path.join(os.tmpdir(), "phase18-user-"));
+    tempRoots.push(repoRoot, userHome);
+
+    const engine = createMemoryEngine({ repoRoot, userHome });
+    const first = await engine.record({
+      layer: "project",
+      state: "curated",
+      kind: "decision",
+      body: "Prefer verifier accepted outputs."
+    });
+    const second = await engine.record({
+      layer: "project",
+      state: "curated",
+      kind: "decision",
+      body: "Prefer continuity-preserving follow-up."
+    });
+
+    const compressed = await engine.compress({ layer: "project" });
+
+    expect(compressed).not.toBeNull();
+    expect(compressed?.sourceRefs).toEqual([first.id, second.id]);
+  });
 });

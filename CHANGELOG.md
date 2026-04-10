@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.7.0] - 2026-04-10
+### Added
+- **Phase 18 Deep Memory Evolution**: Added shared memory trust scoring, evolution contracts, promotion/compression flow, history timeline, rollback support, and skill-candidate evolution on top of the existing three-layer memory system.
+- **Dream-to-Skill Candidate Flow**: Dream idle cycles now produce structured skill candidates, and a local candidate registry persists them for later inspection and promotion.
+- **Companionship Memory**: Added companionship snapshots that summarize thread continuity, unresolved topics, follow-up suggestions, and preference notes from long-running assistant threads.
+- **Memory Evolution Product Surface**: Added dedicated dashboard panels for memory evolution truth, skill candidates, and companionship memory.
+
+### Changed
+- **Project Memory Promotion**: Successful execution summaries now move through an explicit project-memory promotion module instead of ad hoc summary writes.
+- **Lifecycle-Aware Injection**: Stale, superseded, archived, and low-trust memory entries are now excluded from primary prompt injection.
+- **Inspector Enrichment**: `taskLifecycle.inspectTask()` now exposes memory evolution status counts, timeline, skill candidates, and companionship context.
+
 ## [1.6.0] - 2026-04-10
 ### Added
 - **Phase 17 Durable Continuity**: Added durable conversation persistence for assistants, threads, links, events, and WhatsApp channel connection state so continuity survives process restarts.

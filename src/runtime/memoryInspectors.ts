@@ -1,11 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { createMemoryHistory } from "./memoryHistory";
+import { createSkillEvolution } from "./skillEvolution";
+import { summarizeMemoryTimeline } from "./memoryTimeline";
 import { resolveMemoryRoot } from "./memoryPaths";
 
 type MemoryEntryLike = {
   id: string;
   body: string;
+  status?: string;
 };
 
 type InspectableMemoryStore = {
@@ -16,6 +20,7 @@ type InspectableMemoryStore = {
   }) => Promise<Array<{
     id: string;
     body: string;
+    status?: string;
   }>>;
   getTaskEntries?: (taskId: string) => Promise<Array<{
     sourceId: string;
@@ -25,17 +30,35 @@ type InspectableMemoryStore = {
 
 export function createMemoryInspector(args: {
   memoryStore: InspectableMemoryStore;
+  repoRoot?: string;
 }) {
+  const history = args.repoRoot ? createMemoryHistory({ repoRoot: args.repoRoot }) : null;
+  const skillEvolution = args.repoRoot ? createSkillEvolution({ repoRoot: args.repoRoot }) : null;
+
   return {
     async inspect(taskId: string) {
       const personal = await loadLayerEntries(args.memoryStore, "personal");
       const project = await loadLayerEntries(args.memoryStore, "project");
       const task = await loadLayerEntries(args.memoryStore, "task", taskId);
+      const historyEvents = await history?.list();
+      const skillCandidates = await skillEvolution?.listCandidates();
+      const allEntries = [...personal, ...project, ...task];
 
       return {
         personal: summarizeEntries(personal),
         project: summarizeEntries(project),
-        task: summarizeEntries(task)
+        task: summarizeEntries(task),
+        evolution: {
+          statusCounts: {
+            active: allEntries.filter((entry) => entry.status === "active" || entry.status === undefined).length,
+            stale: allEntries.filter((entry) => entry.status === "stale").length,
+            superseded: allEntries.filter((entry) => entry.status === "superseded").length,
+            archived: allEntries.filter((entry) => entry.status === "archived").length,
+            forgotten: allEntries.filter((entry) => entry.status === "forgotten").length
+          },
+          timeline: summarizeMemoryTimeline(historyEvents ?? [])
+        },
+        skillCandidates: (skillCandidates ?? []).slice(-5).reverse()
       };
     }
   };

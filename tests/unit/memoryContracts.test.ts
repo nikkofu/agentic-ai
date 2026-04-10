@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  defaultMemoryConfidence,
+  defaultMemoryEntryStatus,
   defaultMemoryConfig,
+  normalizeMemoryConfidence,
+  normalizeMemoryEntryStatus,
   normalizeMemoryLayer,
   normalizeMemoryState
 } from "../../src/runtime/memoryContracts";
@@ -32,5 +36,23 @@ describe("memory contracts", () => {
     expect(roots.personalRoot).toContain("/home/user/.agentic-ai/memory/personal");
     expect(roots.taskRoot).toContain("/repo/memory/task");
     expect(roots.dreamRoot).toContain("/repo/memory/dream");
+  });
+
+  it("normalizes memory confidence and entry status", () => {
+    expect(normalizeMemoryConfidence("high")).toBe("high");
+    expect(normalizeMemoryConfidence("bad")).toBeNull();
+    expect(normalizeMemoryEntryStatus("superseded")).toBe("superseded");
+    expect(normalizeMemoryEntryStatus("bad")).toBeNull();
+    expect(defaultMemoryConfidence()).toBe("medium");
+    expect(defaultMemoryEntryStatus()).toBe("active");
+  });
+
+  it("provides evolution defaults", () => {
+    const config = defaultMemoryConfig();
+
+    expect(config.evolution.auto_promote_task_to_project).toBe(true);
+    expect(config.evolution.auto_generate_skill_candidates).toBe(true);
+    expect(config.evolution.min_reuse_count_for_project_promotion).toBe(1);
+    expect(config.evolution.max_stale_days).toBe(30);
   });
 });

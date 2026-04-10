@@ -4,6 +4,12 @@ export type MemoryLayer = (typeof MEMORY_LAYERS)[number];
 export const MEMORY_STATES = ["raw", "curated", "compressed"] as const;
 export type MemoryState = (typeof MEMORY_STATES)[number];
 
+export const MEMORY_ENTRY_STATUSES = ["active", "stale", "superseded", "archived", "forgotten"] as const;
+export type MemoryEntryStatus = (typeof MEMORY_ENTRY_STATUSES)[number];
+
+export const MEMORY_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
+export type MemoryConfidence = (typeof MEMORY_CONFIDENCE_LEVELS)[number];
+
 export type MemoryAutomationMode = "full_auto" | "assisted" | "manual";
 
 export type MemoryLayerConfig = {
@@ -24,6 +30,13 @@ export type MemoryRetrievalConfig = {
   max_items_per_layer: number;
 };
 
+export type MemoryEvolutionConfig = {
+  auto_promote_task_to_project: boolean;
+  auto_generate_skill_candidates: boolean;
+  min_reuse_count_for_project_promotion: number;
+  max_stale_days: number;
+};
+
 export type MemoryConfig = {
   enabled: boolean;
   automation: MemoryAutomationMode;
@@ -31,6 +44,7 @@ export type MemoryConfig = {
   project: MemoryLayerConfig;
   task: MemoryLayerConfig;
   retrieval: MemoryRetrievalConfig;
+  evolution: MemoryEvolutionConfig;
 };
 
 export type DreamConfig = {
@@ -58,6 +72,26 @@ export function normalizeMemoryState(value: unknown): MemoryState | null {
   return typeof value === "string" && (MEMORY_STATES as readonly string[]).includes(value)
     ? (value as MemoryState)
     : null;
+}
+
+export function normalizeMemoryEntryStatus(value: unknown): MemoryEntryStatus | null {
+  return typeof value === "string" && (MEMORY_ENTRY_STATUSES as readonly string[]).includes(value)
+    ? (value as MemoryEntryStatus)
+    : null;
+}
+
+export function normalizeMemoryConfidence(value: unknown): MemoryConfidence | null {
+  return typeof value === "string" && (MEMORY_CONFIDENCE_LEVELS as readonly string[]).includes(value)
+    ? (value as MemoryConfidence)
+    : null;
+}
+
+export function defaultMemoryEntryStatus(): MemoryEntryStatus {
+  return "active";
+}
+
+export function defaultMemoryConfidence(): MemoryConfidence {
+  return "medium";
 }
 
 export function defaultMemoryConfig(): MemoryConfig & { dream: DreamConfig } {
@@ -93,6 +127,12 @@ export function defaultMemoryConfig(): MemoryConfig & { dream: DreamConfig } {
       inject_project_compressed: true,
       inject_task_curated: true,
       max_items_per_layer: 5
+    },
+    evolution: {
+      auto_promote_task_to_project: true,
+      auto_generate_skill_candidates: true,
+      min_reuse_count_for_project_promotion: 1,
+      max_stale_days: 30
     },
     dream: {
       enabled: true,

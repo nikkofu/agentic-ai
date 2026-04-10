@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { resolveMemoryRoot } from "./memoryPaths";
+import type { SkillCandidate } from "./skillEvolution";
 
 type DreamInput = {
   idleMinutes: number;
@@ -36,6 +37,7 @@ export function createDreamRuntime(args: {
           hypotheses: [],
           recommendations: [],
           skillDrafts: [],
+          skillCandidates: [],
           externalActionsAttempted: 0
         };
       }
@@ -53,6 +55,20 @@ export function createDreamRuntime(args: {
       const skillDrafts = input.memoryEntries.length > 0
         ? [`Skill draft from ${input.memoryEntries[0].id}: ${input.memoryEntries[0].body}`]
         : ["Skill draft: summarize reusable recovery and verification workflows."];
+      const skillCandidates: SkillCandidate[] = input.memoryEntries.length > 0
+        ? [{
+            id: `skill-candidate-${Date.now()}`,
+            sourceEntryIds: input.memoryEntries.map((entry) => entry.id),
+            summary: input.memoryEntries[0].body,
+            procedure: [
+              "Review the prior successful memory entry.",
+              "Apply the same validation or recovery pattern.",
+              "Re-check the final outcome before closing the task."
+            ],
+            confidence: input.memoryEntries.length > 1 ? "high" : "medium",
+            status: "candidate"
+          }]
+        : [];
 
       await writeDreamArtifacts("reflections", "reflection", reflections);
       await writeDreamArtifacts("hypotheses", "hypothesis", hypotheses);
@@ -64,6 +80,7 @@ export function createDreamRuntime(args: {
         hypotheses,
         recommendations,
         skillDrafts,
+        skillCandidates,
         externalActionsAttempted: 0
       };
     }

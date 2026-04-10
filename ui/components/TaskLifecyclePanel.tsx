@@ -10,6 +10,9 @@ import { ThreadWorkQueuePanel } from "./ThreadWorkQueuePanel";
 import { ThreadDetailPanel } from "./ThreadDetailPanel";
 import { ThreadFollowUpPanel } from "./ThreadFollowUpPanel";
 import { CompanionshipPanel } from "./CompanionshipPanel";
+import { CompanionshipMemoryPanel } from "./CompanionshipMemoryPanel";
+import { MemoryEvolutionPanel } from "./MemoryEvolutionPanel";
+import { SkillCandidatePanel } from "./SkillCandidatePanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -62,6 +65,16 @@ type InspectionResult = {
       personal: { count: number; latest: string[] };
       project: { count: number; latest: string[] };
       task: { count: number; latest: string[] };
+      evolution?: {
+        statusCounts: {
+          active: number;
+          stale: number;
+          superseded: number;
+          archived: number;
+          forgotten: number;
+        };
+        timeline: string[];
+      };
     };
     dream: {
       reflectionsCount: number;
@@ -80,6 +93,18 @@ type InspectionResult = {
       threadStatus: string;
       channelType: string;
       externalUserId: string;
+    } | null;
+    skillCandidates: Array<{
+      id: string;
+      summary: string;
+      confidence: string;
+      status: string;
+    }>;
+    companionship: {
+      continuitySummary: string;
+      unresolvedTopics: string[];
+      followUpSuggestion: string;
+      preferenceNotes: string[];
     } | null;
     explanation: string;
     actionHint: string;
@@ -465,14 +490,20 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
         />
       </div>
 
+      <div className="mt-3">
+        <CompanionshipMemoryPanel companionship={inspection?.runtimeInspector?.companionship ?? null} />
+      </div>
+
       {inspection?.runtimeInspector ? (
-        <div className="mt-3">
+        <div className="mt-3 grid gap-3 xl:grid-cols-3">
           <MemoryPanel
             inspection={{
               memory: inspection.runtimeInspector.memory,
               dream: inspection.runtimeInspector.dream
             }}
           />
+          <MemoryEvolutionPanel evolution={inspection.runtimeInspector.memory.evolution ?? null} />
+          <SkillCandidatePanel candidates={inspection.runtimeInspector.skillCandidates ?? []} />
         </div>
       ) : null}
 

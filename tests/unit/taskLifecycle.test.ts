@@ -279,6 +279,8 @@ describe("task lifecycle", () => {
         activeNodePath: "node-root"
       },
       conversation: null,
+      skillCandidates: [],
+      companionship: null,
       explanation: "Task blocked: policy_verification_required",
       actionHint: "Add verification evidence before attempting final delivery again."
     });

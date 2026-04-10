@@ -5,6 +5,7 @@ import type { DeliveryBundle } from "../types/runtime";
 import { computeResearchSourceCoverage } from "./researchWriting";
 import { summarizeBrowserWorkflow } from "./browserWorkflow";
 import type { AcceptanceProof, DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
+import { buildCompanionshipSnapshot, type CompanionshipSnapshot } from "./companionshipMemory";
 
 type ExecuteResult = {
   taskId: string;
@@ -57,6 +58,22 @@ type TaskLifecycleDeps = {
       personal: { count: number; latest: string[] };
       project: { count: number; latest: string[] };
       task: { count: number; latest: string[] };
+      evolution?: {
+        statusCounts: {
+          active: number;
+          stale: number;
+          superseded: number;
+          archived: number;
+          forgotten: number;
+        };
+        timeline: string[];
+      };
+      skillCandidates?: Array<{
+        id: string;
+        summary: string;
+        confidence: string;
+        status: string;
+      }>;
     }>;
   };
   dreamInspector?: {
@@ -66,6 +83,14 @@ type TaskLifecycleDeps = {
       recommendationsCount: number;
       latestRecommendations: string[];
     }>;
+  };
+  conversationStore?: {
+    getConversationEvents: (threadId: string) => Promise<Array<{
+      direction: "incoming" | "outgoing" | "internal";
+      kind: string;
+      payload: Record<string, unknown>;
+      createdAt: string;
+    }>>;
   };
 };
 
@@ -118,6 +143,16 @@ type RuntimeInspector = {
     personal: { count: number; latest: string[] };
     project: { count: number; latest: string[] };
     task: { count: number; latest: string[] };
+    evolution?: {
+      statusCounts: {
+        active: number;
+        stale: number;
+        superseded: number;
+        archived: number;
+        forgotten: number;
+      };
+      timeline: string[];
+    };
   };
   dream: {
     reflectionsCount: number;
@@ -137,8 +172,37 @@ type RuntimeInspector = {
     channelType: string;
     externalUserId: string;
   } | null;
+  skillCandidates: Array<{
+    id: string;
+    summary: string;
+    confidence: string;
+    status: string;
+  }>;
+  companionship: CompanionshipSnapshot | null;
   explanation: string;
   actionHint: string;
+};
+
+type MemoryInspectionSummary = {
+  personal: { count: number; latest: string[] };
+  project: { count: number; latest: string[] };
+  task: { count: number; latest: string[] };
+  evolution?: {
+    statusCounts: {
+      active: number;
+      stale: number;
+      superseded: number;
+      archived: number;
+      forgotten: number;
+    };
+    timeline: string[];
+  };
+  skillCandidates?: Array<{
+    id: string;
+    summary: string;
+    confidence: string;
+    status: string;
+  }>;
 };
 
 export function createTaskLifecycle(deps: TaskLifecycleDeps) {
@@ -162,7 +226,18 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         deps.memoryInspector?.inspect(taskId) ?? Promise.resolve({
           personal: { count: 0, latest: [] },
           project: { count: 0, latest: [] },
-          task: { count: 0, latest: [] }
+          task: { count: 0, latest: [] },
+          evolution: {
+            statusCounts: {
+              active: 0,
+              stale: 0,
+              superseded: 0,
+              archived: 0,
+              forgotten: 0
+            },
+            timeline: []
+          },
+          skillCandidates: []
         }),
         deps.dreamInspector?.inspect(taskId) ?? Promise.resolve({
           reflectionsCount: 0,
@@ -182,6 +257,12 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         event.type === "HumanActionRequired" || event.type === "HumanActionResolved"
       );
 
+      const companionship = await buildCompanionshipFromEvents({
+        latestConversationLink: [...events].reverse().find((event) => event.type === "ConversationLinked") ?? null,
+        conversationStore: deps.conversationStore,
+        memorySummary
+      });
+
       return {
         taskId,
         graph,
@@ -189,7 +270,7 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         latestAsync: latestAsync ?? null,
         latestAsyncNode: latestAsyncNode ?? null,
         latestHumanAction: latestHumanAction ?? null,
-        runtimeInspector: await summarizeRuntimeInspector(events, graph, memorySummary, dreamSummary),
+        runtimeInspector: await summarizeRuntimeInspector(events, graph, memorySummary, dreamSummary, companionship),
         distributedSummary: summarizeDistributedGraph(graph),
         eventCount: events.length
       };
@@ -209,17 +290,28 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
 async function summarizeRuntimeInspector(
   events: Array<{ type: string; payload: Record<string, unknown> }>,
   graph?: TaskGraph,
-  memorySummary: RuntimeInspector["memory"] = {
+  memorySummary: MemoryInspectionSummary = {
     personal: { count: 0, latest: [] },
     project: { count: 0, latest: [] },
-    task: { count: 0, latest: [] }
+    task: { count: 0, latest: [] },
+    evolution: {
+      statusCounts: {
+        active: 0,
+        stale: 0,
+        superseded: 0,
+        archived: 0,
+        forgotten: 0
+      },
+      timeline: []
+    }
   },
   dreamSummary: RuntimeInspector["dream"] = {
     reflectionsCount: 0,
     latestReflections: [],
     recommendationsCount: 0,
     latestRecommendations: []
-  }
+  },
+  companionship: CompanionshipSnapshot | null = null
 ): Promise<RuntimeInspector> {
   const latestIntent = [...events].reverse().find((event) => event.type === "IntentClassified");
   const latestPlanner = [...events].reverse().find((event) => event.type === "PlannerExpanded");
@@ -306,12 +398,62 @@ async function summarizeRuntimeInspector(
           threadId: String(latestConversationLink.payload.thread_id ?? ""),
           threadStatus: String(latestConversationLink.payload.thread_status ?? ""),
           channelType: String(latestConversationLink.payload.channel_type ?? ""),
-          externalUserId: String(latestConversationLink.payload.external_user_id ?? "")
-        }
+        externalUserId: String(latestConversationLink.payload.external_user_id ?? "")
+      }
       : null,
+    skillCandidates: memorySummary.skillCandidates ?? [],
+    companionship,
     explanation: buildRuntimeExplanation(finalDelivery),
     actionHint: buildActionHint(finalDelivery)
   };
+}
+
+async function buildCompanionshipFromEvents(args: {
+  latestConversationLink: { payload: Record<string, unknown> } | null;
+  conversationStore?: TaskLifecycleDeps["conversationStore"];
+  memorySummary: RuntimeInspector["memory"];
+}): Promise<CompanionshipSnapshot | null> {
+  const threadId = typeof args.latestConversationLink?.payload.thread_id === "string"
+    ? args.latestConversationLink.payload.thread_id
+    : "";
+  if (!threadId || !args.conversationStore) {
+    return null;
+  }
+
+  const latestConversationLink = args.latestConversationLink;
+  if (!latestConversationLink) {
+    return null;
+  }
+
+  const threadStatus = typeof latestConversationLink.payload.thread_status === "string"
+    ? latestConversationLink.payload.thread_status
+    : "idle";
+  const activeTaskId = typeof latestConversationLink.payload.task_id === "string"
+    ? latestConversationLink.payload.task_id
+    : undefined;
+  const recentEvents = (await args.conversationStore.getConversationEvents(threadId))
+    .slice(-3)
+    .map((event) => ({
+      direction: event.direction,
+      summary: typeof event.payload.summary === "string"
+        ? event.payload.summary
+        : typeof event.payload.text === "string"
+          ? event.payload.text
+          : ""
+    }));
+  const lastMeaningfulInteractionAt = (await args.conversationStore.getConversationEvents(threadId)).slice(-1)[0]?.createdAt;
+
+  return buildCompanionshipSnapshot({
+    threadId,
+    threadStatus,
+    activeTaskId,
+    recentEvents,
+    memoryLatest: [
+      ...args.memorySummary.personal.latest,
+      ...args.memorySummary.project.latest
+    ],
+    lastMeaningfulInteractionAt
+  });
 }
 
 function normalizeStringArray(value: unknown): string[] {

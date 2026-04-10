@@ -1,6 +1,10 @@
+import { shouldInjectEntry } from "./memoryTrust";
+
 type InjectionEntry = {
   id: string;
   body: string;
+  confidence?: "low" | "medium" | "high";
+  status?: "active" | "stale" | "superseded" | "archived" | "forgotten";
 };
 
 export function buildMemoryInjectionSet(input: {
@@ -25,6 +29,12 @@ export function buildMemoryInjectionSet(input: {
 function injectLayer(prefix: "personal" | "project" | "task", entries: InjectionEntry[], seenBodies: Set<string>) {
   const injected: string[] = [];
   for (const entry of entries) {
+    if (!shouldInjectEntry({
+      confidence: entry.confidence ?? "medium",
+      status: entry.status ?? "active"
+    })) {
+      continue;
+    }
     const normalizedBody = entry.body.trim();
     if (!normalizedBody || seenBodies.has(normalizedBody)) {
       continue;

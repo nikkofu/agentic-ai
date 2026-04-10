@@ -114,11 +114,15 @@ export async function createRuntimeServices(args?: {
   const taskLifecycle = createTaskLifecycle({
     executor,
     taskStore,
-    memoryInspector: createMemoryInspector({ memoryStore }),
+    memoryInspector: createMemoryInspector({
+      memoryStore,
+      repoRoot: process.cwd()
+    }),
     dreamInspector: createDreamInspector({
       repoRoot: process.cwd(),
       userHome: process.env.HOME ?? process.cwd()
-    })
+    }),
+    conversationStore
   });
   await conversationStore.saveAssistantProfile({
     assistantId: "assistant-main",
