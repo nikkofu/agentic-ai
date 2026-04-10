@@ -7,6 +7,7 @@ import { summarizeBrowserWorkflow } from "./browserWorkflow";
 import type { AcceptanceProof, DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
 import { buildCompanionshipSnapshot, type CompanionshipSnapshot } from "./companionshipMemory";
 import type { CompletionRecord, FamilyCompletionSummary, ReleaseGateResult } from "./completionHarness";
+import { buildOperatorIntelligenceSnapshot, type OperatorIntelligenceSnapshot } from "./operatorIntelligence";
 
 type ExecuteResult = {
   taskId: string;
@@ -191,6 +192,7 @@ type RuntimeInspector = {
     families: FamilyCompletionSummary[];
     releaseGate: ReleaseGateResult;
   } | null;
+  operatorIntelligence: OperatorIntelligenceSnapshot;
   companionship: CompanionshipSnapshot | null;
   explanation: string;
   actionHint: string;
@@ -377,6 +379,22 @@ async function summarizeRuntimeInspector(
         referencesPreview
       }
     : null;
+  const totalCostUsd = normalizeTelemetryCost(latestTerminal?.payload.telemetry);
+  const operatorIntelligence = buildOperatorIntelligenceSnapshot({
+    tasks: [{
+      family,
+      finalState: latestTerminal?.type === "TaskClosed"
+        ? (String(latestTerminal.payload.state ?? "") === "completed" ? "completed" : "aborted")
+        : String(latestTerminal?.payload.final_state ?? "") === "completed"
+          ? "completed"
+          : "aborted",
+      deliveryStatus: finalDelivery?.status ?? "",
+      acceptanceDecision: finalDelivery?.acceptanceDecision ?? "",
+      totalCostUsd,
+      humanInterventions: 0,
+      blocked: finalDelivery?.status === "blocked" || Boolean(finalDelivery?.blockingReason)
+    }]
+  });
 
   return {
     intent: latestIntent
@@ -418,10 +436,20 @@ async function summarizeRuntimeInspector(
       : null,
     skillCandidates: memorySummary.skillCandidates ?? [],
     completion: completionSummary,
+    operatorIntelligence,
     companionship,
     explanation: buildRuntimeExplanation(finalDelivery),
     actionHint: buildActionHint(finalDelivery)
   };
+}
+
+function normalizeTelemetryCost(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return 0;
+  }
+
+  const record = value as { total_cost_usd?: unknown };
+  return typeof record.total_cost_usd === "number" ? record.total_cost_usd : 0;
 }
 
 async function buildCompanionshipFromEvents(args: {

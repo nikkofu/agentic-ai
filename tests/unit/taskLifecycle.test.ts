@@ -281,6 +281,22 @@ describe("task lifecycle", () => {
       conversation: null,
       skillCandidates: [],
       completion: null,
+      operatorIntelligence: {
+        outcome: {
+          completionRate: 0,
+          acceptanceRate: 0
+        },
+        economics: {
+          totalCostUsd: 0,
+          costPerAcceptedDelivery: 0
+        },
+        risk: {
+          blockedRate: 1
+        },
+        trust: {
+          evidenceBackedCompletionRate: 0
+        }
+      },
       companionship: null,
       explanation: "Task blocked: policy_verification_required",
       actionHint: "Add verification evidence before attempting final delivery again."
@@ -705,5 +721,51 @@ describe("task lifecycle", () => {
     expect(inspection.runtimeInspector?.finalDelivery?.findingsPreview).toEqual(["submit button missing"]);
     expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow revise: Browser verifier found 1 issue(s).");
     expect(inspection.runtimeInspector?.actionHint).toBe("Retry the workflow, re-locate the target, or reload the page before resuming.");
+  });
+
+  it("includes operator intelligence aggregates in the runtime inspector", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-operator-intelligence",
+          status: "completed",
+          nodes: {
+            "node-root": { state: "completed", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-operator-intelligence",
+              state: "completed",
+              telemetry: {
+                total_cost_usd: 2.5
+              },
+              delivery: {
+                family: "research_writing",
+                status: "completed",
+                final_result: "done",
+                acceptance_proof: {
+                  decision: "accept",
+                  verifierSummary: "accepted",
+                  findings: []
+                }
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-operator-intelligence");
+
+    expect(inspection.runtimeInspector?.operatorIntelligence.outcome.acceptanceRate).toBe(1);
+    expect(inspection.runtimeInspector?.operatorIntelligence.economics.totalCostUsd).toBe(2.5);
+    expect(inspection.runtimeInspector?.operatorIntelligence.trust.evidenceBackedCompletionRate).toBe(1);
   });
 });
