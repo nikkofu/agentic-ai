@@ -14,6 +14,7 @@ import { CompanionshipMemoryPanel } from "./CompanionshipMemoryPanel";
 import { MemoryEvolutionPanel } from "./MemoryEvolutionPanel";
 import { SkillCandidatePanel } from "./SkillCandidatePanel";
 import { CompletionHarnessPanel } from "./CompletionHarnessPanel";
+import { ExecutiveOverviewPanel } from "./ExecutiveOverviewPanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -123,6 +124,36 @@ type InspectionResult = {
         reasons: string[];
       };
     } | null;
+    operatorIntelligence: {
+      outcome: {
+        completionRate: number;
+        acceptanceRate: number;
+      };
+      economics: {
+        totalCostUsd: number;
+        costPerAcceptedDelivery: number;
+      };
+      risk: {
+        blockedRate: number;
+      };
+      humanLoad: {
+        interventionRate: number;
+        totalInterventions: number;
+      };
+      trust: {
+        evidenceBackedCompletionRate: number;
+        releaseGateReadiness: boolean;
+      };
+      objectives: Array<{
+        id: string;
+        label: string;
+        family: string;
+        completionRate: number;
+        acceptanceRate: number;
+        totalRuns: number;
+        blockedRuns: number;
+      }>;
+    };
     companionship: {
       continuitySummary: string;
       unresolvedTopics: string[];
@@ -336,6 +367,10 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
         </button>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="md:col-span-2 xl:col-span-4">
+          <ExecutiveOverviewPanel snapshot={inspection?.runtimeInspector?.operatorIntelligence ?? null} />
+        </div>
+
         <InspectorCard title="Intent">
           <InspectorLine label="intent" value={inspection?.runtimeInspector?.intent ? `${inspection.runtimeInspector.intent.taskKind}/${inspection.runtimeInspector.intent.executionMode}` : ""} />
           <InspectorLine label="needs verification" value={inspection?.runtimeInspector?.intent ? String(inspection.runtimeInspector.intent.needsVerification) : ""} />
