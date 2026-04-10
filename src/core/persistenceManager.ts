@@ -113,11 +113,37 @@ export function createPersistenceManager(eventBus: EventBus, taskStore: TaskStor
       nodeId: event.payload.node_id as string,
       parentNodeId: event.payload.parent_node_id as string | undefined,
       role: (event.payload.role as any) || "planner",
-      state: event.payload.decision === "stop" ? "completed" : "evaluating",
+      state: event.payload.decision === "deliver" ? "completed" : "evaluating",
       depth: Number(event.payload.depth ?? 0),
       attempt: Number(event.payload.attempt ?? 1),
       inputSummary: String(event.payload.input_summary ?? ""),
       outputSummary: JSON.stringify(event.payload)
+    });
+  });
+
+  eventBus.subscribe("NodeCompleted", (event: RuntimeEvent) => {
+    taskStore.upsertNode(event.payload.task_id as string, {
+      nodeId: event.payload.node_id as string,
+      parentNodeId: event.payload.parent_node_id as string | undefined,
+      role: (event.payload.role as any) || "planner",
+      state: "completed",
+      depth: Number(event.payload.depth ?? 0),
+      attempt: Number(event.payload.attempt ?? 1),
+      inputSummary: String(event.payload.input_summary ?? ""),
+      outputSummary: String(event.payload.output_summary ?? "")
+    });
+  });
+
+  eventBus.subscribe("NodeAborted", (event: RuntimeEvent) => {
+    taskStore.upsertNode(event.payload.task_id as string, {
+      nodeId: event.payload.node_id as string,
+      parentNodeId: event.payload.parent_node_id as string | undefined,
+      role: (event.payload.role as any) || "planner",
+      state: "aborted",
+      depth: Number(event.payload.depth ?? 0),
+      attempt: Number(event.payload.attempt ?? 1),
+      inputSummary: String(event.payload.input_summary ?? ""),
+      outputSummary: String(event.payload.output_summary ?? "")
     });
   });
 

@@ -89,11 +89,10 @@ describe("phase 12 prompt pipeline", () => {
       tools: ["web_search", "verify_sources"],
       context: expect.arrayContaining(["node:write article", "dependency:research notes"]),
       memory: expect.arrayContaining([
-        "memref:mem://task/openclaw/node-research",
-        "working:avoid hype",
-        "retrieved:rag://openclaw/readme:OpenClaw is an open-source agent runtime project."
+        "project:working-1:avoid hype",
+        "task:rag://openclaw/readme:OpenClaw is an open-source agent runtime project."
       ]),
-      constraints: expect.arrayContaining(["verification:cite urls", "capability:verification"]),
+      constraints: expect.arrayContaining(["verification:cite urls", "capability:verification", "capability:research", "capability:writing"]),
       output_schema: {
         type: "json",
         shape: {
@@ -105,6 +104,7 @@ describe("phase 12 prompt pipeline", () => {
         }
       }
     }));
+    expect(runtime.run.mock.calls[0][0].__prompt.system).toContain("autonomous writer agent");
     expect(runtime.run.mock.calls[0][0].input?.[0]?.content).toContain("cite urls");
   });
 });

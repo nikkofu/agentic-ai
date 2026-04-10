@@ -129,9 +129,40 @@ export function createAgentRuntime(deps: AgentRuntimeDeps = {}) {
         });
       }
 
+      const simulatedArgs = (args ?? {}) as Partial<OpenRouterRunArgs> & SimulatedRunArgs;
+      const stagedInput = Array.isArray(simulatedArgs.input) ? simulatedArgs.input : [];
+      const sawToolResult = stagedInput.some((entry) =>
+        entry && typeof entry === "object" && "role" in entry && (entry as { role?: unknown }).role === "tool"
+      );
+
+      if (!sawToolResult) {
+        return {
+          usedTool: true,
+          evaluation: "pass",
+          outputText: JSON.stringify({
+            tool_calls: [
+              {
+                transport: "local",
+                tool: "echo",
+                input: {
+                  message: "simulated tool call"
+                }
+              }
+            ]
+          })
+        } as const;
+      }
+
       return {
         usedTool: true,
-        evaluation: "pass"
+        evaluation: "pass",
+        outputText: JSON.stringify({
+          final_result: "simulated result",
+          verification: ["simulated tool evidence"],
+          artifacts: [],
+          risks: [],
+          next_actions: []
+        })
       } as const;
     }
   };

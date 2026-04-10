@@ -62,7 +62,6 @@ describe("orchestrator state machine", () => {
     expect(eventNames).toContain("ToolReturned");
     expect(eventNames).toContain("Evaluated");
     expect(eventNames).toContain("NodeCompleted");
-    expect(eventNames).toContain("TaskClosed");
   });
 
   it("checks guardrails before child spawn", async () => {

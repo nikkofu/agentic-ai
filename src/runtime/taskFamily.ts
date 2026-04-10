@@ -40,6 +40,10 @@ export function inferTaskFamily(args: {
     return taskKind;
   }
 
+  if (args.intent) {
+    return undefined;
+  }
+
   const task = (args.task ?? "").toLowerCase();
   if (matchesResearchTask(task)) {
     return "research_writing";

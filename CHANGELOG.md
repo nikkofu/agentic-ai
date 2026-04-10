@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.8.1] - 2026-04-10
+### Fixed
+- **Phase 19 Closure Fixes**: Closed the remaining Phase 19 regressions by restoring completion-safe task-family inference, hardening Dream idle scheduling against missing candidate arrays, and making simulated runtime loops complete deterministically in orchestration and resume tests.
+- **Research Verification Compatibility**: Legacy URL-style verification strings now normalize into source records for research-family coverage and references generation, keeping older gold-paths compatible with the stricter verifier layer.
+- **Runtime Persistence & Audit Stability**: Persistence now marks nodes completed/aborted on terminal node events, audit-trail logging resolves its path from the active working directory, and WebHub tests degrade cleanly when sandboxed ports are unavailable.
+- **Test Harness Stability**: The project test script now runs without file parallelism so suites that intentionally change `process.cwd()` no longer race each other.
+
 ## [1.8.0] - 2026-04-10
 ### Added
 - **Phase 19 Completion Harness**: Added a first-class completion harness that records runtime benchmark evidence, aggregates task-family completion scorecards, and exposes release-gate readiness.

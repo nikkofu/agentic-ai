@@ -2,7 +2,9 @@ import { RuntimeEvent } from "./eventBus";
 import fs from "fs";
 import path from "path";
 
-const AUDIT_LOG_PATH = path.join(process.cwd(), "audit_trail.jsonl");
+function getAuditLogPath() {
+  return path.join(process.cwd(), "audit_trail.jsonl");
+}
 
 export interface AuditRecord {
   timestamp: string;
@@ -41,7 +43,7 @@ export function logAuditEvent(event: RuntimeEvent) {
     payload: event.payload
   };
 
-  fs.appendFileSync(AUDIT_LOG_PATH, JSON.stringify(record) + "\n");
+  fs.appendFileSync(getAuditLogPath(), JSON.stringify(record) + "\n");
 }
 
 export function createInMemoryAuditTrail(): AuditTrail {
@@ -95,7 +97,8 @@ export function createInMemoryAuditTrail(): AuditTrail {
 }
 
 export function getAuditRecords(): AuditRecord[] {
-  if (!fs.existsSync(AUDIT_LOG_PATH)) return [];
-  const lines = fs.readFileSync(AUDIT_LOG_PATH, "utf8").split("\n").filter(Boolean);
+  const auditLogPath = getAuditLogPath();
+  if (!fs.existsSync(auditLogPath)) return [];
+  const lines = fs.readFileSync(auditLogPath, "utf8").split("\n").filter(Boolean);
   return lines.map(l => JSON.parse(l));
 }

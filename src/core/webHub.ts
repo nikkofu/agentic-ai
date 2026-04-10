@@ -102,6 +102,10 @@ export class WebHub {
     }
   }
 
+  isRunning(): boolean {
+    return this.wss !== null;
+  }
+
   private broadcast(event: any): void {
     if (!this.wss) return;
     const message = JSON.stringify(event);

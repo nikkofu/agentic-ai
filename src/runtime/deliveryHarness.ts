@@ -176,9 +176,21 @@ function normalizeVerificationRecords(values: unknown): VerificationRecord[] {
   return values
     .map((value): VerificationRecord | null => {
       if (typeof value === "string") {
+        const normalized = value.trim();
+        if (!normalized) {
+          return null;
+        }
+        if (looksLikeSourceReference(normalized)) {
+          return {
+            kind: "source",
+            summary: normalized,
+            passed: true,
+            sourceId: normalized
+          };
+        }
         return {
           kind: "artifact_check",
-          summary: value,
+          summary: normalized,
           passed: true
         };
       }
@@ -212,6 +224,10 @@ function normalizeVerificationRecords(values: unknown): VerificationRecord[] {
       };
     })
     .filter((value): value is VerificationRecord => value !== null);
+}
+
+function looksLikeSourceReference(value: string) {
+  return /^https?:\/\//i.test(value) || /github|docs|readme|source|citation|reference/i.test(value);
 }
 
 function normalizeVerificationKind(value: unknown): VerificationRecord["kind"] {

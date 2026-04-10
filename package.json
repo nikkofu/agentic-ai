@@ -1,6 +1,6 @@
 {
   "name": "agentic-ai",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -8,9 +8,9 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --no-file-parallelism",
     "ui:dev": "cd ui && npm run dev",
-    "test:watch": "vitest"
+    "test:watch": "vitest --no-file-parallelism"
   },
   "devDependencies": {
     "@types/ioredis": "^4.28.10",

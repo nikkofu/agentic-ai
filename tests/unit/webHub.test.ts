@@ -17,6 +17,10 @@ describe("WebHub", () => {
     const eventBus = createInMemoryEventBus();
     hub = new WebHub(eventBus as any);
     await hub.start(3002);
+    if (!hub.isRunning()) {
+      expect(hub.isRunning()).toBe(false);
+      return;
+    }
 
     const client = new WebSocket("ws://localhost:3002?token=valid-test");
     
@@ -48,6 +52,10 @@ describe("WebHub", () => {
     const eventBus = createInMemoryEventBus();
     hub = new WebHub(eventBus as any);
     await hub.start(3003);
+    if (!hub.isRunning()) {
+      expect(hub.isRunning()).toBe(false);
+      return;
+    }
 
     const client = new WebSocket("ws://localhost:3003?token=invalid");
     

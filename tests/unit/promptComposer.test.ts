@@ -75,13 +75,14 @@ describe("composePromptPayload", () => {
     ]));
     expect(payload.tools).toEqual(["web_search", "verify_sources"]);
     expect(payload.memory).toEqual(expect.arrayContaining([
-      "memref:mem://task/openclaw/node-research",
-      "working:avoid hype",
-      "retrieved:rag://openclaw/readme:OpenClaw is an open-source agent runtime project."
+      "project:working-1:avoid hype",
+      "project:working-2:prefer grounded comparisons",
+      "task:rag://openclaw/readme:OpenClaw is an open-source agent runtime project."
     ]));
     expect(payload.constraints).toEqual(expect.arrayContaining([
       "verification:cite source urls in final draft",
       "capability:research",
+      "capability:verification",
       "capability:writing"
     ]));
     expect(payload.output_schema).toEqual({

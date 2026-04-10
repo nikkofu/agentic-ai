@@ -122,7 +122,7 @@ describe("deliveryHarness", () => {
         status: "completed",
         final_result: "ok",
         artifacts: ["artifacts/final.md"],
-        verification: ["citation-needed"],
+        verification: ["manual verification complete"],
         risks: [],
         next_actions: []
       }

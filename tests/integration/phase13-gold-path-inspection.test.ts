@@ -125,6 +125,11 @@ describe("phase 13 gold-path inspection", () => {
           path: "artifacts/openclaw.md",
           exists: true,
           nonEmpty: true
+        },
+        {
+          path: "artifacts/openclaw-references.json",
+          exists: true,
+          nonEmpty: true
         }
       ]);
       expect(inspection.runtimeInspector?.finalDelivery?.verificationPreview).toEqual([
@@ -132,7 +137,7 @@ describe("phase 13 gold-path inspection", () => {
         "https://example.com/verify"
       ]);
       expect(inspection.runtimeInspector?.explanation).toBe(
-        "Task completed with 1 artifacts and 2 verification items"
+        "Research delivery accepted with 2 verified sources and 2 artifacts"
       );
     } finally {
       await services.close();
@@ -235,9 +240,9 @@ describe("phase 13 gold-path inspection", () => {
       expect(inspection.runtimeInspector?.finalDelivery?.status).toBe("blocked");
       expect(inspection.runtimeInspector?.finalDelivery?.blockingReason).toBe("verification_missing");
       expect(inspection.runtimeInspector?.finalDelivery?.artifacts).toEqual([]);
-      expect(inspection.runtimeInspector?.explanation).toBe("Task blocked: verification_missing");
+      expect(inspection.runtimeInspector?.explanation).toBe("Research delivery reject: Research verifier found 4 issue(s).");
       expect(inspection.runtimeInspector?.actionHint).toBe(
-        "Add verification evidence before attempting final delivery again."
+        "Add better sources and verification evidence before attempting final article delivery again."
       );
     } finally {
       await services.close();

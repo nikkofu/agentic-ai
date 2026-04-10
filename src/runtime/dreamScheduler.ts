@@ -51,10 +51,14 @@ export function createDreamScheduler(args: {
       }
 
       const result = await args.dreamRuntime.runIdleCycle(input);
-      if (result.skillCandidates.length > 0) {
-        await args.skillEvolution?.recordCandidates(result.skillCandidates);
+      const skillCandidates = result.skillCandidates ?? [];
+      if (skillCandidates.length > 0) {
+        await args.skillEvolution?.recordCandidates(skillCandidates);
       }
-      return result;
+      return {
+        ...result,
+        skillCandidates
+      };
     }
   };
 }
