@@ -7,13 +7,14 @@ dist/
 artifacts/
 .worktrees/
 audit_trail.jsonl
+diary/
+memory/
 *.json
 !package.json
 !package-lock.json
 !tsconfig.json
 !vitest.config.ts
 !src/**/*.json
-\n# Prisma\nprisma/*.db\nprisma/*.db-journal
 
 # Prisma
 prisma/*.db
