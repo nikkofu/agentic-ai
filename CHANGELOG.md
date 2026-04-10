@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.5.1] - 2026-04-10
+### Changed
+- **Repository Surface Cleanup**: Removed `docs/superpowers` and `docs/phase-handoff-playbook` from the published repository while keeping local copies available for private planning and handoff use.
+- **README Cleanup**: Removed direct superpowers and handoff document references from the public README while keeping the roadmap overview intact.
+
 ## [1.5.0] - 2026-04-10
 ### Added
 - **Phase 17 Channel Continuity**: Added shared conversation contracts, in-memory thread/session/event persistence, `ConversationService`, and a true WhatsApp adapter path for inbound continuity-aware messages.

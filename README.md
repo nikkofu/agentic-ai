@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.5.0`
+当前版本：`1.5.1`
 
 ## 🚀 核心特性
 
@@ -85,35 +85,6 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
 - 运行日志与阻断任务记录写入 `logs/runs/<taskId>/delivery.json`。
 - 若交付物是文件，runtime 会在退出前校验文件真实存在且非空。
 - 调研类任务如果没有来源验证信息，不会被标记为完成。
-- 当前阶段的架构升级路线图见：
-  [`docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md`](docs/superpowers/specs/2026-04-08-runtime-architecture-upgrade-roadmap.md)
-- 当前阶段的可恢复架构升级交接记录见：
-  [`docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md`](docs/phase-handoff-playbook/2026-04-08-runtime-upgrade-handoff.md)
-- Phase 11 的分布式闭环设计与计划见：
-  [`docs/superpowers/specs/2026-04-09-phase11-13-iteration-design.md`](docs/superpowers/specs/2026-04-09-phase11-13-iteration-design.md)
-  [`docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md`](docs/superpowers/plans/2026-04-09-phase11-distributed-closure.md)
-- Phase 12 的 Agent 智能化内核计划见：
-  [`docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md`](docs/superpowers/plans/2026-04-09-phase12-agent-intelligence-kernel.md)
-- Phase 13 的用户产品化计划见：
-  [`docs/superpowers/plans/2026-04-09-phase13-user-productization.md`](docs/superpowers/plans/2026-04-09-phase13-user-productization.md)
-- Phase 14 的真实交付平台设计见：
-  [`docs/superpowers/specs/2026-04-09-phase14-real-world-delivery-platform-design.md`](docs/superpowers/specs/2026-04-09-phase14-real-world-delivery-platform-design.md)
-- Phase 14 的实现计划见：
-  [`docs/superpowers/plans/2026-04-09-phase14-real-world-delivery-platform.md`](docs/superpowers/plans/2026-04-09-phase14-real-world-delivery-platform.md)
-- Phase 15 的 QA / Verifier Harness 设计见：
-  [`docs/superpowers/specs/2026-04-09-phase15-qa-verifier-harness-design.md`](docs/superpowers/specs/2026-04-09-phase15-qa-verifier-harness-design.md)
-- Phase 15 的实现计划见：
-  [`docs/superpowers/plans/2026-04-09-phase15-qa-verifier-harness.md`](docs/superpowers/plans/2026-04-09-phase15-qa-verifier-harness.md)
-- Phase 16 的 Memory Productization & Dream Runtime 设计见：
-  [`docs/superpowers/specs/2026-04-09-phase16-memory-productization-and-dream-runtime-design.md`](docs/superpowers/specs/2026-04-09-phase16-memory-productization-and-dream-runtime-design.md)
-- Phase 16 的实现计划见：
-  [`docs/superpowers/plans/2026-04-09-phase16-memory-productization-and-dream-runtime.md`](docs/superpowers/plans/2026-04-09-phase16-memory-productization-and-dream-runtime.md)
-- Phase 17 的 Persistent Assistant Surface 设计见：
-  [`docs/superpowers/specs/2026-04-09-phase17-persistent-assistant-surface-design.md`](docs/superpowers/specs/2026-04-09-phase17-persistent-assistant-surface-design.md)
-- Phase 17 的实现计划见：
-  [`docs/superpowers/plans/2026-04-09-phase17-persistent-assistant-surface.md`](docs/superpowers/plans/2026-04-09-phase17-persistent-assistant-surface.md)
-- Phase 17 的阶段交接记录见：
-  [`docs/phase-handoff-playbook/2026-04-09-phase17-persistent-assistant-surface-handoff.md`](docs/phase-handoff-playbook/2026-04-09-phase17-persistent-assistant-surface-handoff.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 
