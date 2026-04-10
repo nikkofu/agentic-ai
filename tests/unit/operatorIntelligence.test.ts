@@ -22,6 +22,8 @@ describe("operatorIntelligence", () => {
     expect(snapshot.economics.costPerAcceptedDelivery).toBe(1.25);
     expect(snapshot.trust.evidenceBackedCompletionRate).toBe(1);
     expect(snapshot.humanLoad.totalInterventions).toBe(0);
+    expect(snapshot.queue.pendingApprovals).toBe(0);
+    expect(snapshot.queue.pendingClarifications).toBe(0);
     expect(snapshot.trust.releaseGateReadiness).toBe(false);
     expect(snapshot.objectives).toEqual([]);
   });

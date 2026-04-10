@@ -343,6 +343,9 @@ async function summarizeRuntimeInspector(
     event.type === "TaskClosed" || event.type === "AsyncTaskSettled" || event.type === "AsyncTaskFailed"
   );
   const latestConversationLink = [...events].reverse().find((event) => event.type === "ConversationLinked");
+  const latestHumanAction = [...events].reverse().find((event) =>
+    event.type === "HumanActionRequired" || event.type === "HumanActionResolved"
+  );
   const deliveryPayload = (latestTerminal?.payload.delivery as Record<string, unknown> | undefined) ?? undefined;
   const deliveryArtifacts = normalizeStringArray(deliveryPayload?.artifacts);
   const normalizedVerification = normalizeVerificationRecords(deliveryPayload?.verification);
@@ -388,6 +391,8 @@ async function summarizeRuntimeInspector(
   const humanInterventions = events.filter((event) =>
     event.type === "HumanActionRequired" || event.type === "HumanActionResolved"
   ).length;
+  const pendingApprovals = latestHumanAction?.type === "HumanActionRequired" ? 1 : 0;
+  const pendingClarifications = latestConversationLink?.payload.thread_status === "awaiting_user_input" ? 1 : 0;
   const operatorIntelligence = buildOperatorIntelligenceSnapshot({
     tasks: [{
       family,
@@ -403,7 +408,9 @@ async function summarizeRuntimeInspector(
       blocked: finalDelivery?.status === "blocked" || Boolean(finalDelivery?.blockingReason)
     }],
     releaseGateReady: completionSummary?.releaseGate.ready ?? false,
-    objectives: summarizeCompletionObjectives(completionSummary?.families ?? [])
+    objectives: summarizeCompletionObjectives(completionSummary?.families ?? []),
+    pendingApprovals,
+    pendingClarifications
   });
 
   return {

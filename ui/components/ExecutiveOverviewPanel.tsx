@@ -1,6 +1,7 @@
 "use client";
 
 import { DeliveryEconomicsPanel } from "./DeliveryEconomicsPanel";
+import { ObjectivePerformancePanel } from "./ObjectivePerformancePanel";
 import { OutcomeHealthPanel } from "./OutcomeHealthPanel";
 import { RiskInterventionPanel } from "./RiskInterventionPanel";
 
@@ -20,6 +21,10 @@ type ExecutiveOverviewPanelProps = {
     humanLoad: {
       interventionRate: number;
       totalInterventions: number;
+    };
+    queue: {
+      pendingApprovals: number;
+      pendingClarifications: number;
     };
     trust: {
       evidenceBackedCompletionRate: number;
@@ -61,25 +66,11 @@ export function ExecutiveOverviewPanel({ snapshot }: ExecutiveOverviewPanelProps
       <div className="grid gap-3 md:grid-cols-3">
         <OutcomeHealthPanel outcome={snapshot.outcome} trust={snapshot.trust} />
         <DeliveryEconomicsPanel economics={snapshot.economics} />
-        <RiskInterventionPanel risk={snapshot.risk} humanLoad={snapshot.humanLoad} />
+        <RiskInterventionPanel risk={snapshot.risk} humanLoad={snapshot.humanLoad} queue={snapshot.queue} />
       </div>
 
-      <div className="mt-3 rounded border border-white/10 bg-white/5 p-3">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">Objective Signals</div>
-        {snapshot.objectives.length === 0 ? (
-          <div className="text-xs text-neutral-500">No objective summaries yet.</div>
-        ) : (
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {snapshot.objectives.map((objective) => (
-              <div key={objective.id} className="rounded border border-white/10 px-2 py-2 text-xs text-neutral-200">
-                <div className="font-medium text-white">{objective.label}</div>
-                <div>{`acceptance ${Math.round(objective.acceptanceRate * 100)}%`}</div>
-                <div>{`completion ${Math.round(objective.completionRate * 100)}%`}</div>
-                <div>{`runs ${objective.totalRuns}`}</div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="mt-3">
+        <ObjectivePerformancePanel objectives={snapshot.objectives} />
       </div>
     </div>
   );

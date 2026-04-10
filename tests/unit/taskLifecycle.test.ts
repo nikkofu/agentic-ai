@@ -297,6 +297,10 @@ describe("task lifecycle", () => {
           interventionRate: 0,
           totalInterventions: 0
         },
+        queue: {
+          pendingApprovals: 0,
+          pendingClarifications: 0
+        },
         trust: {
           evidenceBackedCompletionRate: 0,
           releaseGateReadiness: false
@@ -774,5 +778,6 @@ describe("task lifecycle", () => {
     expect(inspection.runtimeInspector?.operatorIntelligence.economics.totalCostUsd).toBe(2.5);
     expect(inspection.runtimeInspector?.operatorIntelligence.trust.evidenceBackedCompletionRate).toBe(1);
     expect(inspection.runtimeInspector?.operatorIntelligence.humanLoad.totalInterventions).toBe(0);
+    expect(inspection.runtimeInspector?.operatorIntelligence.queue.pendingApprovals).toBe(0);
   });
 });

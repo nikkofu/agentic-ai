@@ -13,6 +13,7 @@ describe("executive overview panel", () => {
           economics: { totalCostUsd: 124.52, costPerAcceptedDelivery: 3.88 },
           risk: { blockedRate: 0.11 },
           humanLoad: { interventionRate: 0.27, totalInterventions: 4 },
+          queue: { pendingApprovals: 2, pendingClarifications: 1 },
           trust: { evidenceBackedCompletionRate: 0.76, releaseGateReadiness: true },
           objectives: [
             {

@@ -26,6 +26,10 @@ export type OperatorIntelligenceSnapshot = {
     interventionRate: number;
     totalInterventions: number;
   };
+  queue: {
+    pendingApprovals: number;
+    pendingClarifications: number;
+  };
   trust: {
     evidenceBackedCompletionRate: number;
     releaseGateReadiness: boolean;
@@ -37,6 +41,8 @@ export function buildOperatorIntelligenceSnapshot(input: {
   tasks: OperatorIntelligenceTaskInput[];
   releaseGateReady?: boolean;
   objectives?: CompletionObjectiveSummary[];
+  pendingApprovals?: number;
+  pendingClarifications?: number;
 }): OperatorIntelligenceSnapshot {
   const totalRuns = input.tasks.length;
   const completedRuns = input.tasks.filter((task) => task.finalState === "completed").length;
@@ -60,6 +66,10 @@ export function buildOperatorIntelligenceSnapshot(input: {
     humanLoad: {
       interventionRate: totalRuns === 0 ? 0 : totalInterventions / totalRuns,
       totalInterventions
+    },
+    queue: {
+      pendingApprovals: input.pendingApprovals ?? 0,
+      pendingClarifications: input.pendingClarifications ?? 0
     },
     trust: {
       evidenceBackedCompletionRate: totalRuns === 0 ? 0 : acceptedRuns / totalRuns,

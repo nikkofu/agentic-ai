@@ -141,6 +141,10 @@ type InspectionResult = {
         interventionRate: number;
         totalInterventions: number;
       };
+      queue: {
+        pendingApprovals: number;
+        pendingClarifications: number;
+      };
       trust: {
         evidenceBackedCompletionRate: number;
         releaseGateReadiness: boolean;

@@ -73,6 +73,7 @@ describe("phase20 operator intelligence", () => {
       expect(inspection.runtimeInspector?.operatorIntelligence.outcome.acceptanceRate).toBeTypeOf("number");
       expect(inspection.runtimeInspector?.operatorIntelligence.economics.totalCostUsd).toBeTypeOf("number");
       expect(inspection.runtimeInspector?.operatorIntelligence.risk.blockedRate).toBeTypeOf("number");
+      expect(inspection.runtimeInspector?.operatorIntelligence.queue.pendingApprovals).toBeTypeOf("number");
       expect(inspection.runtimeInspector?.operatorIntelligence.trust.releaseGateReadiness).toBe(true);
       expect(inspection.runtimeInspector?.operatorIntelligence.objectives[0]?.id).toBe("family:research_writing");
     } finally {
