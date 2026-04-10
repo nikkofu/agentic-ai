@@ -39,7 +39,7 @@ export function createInMemoryRetrievalProvider(
             relevance: score
           } satisfies RetrievalSnippet;
         })
-        .filter((entry): entry is RetrievalSnippet => Boolean(entry))
+        .filter(isDefined)
         .sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
         .slice(0, maxResults);
 
@@ -80,7 +80,7 @@ export function createTaskAwareRetrievalProvider(args: {
             relevance: score
           } satisfies RetrievalSnippet;
         })
-        .filter((entry): entry is RetrievalSnippet => Boolean(entry));
+        .filter(isDefined);
 
       return [...memoryResults, ...baseResults]
         .sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
@@ -122,4 +122,8 @@ function countOverlap(queryTerms: string[], contentTerms: string[]): number {
     }
   }
   return overlap;
+}
+
+function isDefined<T>(value: T | null): value is T {
+  return value !== null;
 }

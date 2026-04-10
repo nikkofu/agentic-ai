@@ -13,6 +13,7 @@ import { CompanionshipPanel } from "./CompanionshipPanel";
 import { CompanionshipMemoryPanel } from "./CompanionshipMemoryPanel";
 import { MemoryEvolutionPanel } from "./MemoryEvolutionPanel";
 import { SkillCandidatePanel } from "./SkillCandidatePanel";
+import { CompletionHarnessPanel } from "./CompletionHarnessPanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -100,6 +101,28 @@ type InspectionResult = {
       confidence: string;
       status: string;
     }>;
+    completion: {
+      latestRecord: {
+        taskId: string;
+        family: string;
+        acceptanceDecision: string;
+        successfulCompletion: boolean;
+      } | null;
+      families: Array<{
+        family: string;
+        totalRuns: number;
+        successfulRuns: number;
+        acceptedRuns: number;
+        blockedRuns: number;
+        completionRate: number;
+        acceptanceRate: number;
+      }>;
+      releaseGate: {
+        ready: boolean;
+        requiredFamilies: string[];
+        reasons: string[];
+      };
+    } | null;
     companionship: {
       continuitySummary: string;
       unresolvedTopics: string[];
@@ -504,6 +527,7 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           />
           <MemoryEvolutionPanel evolution={inspection.runtimeInspector.memory.evolution ?? null} />
           <SkillCandidatePanel candidates={inspection.runtimeInspector.skillCandidates ?? []} />
+          <CompletionHarnessPanel completion={inspection.runtimeInspector.completion ?? null} />
         </div>
       ) : null}
 

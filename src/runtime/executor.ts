@@ -15,6 +15,7 @@ import { evaluateAcceptanceProof } from "../eval/evaluator";
 import { enrichExecutionContext, type MemoryStore, type RetrievalProvider } from "./memory";
 import type { TaskStore } from "../core/taskStore";
 import { promoteExecutionSummaryToProjectMemory } from "./memoryEvolution";
+import type { CompletionHarnessStore, CompletionAcceptanceDecision } from "./completionHarness";
 
 type EventBus = {
   publish: (event: RuntimeEvent) => void;
@@ -140,6 +141,7 @@ type TaskExecutorDeps = {
   retrievalProvider?: RetrievalProvider;
   memoryStore?: MemoryStore;
   taskStore?: TaskStore;
+  completionHarness?: CompletionHarnessStore;
 };
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
@@ -458,6 +460,13 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         : "deliver";
       finalState = familyDelivery.status === "completed" && acceptanceDecision === "deliver" ? "completed" : "aborted";
       outputText = familyDelivery.final_result;
+      await deps.completionHarness?.appendRecord(buildCompletionRecord({
+        taskId,
+        family,
+        taskInput: input.input,
+        finalState,
+        delivery: familyDelivery
+      }));
 
       deps.eventBus.publish({
         type: "TaskClosed",
@@ -551,6 +560,13 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         ? evaluateAcceptanceProof(familyDelivery.acceptance_proof)
         : "deliver";
       const finalState = familyDelivery.status === "completed" && acceptanceDecision === "deliver" ? "completed" : "aborted";
+      await deps.completionHarness?.appendRecord(buildCompletionRecord({
+        taskId: input.taskId,
+        family,
+        taskInput,
+        finalState,
+        delivery: familyDelivery
+      }));
 
       deps.eventBus.publish({
         type: "TaskClosed",
@@ -796,4 +812,41 @@ function resolveExecutionTiers(workflow: DagWorkflow) {
   }
 
   return tiers;
+}
+
+function buildCompletionRecord(args: {
+  taskId: string;
+  family?: TaskFamily;
+  taskInput: string;
+  finalState: "completed" | "aborted";
+  delivery: DeliveryBundle | FamilyDeliveryBundle;
+}) {
+  return {
+    taskId: args.taskId,
+    family: args.family ?? "general",
+    taskInput: args.taskInput,
+    finalState: args.finalState,
+    deliveryStatus: args.delivery.status,
+    acceptanceDecision: inferCompletionAcceptance(args.delivery),
+    verifierSummary: readVerifierSummary(args.delivery),
+    artifactCount: args.delivery.artifacts.length,
+    verificationCount: args.delivery.verification.length
+  };
+}
+
+function inferCompletionAcceptance(delivery: DeliveryBundle | FamilyDeliveryBundle): CompletionAcceptanceDecision {
+  if ("acceptance_proof" in delivery) {
+    if (delivery.acceptance_proof?.decision === "accept" || delivery.acceptance_proof?.decision === "revise" || delivery.acceptance_proof?.decision === "reject") {
+      return delivery.acceptance_proof.decision;
+    }
+  }
+  return "unverified";
+}
+
+function readVerifierSummary(delivery: DeliveryBundle | FamilyDeliveryBundle) {
+  if ("acceptance_proof" in delivery) {
+    const summary = delivery.acceptance_proof?.verifierSummary;
+    return typeof summary === "string" ? summary : "";
+  }
+  return "";
 }

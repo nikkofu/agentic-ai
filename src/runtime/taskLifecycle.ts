@@ -6,6 +6,7 @@ import { computeResearchSourceCoverage } from "./researchWriting";
 import { summarizeBrowserWorkflow } from "./browserWorkflow";
 import type { AcceptanceProof, DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
 import { buildCompanionshipSnapshot, type CompanionshipSnapshot } from "./companionshipMemory";
+import type { CompletionRecord, FamilyCompletionSummary, ReleaseGateResult } from "./completionHarness";
 
 type ExecuteResult = {
   taskId: string;
@@ -91,6 +92,13 @@ type TaskLifecycleDeps = {
       payload: Record<string, unknown>;
       createdAt: string;
     }>>;
+  };
+  completionInspector?: {
+    inspect: (taskId?: string) => Promise<{
+      latestRecord: CompletionRecord | null;
+      families: FamilyCompletionSummary[];
+      releaseGate: ReleaseGateResult;
+    }>;
   };
 };
 
@@ -178,6 +186,11 @@ type RuntimeInspector = {
     confidence: string;
     status: string;
   }>;
+  completion: {
+    latestRecord: CompletionRecord | null;
+    families: FamilyCompletionSummary[];
+    releaseGate: ReleaseGateResult;
+  } | null;
   companionship: CompanionshipSnapshot | null;
   explanation: string;
   actionHint: string;
@@ -220,7 +233,7 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
     },
 
     async inspectTask(taskId: string) {
-      const [graph, events, memorySummary, dreamSummary] = await Promise.all([
+      const [graph, events, memorySummary, dreamSummary, completionSummary] = await Promise.all([
         deps.taskStore.getGraph(taskId),
         deps.taskStore.getEvents(taskId),
         deps.memoryInspector?.inspect(taskId) ?? Promise.resolve({
@@ -244,7 +257,8 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
           latestReflections: [],
           recommendationsCount: 0,
           latestRecommendations: []
-        })
+        }),
+        deps.completionInspector?.inspect(taskId) ?? Promise.resolve(null)
       ]);
       const latestClose = [...events].reverse().find((event) => event.type === "TaskClosed");
       const latestAsync = [...events].reverse().find((event) =>
@@ -270,7 +284,7 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         latestAsync: latestAsync ?? null,
         latestAsyncNode: latestAsyncNode ?? null,
         latestHumanAction: latestHumanAction ?? null,
-        runtimeInspector: await summarizeRuntimeInspector(events, graph, memorySummary, dreamSummary, companionship),
+        runtimeInspector: await summarizeRuntimeInspector(events, graph, memorySummary, dreamSummary, companionship, completionSummary),
         distributedSummary: summarizeDistributedGraph(graph),
         eventCount: events.length
       };
@@ -311,7 +325,8 @@ async function summarizeRuntimeInspector(
     recommendationsCount: 0,
     latestRecommendations: []
   },
-  companionship: CompanionshipSnapshot | null = null
+  companionship: CompanionshipSnapshot | null = null,
+  completionSummary: RuntimeInspector["completion"] = null
 ): Promise<RuntimeInspector> {
   const latestIntent = [...events].reverse().find((event) => event.type === "IntentClassified");
   const latestPlanner = [...events].reverse().find((event) => event.type === "PlannerExpanded");
@@ -402,6 +417,7 @@ async function summarizeRuntimeInspector(
       }
       : null,
     skillCandidates: memorySummary.skillCandidates ?? [],
+    completion: completionSummary,
     companionship,
     explanation: buildRuntimeExplanation(finalDelivery),
     actionHint: buildActionHint(finalDelivery)

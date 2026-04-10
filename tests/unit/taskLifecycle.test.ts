@@ -280,10 +280,89 @@ describe("task lifecycle", () => {
       },
       conversation: null,
       skillCandidates: [],
+      completion: null,
       companionship: null,
       explanation: "Task blocked: policy_verification_required",
       actionHint: "Add verification evidence before attempting final delivery again."
     });
+  });
+
+  it("exposes completion harness summary in the runtime inspector", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      completionInspector: {
+        inspect: vi.fn().mockResolvedValue({
+          latestRecord: {
+            id: "rec-1",
+            taskId: "task-completion",
+            family: "research_writing",
+            taskInput: "research topic",
+            finalState: "completed",
+            deliveryStatus: "completed",
+            acceptanceDecision: "accept",
+            verifierSummary: "accepted",
+            artifactCount: 1,
+            verificationCount: 2,
+            successfulCompletion: true,
+            countedAt: "2026-04-10T00:00:00.000Z"
+          },
+          families: [
+            {
+              family: "research_writing",
+              totalRuns: 1,
+              successfulRuns: 1,
+              acceptedRuns: 1,
+              blockedRuns: 0,
+              completionRate: 1,
+              acceptanceRate: 1,
+              latestTaskId: "task-completion",
+              latestVerifierSummary: "accepted"
+            }
+          ],
+          releaseGate: {
+            ready: true,
+            requiredFamilies: ["research_writing"],
+            checkedFamilies: [],
+            reasons: []
+          }
+        })
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-completion",
+          status: "completed",
+          nodes: {
+            "node-root": { state: "completed", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-completion",
+              state: "completed",
+              delivery: {
+                status: "completed",
+                final_result: "done",
+                artifacts: [],
+                verification: [],
+                risks: [],
+                next_actions: []
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-completion");
+
+    expect(inspection.runtimeInspector?.completion?.latestRecord?.taskId).toBe("task-completion");
+    expect(inspection.runtimeInspector?.completion?.releaseGate.ready).toBe(true);
+    expect(inspection.runtimeInspector?.completion?.families[0].family).toBe("research_writing");
   });
 
   it("exposes conversation continuity facts in the runtime inspector", async () => {

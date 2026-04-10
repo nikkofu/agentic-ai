@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.8.0] - 2026-04-10
+### Added
+- **Phase 19 Completion Harness**: Added a first-class completion harness that records runtime benchmark evidence, aggregates task-family completion scorecards, and exposes release-gate readiness.
+- **Completion Ledger**: Added local completion records for task family, acceptance decision, verifier summary, artifact counts, and whether the run counts as successful completion evidence.
+- **Completion Harness Product Surface**: Added task inspection and dashboard support for latest completion evidence, family completion/acceptance rates, and release readiness.
+
+### Changed
+- **Executor Completion Recording**: Runtime execution and resume flows now append completion evidence after final delivery settles instead of leaving release readiness implicit.
+- **Release Discipline**: Version publishing can now point to fresh completion evidence rather than only to changed files or passing tests.
+
 ## [1.7.0] - 2026-04-10
 ### Added
 - **Phase 18 Deep Memory Evolution**: Added shared memory trust scoring, evolution contracts, promotion/compression flow, history timeline, rollback support, and skill-candidate evolution on top of the existing three-layer memory system.

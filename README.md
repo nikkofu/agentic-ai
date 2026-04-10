@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.7.0`
+当前版本：`1.8.0`
 
 ## 🚀 核心特性
 
@@ -50,6 +50,7 @@
 - **生产级 WhatsApp Continuity**：Adapter 现在具备连接状态显式化、消息去重、assistant channel-state 暴露，以及 richer inbound flow proof。
 - **Phase 18 深度记忆演化**：三层记忆现在具备 trust gate、promotion/compression、history/rollback、stale/superseded 生命周期，以及由 Dream 驱动的 skill candidate 演化。
 - **记忆演化真值面板**：Dashboard 开始展示 memory evolution timeline、status truth、skill candidates 和 companionship memory，不再只展示静态 memory count。
+- **Phase 19 Completion Harness**：runtime 现在会记录 benchmark/completion evidence、聚合 task-family completion/acceptance rate，并把 release gate readiness 暴露到 inspection 与 dashboard。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -117,6 +118,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 16 Closure**: 默认 memory/dream inspector 接线、auto-curate/compress、demote/forget、safe Dream idle trigger、memory product truth。
 - [x] **Phase 17**: Persistent Assistant Surface 完成，WhatsApp continuity、durable conversation persistence、完整 Control Center、richer HITL workflow、Companionship Layer。
 - [x] **Phase 18**: Deep Memory Evolution，trust model、promotion/compression、history/rollback、Dream-to-skill candidate、companionship memory、memory evolution product surface。
+- [x] **Phase 19**: Completion Harness，benchmark/completion ledger、task-family scorecard、release gate、completion evidence product surface。
 
 ## 📄 开源协议
 

@@ -24,6 +24,7 @@ import { createDreamScheduler } from "./dreamScheduler";
 import { createConversationService } from "./conversationService";
 import { createConversationStoreForRuntime } from "./conversationStore";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
+import { createCompletionHarness } from "./completionHarness";
 
 export async function createRuntimeServices(args?: {
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
@@ -52,6 +53,9 @@ export async function createRuntimeServices(args?: {
   const conversationStore = createConversationStoreForRuntime({
     repoRoot: process.cwd(),
     mode: process.env.NODE_ENV === "test" ? "test" : "production"
+  });
+  const completionHarness = createCompletionHarness({
+    repoRoot: process.cwd()
   });
 
   let limiter: RequestLimiter | undefined;
@@ -108,7 +112,8 @@ export async function createRuntimeServices(args?: {
     resolveModelRoute,
     availableLocalTools,
     env: process.env,
-    memoryStore
+    memoryStore,
+    completionHarness
   });
 
   const taskLifecycle = createTaskLifecycle({
@@ -122,7 +127,8 @@ export async function createRuntimeServices(args?: {
       repoRoot: process.cwd(),
       userHome: process.env.HOME ?? process.cwd()
     }),
-    conversationStore
+    conversationStore,
+    completionInspector: completionHarness
   });
   await conversationStore.saveAssistantProfile({
     assistantId: "assistant-main",
@@ -150,6 +156,7 @@ export async function createRuntimeServices(args?: {
     dreamScheduler,
     conversationStore,
     conversationService,
+    completionHarness,
     orchestrator,
     executor,
     taskLifecycle,

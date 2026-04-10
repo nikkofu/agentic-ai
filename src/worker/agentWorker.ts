@@ -148,10 +148,15 @@ export function createObservedTaskLifecycleProcessor(args: {
   };
 }) {
   const processor = createTaskLifecycleProcessor(args.lifecycle);
+  type LifecycleResult = {
+    taskId?: string;
+    finalState?: string;
+    delivery?: unknown;
+  } | null;
 
   return async (job: Job<TaskLifecycleJob>) => {
     try {
-      const result = await processor(job);
+      const result = await processor(job) as LifecycleResult;
       const taskId = typeof result?.taskId === "string"
         ? result.taskId
         : job.data.kind === "resume"
