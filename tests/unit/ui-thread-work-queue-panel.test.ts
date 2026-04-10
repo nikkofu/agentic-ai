@@ -73,6 +73,8 @@ describe("thread work queue panel", () => {
     expect(html).toContain("needs intervention");
     expect(html).toContain("inspect");
     expect(html).toContain("approve");
+    expect(html).toContain("reject");
+    expect(html).toContain("clarify");
     expect(html).not.toContain("resume");
   });
 

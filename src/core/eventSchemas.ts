@@ -75,6 +75,7 @@ export const eventSchemaRegistry = {
   HumanActionResolved: z.object({
     task_id: z.string(),
     node_id: z.string(),
+    action: z.string().optional(),
     feedback: z.string()
   }),
   Evaluated: z.object({ task_id: z.string(), node_id: z.string(), decision: z.string() }),

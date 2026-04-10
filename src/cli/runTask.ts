@@ -105,7 +105,8 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     const waAdapter = createWhatsAppAdapter({
       recipientJid: process.env.WHATSAPP_RECIPIENT,
       eventBus: services.eventBus,
-      conversationService: services.conversationService
+      conversationService: services.conversationService,
+      conversationStore: services.conversationStore
     });
     await waAdapter.init();
   }

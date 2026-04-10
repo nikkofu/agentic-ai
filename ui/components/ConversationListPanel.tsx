@@ -18,24 +18,36 @@ type ConversationListPanelProps = {
       assistantId: string;
       displayName: string;
       personaProfile?: string;
+      channelConnectionState?: string;
     }>;
     threads: ConversationThreadListItem[];
   } | null;
   onSelectTask?: (taskId: string) => void;
   onResumeTask?: (taskId: string) => void;
-  activeOnly?: boolean;
+  filter?: "all" | "active" | "running" | "blocked" | "awaiting_user_input";
 };
 
-export function getVisibleThreads(threads: ConversationThreadListItem[], activeOnly: boolean): ConversationThreadListItem[] {
-  if (!activeOnly) {
-    return threads;
+export function getVisibleThreads(
+  threads: ConversationThreadListItem[],
+  filter: "all" | "active" | "running" | "blocked" | "awaiting_user_input"
+): ConversationThreadListItem[] {
+  if (filter === "all") return threads;
+  if (filter === "active") {
+    return threads.filter((thread) =>
+      Boolean(thread.activeTaskId) || thread.status === "task_running" || thread.status === "awaiting_user_input"
+    );
   }
-
-  return threads.filter((thread) => Boolean(thread.activeTaskId) || thread.status === "task_running" || thread.status === "awaiting_user_input");
+  if (filter === "running") {
+    return threads.filter((thread) => thread.status === "task_running");
+  }
+  if (filter === "blocked") {
+    return threads.filter((thread) => thread.status === "task_blocked");
+  }
+  return threads.filter((thread) => thread.status === "awaiting_user_input");
 }
 
-export function ConversationListPanel({ data, onSelectTask, onResumeTask, activeOnly = false }: ConversationListPanelProps) {
-  const visibleThreads = getVisibleThreads(data?.threads ?? [], activeOnly);
+export function ConversationListPanel({ data, onSelectTask, onResumeTask, filter = "all" }: ConversationListPanelProps) {
+  const visibleThreads = getVisibleThreads(data?.threads ?? [], filter);
 
   return (
     <div className="rounded border border-white/10 bg-black/30 p-3">
@@ -47,14 +59,15 @@ export function ConversationListPanel({ data, onSelectTask, onResumeTask, active
           <div className="text-xs text-neutral-400">
             assistants={data.assistants.length} threads={visibleThreads.length}
           </div>
-          {activeOnly ? (
-            <div className="text-[11px] text-neutral-500">filter=active-only</div>
+          {filter !== "all" ? (
+            <div className="text-[11px] text-neutral-500">filter={filter}</div>
           ) : null}
           <div className="flex flex-wrap gap-2 text-[11px] text-neutral-500">
             {data.assistants.map((assistant) => (
               <span key={assistant.assistantId} className="rounded border border-white/10 px-2 py-1">
                 {assistant.displayName} ({assistant.assistantId})
                 {assistant.personaProfile ? ` · ${assistant.personaProfile}` : ""}
+                {assistant.channelConnectionState ? ` · whatsapp=${assistant.channelConnectionState}` : ""}
               </span>
             ))}
           </div>

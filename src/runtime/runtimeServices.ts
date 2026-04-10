@@ -22,10 +22,8 @@ import { createDreamRuntime } from "./dreamRuntime";
 import { createDreamInspector, createMemoryInspector } from "./memoryInspectors";
 import { createDreamScheduler } from "./dreamScheduler";
 import { createConversationService } from "./conversationService";
-import { createInMemoryConversationStore } from "./conversationStore";
+import { createConversationStoreForRuntime } from "./conversationStore";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
-
-let sharedConversationStore: ReturnType<typeof createInMemoryConversationStore> | null = null;
 
 export async function createRuntimeServices(args?: {
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
@@ -51,9 +49,10 @@ export async function createRuntimeServices(args?: {
     dreamRuntime,
     thresholdMinutes: config.dream?.idle_threshold_minutes ?? 20
   });
-  const conversationStore = process.env.NODE_ENV === "test"
-    ? createInMemoryConversationStore()
-    : (sharedConversationStore ??= createInMemoryConversationStore());
+  const conversationStore = createConversationStoreForRuntime({
+    repoRoot: process.cwd(),
+    mode: process.env.NODE_ENV === "test" ? "test" : "production"
+  });
 
   let limiter: RequestLimiter | undefined;
   if (config.scheduler.rate_limit) {

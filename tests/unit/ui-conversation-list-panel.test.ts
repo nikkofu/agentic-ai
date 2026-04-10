@@ -97,9 +97,53 @@ describe("conversation list panel", () => {
         latestEventSummary: "任务已完成",
         latestEventAt: "2026-04-09T11:01:00.000Z"
       }
-    ], true);
+    ], "active");
 
     expect(visible.map((thread) => thread.threadId)).toEqual(["thread-running"]);
+  });
+
+  it("filters blocked threads independently", () => {
+    const visible = getVisibleThreads([
+      {
+        threadId: "thread-running",
+        assistantId: "assistant-main",
+        assistantDisplayName: "Aether",
+        status: "task_running",
+        activeTaskId: "task-1",
+        lastInteractionAt: "2026-04-09T12:00:00.000Z"
+      },
+      {
+        threadId: "thread-blocked",
+        assistantId: "assistant-main",
+        assistantDisplayName: "Aether",
+        status: "task_blocked",
+        activeTaskId: "task-2",
+        lastInteractionAt: "2026-04-09T11:00:00.000Z"
+      }
+    ] as any, "blocked");
+
+    expect(visible.map((thread) => thread.threadId)).toEqual(["thread-blocked"]);
+  });
+
+  it("renders current filter label", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConversationListPanel, {
+        data: {
+          assistants: [{ assistantId: "assistant-main", displayName: "Aether", personaProfile: "persistent assistant" }],
+          threads: [{
+            threadId: "thread-awaiting",
+            assistantId: "assistant-main",
+            assistantDisplayName: "Aether",
+            status: "awaiting_user_input",
+            activeTaskId: "task-awaiting",
+            lastInteractionAt: "2026-04-09T13:00:00.000Z"
+          }]
+        },
+        filter: "awaiting_user_input"
+      })
+    );
+
+    expect(html).toContain("filter=awaiting_user_input");
   });
 
   it("renders resume shortcut for blocked task threads", () => {

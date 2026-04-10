@@ -22,6 +22,7 @@ export const CHANNEL_MESSAGE_KINDS = [
   "status_query",
   "resume_request",
   "approval_response",
+  "rejection_response",
   "clarification_response"
 ] as const;
 
@@ -33,6 +34,13 @@ export type AssistantIdentity = {
   personaProfile: string;
   memoryPolicy: string;
   channelPolicies: Partial<Record<ChannelType, string>>;
+};
+
+export type AssistantChannelState = {
+  assistantId: string;
+  channelType: ChannelType;
+  connectionState: string;
+  updatedAt: string;
 };
 
 export type ConversationThread = {

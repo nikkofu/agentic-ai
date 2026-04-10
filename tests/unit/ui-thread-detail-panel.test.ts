@@ -11,6 +11,9 @@ describe("thread detail panel", () => {
         detail: {
           taskId: "task-1",
           graphStatus: "running",
+          channelConnectionState: "connected",
+          latestEventSummary: "已收到你的批准",
+          latestEventAt: "2026-04-10T10:00:00.000Z",
           conversation: {
             assistantId: "assistant-main",
             threadId: "thread-123",
@@ -39,6 +42,8 @@ describe("thread detail panel", () => {
     expect(html).toContain("Thread Detail");
     expect(html).toContain("thread-123");
     expect(html).toContain("task-1");
+    expect(html).toContain("connected");
+    expect(html).toContain("已收到你的批准");
     expect(html).toContain("approval needed");
     expect(html).toContain("worker-a");
   });

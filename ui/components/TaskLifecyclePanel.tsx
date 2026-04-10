@@ -8,6 +8,8 @@ import { ConversationListPanel } from "./ConversationListPanel";
 import { AssistantProfilePanel } from "./AssistantProfilePanel";
 import { ThreadWorkQueuePanel } from "./ThreadWorkQueuePanel";
 import { ThreadDetailPanel } from "./ThreadDetailPanel";
+import { ThreadFollowUpPanel } from "./ThreadFollowUpPanel";
+import { CompanionshipPanel } from "./CompanionshipPanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -115,6 +117,7 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
       assistantId: string;
       displayName: string;
       personaProfile?: string;
+      channelConnectionState?: string;
     }>;
     threads: Array<{
       threadId: string;
@@ -127,11 +130,36 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
       latestEventDirection?: string;
       latestEventSummary?: string;
       latestEventAt?: string;
+      recentEvents?: Array<{
+        direction?: string;
+        summary?: string;
+        createdAt?: string;
+      }>;
     }>;
   } | null>(null);
-  const [activeThreadsOnly, setActiveThreadsOnly] = useState(false);
+  const [threadFilter, setThreadFilter] = useState<"all" | "active" | "running" | "blocked" | "awaiting_user_input">("active");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  const selectedThread = inspection?.runtimeInspector?.conversation?.threadId
+    ? conversationList?.threads.find((thread) => thread.threadId === inspection.runtimeInspector?.conversation?.threadId)
+    : null;
+  const selectedAssistant = selectedThread
+    ? conversationList?.assistants.find((assistant) => assistant.assistantId === selectedThread.assistantId)
+    : null;
+  const companionshipSummary = inspection?.runtimeInspector?.conversation
+    ? `这条会话仍然和 ${inspection.runtimeInspector.conversation.threadId} 保持连续，上一次任务的上下文还在，当前已经沉淀了 ${inspection.runtimeInspector.memory.task.count} 条任务记忆。`
+    : "这位助手会在持续的 thread 里保留任务上下文，而不是把每次交流都当成新的开始。";
+  const companionshipFollowUp = inspection?.runtimeInspector?.actionHint
+    ? inspection.runtimeInspector.actionHint
+    : selectedThread?.status === "task_completed"
+      ? "适合在用户回到这个 thread 时继续跟进结果和后续动作。"
+      : selectedThread?.status === "task_blocked" || selectedThread?.status === "awaiting_user_input"
+        ? "这个 thread 仍然适合继续推进，用户回来时可以顺着当前状态接着走。"
+        : "当前 thread 还在持续流动，适合保持轻量而稳定的跟进。";
+  const companionshipPresence = inspection?.runtimeInspector?.memory
+    ? `我会继续记住这个 thread 的节奏、上下文，以及最近的任务状态；当前项目记忆 ${inspection.runtimeInspector.memory.project.count} 条，个人记忆 ${inspection.runtimeInspector.memory.personal.count} 条。`
+    : "我会继续保留这条会话的语境，让下一次对话不从空白开始。";
 
   useEffect(() => {
     startTransition(() => {
@@ -232,10 +260,31 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
         </button>
         <button
           type="button"
-          onClick={() => setActiveThreadsOnly((current) => !current)}
+          onClick={() => setThreadFilter((current) => current === "all" ? "active" : "all")}
           className="rounded border border-white/10 px-3 py-2 font-medium text-neutral-200 transition hover:bg-white/5"
         >
-          {activeThreadsOnly ? "Show All Threads" : "Active Threads Only"}
+          {threadFilter === "all" ? "Active Threads Only" : "Show All Threads"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setThreadFilter("running")}
+          className="rounded border border-white/10 px-3 py-2 font-medium text-neutral-200 transition hover:bg-white/5"
+        >
+          Running
+        </button>
+        <button
+          type="button"
+          onClick={() => setThreadFilter("blocked")}
+          className="rounded border border-white/10 px-3 py-2 font-medium text-neutral-200 transition hover:bg-white/5"
+        >
+          Blocked
+        </button>
+        <button
+          type="button"
+          onClick={() => setThreadFilter("awaiting_user_input")}
+          className="rounded border border-white/10 px-3 py-2 font-medium text-neutral-200 transition hover:bg-white/5"
+        >
+          Awaiting Input
         </button>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -339,9 +388,18 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
               });
           });
         }}
-        onApproveTask={(selectedTaskId, nodeId) => {
+        onResolveHumanAction={(selectedTaskId, nodeId, action) => {
           startTransition(() => {
-            void resolveHumanAction(selectedTaskId, nodeId, "approved from control center")
+            void resolveHumanAction(
+              selectedTaskId,
+              nodeId,
+              action,
+              action === "approve"
+                ? "approved from control center"
+                : action === "reject"
+                  ? "rejected from control center"
+                  : "clarification requested from control center"
+            )
               .then((result) => {
                 router.push(`/dashboard?taskId=${result.taskId}&token=valid-session`);
               })
@@ -358,6 +416,11 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           detail={inspection ? {
             taskId: inspection.taskId,
             graphStatus: inspection.graph?.status ?? "",
+            channelConnectionState: selectedAssistant?.channelConnectionState,
+            latestEventSummary: selectedThread?.latestEventSummary,
+            latestEventAt: selectedThread?.latestEventAt,
+            verifierSummary: inspection.runtimeInspector?.finalDelivery?.verifierSummary ?? "",
+            recentEvents: selectedThread?.recentEvents ?? [],
             conversation: inspection.runtimeInspector?.conversation ?? null,
             latestHumanAction: inspection.latestHumanAction ?? null,
             latestAsyncNode: inspection.latestAsyncNode ?? null
@@ -368,26 +431,38 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
       <div className="mt-3">
         <ConversationListPanel
           data={conversationList}
-          activeOnly={activeThreadsOnly}
-        onSelectTask={(selectedTaskId) => {
-          router.push(`/dashboard?taskId=${selectedTaskId}&token=valid-session`);
-        }}
-        onResumeTask={(selectedTaskId) => {
-          startTransition(() => {
-            void resumeTask(selectedTaskId)
-              .then((result) => {
-                router.push(`/dashboard?taskId=${result.taskId}&token=valid-session`);
-              })
-              .catch((cause) => {
-                setError(cause instanceof Error ? cause.message : String(cause));
-              });
-          });
-        }}
-      />
+          filter={threadFilter}
+          onSelectTask={(selectedTaskId) => {
+            router.push(`/dashboard?taskId=${selectedTaskId}&token=valid-session`);
+          }}
+          onResumeTask={(selectedTaskId) => {
+            startTransition(() => {
+              void resumeTask(selectedTaskId)
+                .then((result) => {
+                  router.push(`/dashboard?taskId=${result.taskId}&token=valid-session`);
+                })
+                .catch((cause) => {
+                  setError(cause instanceof Error ? cause.message : String(cause));
+                });
+            });
+          }}
+        />
+      </div>
+
+      <div className="mt-3">
+        <ThreadFollowUpPanel threads={conversationList?.threads ?? []} />
       </div>
 
       <div className="mt-3">
         <ConversationPanel inspection={inspection?.runtimeInspector?.conversation ?? null} />
+      </div>
+
+      <div className="mt-3">
+        <CompanionshipPanel
+          continuitySummary={companionshipSummary}
+          followUpSuggestion={companionshipFollowUp}
+          presenceNote={companionshipPresence}
+        />
       </div>
 
       {inspection?.runtimeInspector ? (
@@ -479,6 +554,7 @@ async function inspectConversations() {
       assistantId: string;
       displayName: string;
       personaProfile?: string;
+      channelConnectionState?: string;
     }>;
     threads: Array<{
       threadId: string;
@@ -491,6 +567,11 @@ async function inspectConversations() {
       latestEventDirection?: string;
       latestEventSummary?: string;
       latestEventAt?: string;
+      recentEvents?: Array<{
+        direction?: string;
+        summary?: string;
+        createdAt?: string;
+      }>;
     }>;
   }>;
 }
@@ -505,16 +586,16 @@ async function resumeTask(taskId: string) {
   return response.json() as Promise<{ taskId: string }>;
 }
 
-async function resolveHumanAction(taskId: string, nodeId: string, feedback: string) {
+async function resolveHumanAction(taskId: string, nodeId: string, action: "approve" | "reject" | "clarify", feedback: string) {
   const response = await fetch(`/api/tasks/${taskId}/hitl`, {
     method: "POST",
     headers: {
       "content-type": "application/json"
     },
-    body: JSON.stringify({ nodeId, feedback })
+    body: JSON.stringify({ nodeId, action, feedback })
   });
   if (!response.ok) {
     throw new Error(`resolve_human_action_failed:${response.status}`);
   }
-  return response.json() as Promise<{ taskId: string; nodeId: string; resolved: boolean }>;
+  return response.json() as Promise<{ taskId: string; nodeId: string; action: "approve" | "reject" | "clarify"; resolved: boolean }>;
 }

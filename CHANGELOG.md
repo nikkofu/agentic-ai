@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.6.0] - 2026-04-10
+### Added
+- **Phase 17 Durable Continuity**: Added durable conversation persistence for assistants, threads, links, events, and WhatsApp channel connection state so continuity survives process restarts.
+- **Richer Inbound WhatsApp Flows**: Added proof and runtime handling for `approval_response`, `rejection_response`, and `clarification_response`, not just new-task and resume paths.
+- **Companionship Layer**: Added `ThreadFollowUpPanel` and `CompanionshipPanel`, giving the control center a dedicated follow-up surface and a thread-aware presence layer grounded in runtime memory.
+
+### Changed
+- **Control Center Completion**: Conversation list filters now support `all / active / running / blocked / awaiting_user_input`, thread detail now includes connection state, verifier summary, and recent event context, and the dashboard exposes a fuller assistant/thread/task surface.
+- **Richer HITL Workflow**: Human actions now distinguish `approve / reject / clarify` end-to-end across dashboard, API, task lifecycle, executor, and orchestrator eventing.
+- **WhatsApp Adapter Lifecycle**: Adapter now tracks `connecting / connected / reconnecting / disconnected`, deduplicates inbound messages, and persists assistant channel state for control-center visibility.
+
 ## [1.5.1] - 2026-04-10
 ### Changed
 - **Repository Surface Cleanup**: Removed `docs/superpowers` and `docs/phase-handoff-playbook` from the published repository while keeping local copies available for private planning and handoff use.

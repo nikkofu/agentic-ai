@@ -44,9 +44,10 @@ type TaskLifecycleDeps = {
   executor: {
     execute: (input: { input: string; workflow?: DagWorkflow }) => Promise<ExecuteResult>;
     resume: (input: { taskId: string; maxParallel?: number }) => Promise<ExecuteResult>;
-    resolveHumanAction: (input: { taskId: string; nodeId: string; feedback: string }) => Promise<{
+    resolveHumanAction: (input: { taskId: string; nodeId: string; action?: "approve" | "reject" | "clarify"; feedback: string }) => Promise<{
       taskId: string;
       nodeId: string;
+      action: "approve" | "reject" | "clarify";
       resolved: boolean;
     }>;
   };
@@ -150,7 +151,7 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
       return deps.executor.resume(input);
     },
 
-    resolveHumanAction(input: { taskId: string; nodeId: string; feedback: string }) {
+    resolveHumanAction(input: { taskId: string; nodeId: string; action?: "approve" | "reject" | "clarify"; feedback: string }) {
       return deps.executor.resolveHumanAction(input);
     },
 

@@ -12,12 +12,23 @@ type ConversationService = {
   }>;
 };
 
+type ConversationStore = {
+  updateAssistantChannelState?: (input: {
+    assistantId: string;
+    channelType: "whatsapp";
+    connectionState: string;
+    updatedAt: string;
+  }) => Promise<void>;
+};
+
 type SocketLike = {
   sendMessage: (jid: string, message: { text: string }) => Promise<unknown>;
   ev: {
     on: (event: string, listener: (payload: any) => void) => void;
   };
 };
+
+type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected";
 
 export function normalizeWhatsAppMessage(message: any):
   | {
@@ -57,15 +68,55 @@ export function createWhatsAppAdapter(deps: {
   recipientJid: string;
   eventBus: EventBus;
   conversationService: ConversationService;
+  conversationStore?: ConversationStore;
   assistantId?: string;
   socketFactory?: () => Promise<SocketLike>;
   saveCreds?: () => Promise<void>;
 }) {
   const assistantId = deps.assistantId ?? "assistant-main";
   let sock: SocketLike | null = null;
+  let connectionState: ConnectionState = "connecting";
+  const processedMessageIds = new Set<string>();
+
+  const setConnectionState = (next: ConnectionState) => {
+    connectionState = next;
+    void deps.conversationStore?.updateAssistantChannelState?.({
+      assistantId,
+      channelType: "whatsapp",
+      connectionState: next,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const handleConnectionUpdate = (update: any, reconnect: () => void) => {
+    const { connection, lastDisconnect, qr } = update;
+    if (qr) {
+      qrcode.generate(qr, { small: true });
+    }
+    if (connection === "open") {
+      setConnectionState("connected");
+      return;
+    }
+    if (connection === "close") {
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      setConnectionState(shouldReconnect ? "reconnecting" : "disconnected");
+      if (shouldReconnect) {
+        reconnect();
+      }
+    }
+  };
 
   return {
+    getConnectionState() {
+      return connectionState;
+    },
+
     async init() {
+      if (connectionState !== "reconnecting") {
+        setConnectionState("connecting");
+      }
+
       if (!deps.socketFactory) {
         const { state, saveCreds } = await useMultiFileAuthState(path.join(process.cwd(), "auth_info_baileys"));
 
@@ -75,18 +126,6 @@ export function createWhatsAppAdapter(deps: {
         }) as unknown as SocketLike;
 
         sock.ev.on("creds.update", saveCreds as any);
-        sock.ev.on("connection.update", (update: any) => {
-          const { connection, lastDisconnect, qr } = update;
-          if (qr) {
-            qrcode.generate(qr, { small: true });
-          }
-          if (connection === "close") {
-            const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) {
-              void this.init();
-            }
-          }
-        });
       } else {
         sock = await deps.socketFactory();
         if (deps.saveCreds) {
@@ -94,10 +133,18 @@ export function createWhatsAppAdapter(deps: {
         }
       }
 
+      sock.ev.on("connection.update", (update: any) => {
+        handleConnectionUpdate(update, () => {
+          void this.init();
+        });
+      });
+
       sock.ev.on("messages.upsert", async (event: any) => {
         for (const message of event?.messages ?? []) {
           const normalized = normalizeWhatsAppMessage(message);
           if (!normalized || !sock) continue;
+          if (processedMessageIds.has(normalized.messageId)) continue;
+          processedMessageIds.add(normalized.messageId);
 
           const result = await deps.conversationService.handleIncomingMessage({
             assistantId,

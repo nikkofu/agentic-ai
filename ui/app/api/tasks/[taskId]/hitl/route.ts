@@ -8,7 +8,7 @@ type Params = {
 
 export async function POST(request: Request, context: Params) {
   const { taskId } = await context.params;
-  const body = await request.json() as { nodeId?: string; feedback?: string };
+  const body = await request.json() as { nodeId?: string; action?: "approve" | "reject" | "clarify"; feedback?: string };
 
   if (!body.nodeId || !body.feedback) {
     return NextResponse.json({ error: "nodeId_and_feedback_required" }, { status: 400 });
@@ -20,6 +20,7 @@ export async function POST(request: Request, context: Params) {
     const result = await services.taskLifecycle.resolveHumanAction({
       taskId,
       nodeId: body.nodeId,
+      action: body.action,
       feedback: body.feedback
     });
     return NextResponse.json(result);

@@ -1,6 +1,14 @@
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
-import { createInMemoryConversationStore } from "../../src/runtime/conversationStore";
+import {
+  createConversationStoreForRuntime,
+  createFileConversationStore,
+  createInMemoryConversationStore
+} from "../../src/runtime/conversationStore";
 
 describe("conversationStore", () => {
   it("creates and resolves a thread by WhatsApp identity", async () => {
@@ -174,5 +182,114 @@ describe("conversationStore", () => {
     expect(profiles).toHaveLength(1);
     expect(profiles[0]?.assistantId).toBe("assistant-main");
     expect(threads.map((thread) => thread.threadId)).toEqual(["thread-b", "thread-a"]);
+  });
+
+  it("persists thread links and events across store recreation", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "conversation-store-"));
+    const first = createFileConversationStore({ rootDir });
+
+    await first.saveAssistantProfile({
+      assistantId: "assistant-main",
+      displayName: "Aether",
+      personaProfile: "helpful",
+      memoryPolicy: "default",
+      channelPolicies: { whatsapp: "default" }
+    });
+
+    await first.createThread({
+      threadId: "thread-persisted",
+      assistantId: "assistant-main",
+      userIdentityKey: "user:whatsapp:persisted",
+      status: "task_running",
+      activeTaskId: "task-42",
+      lastInteractionAt: "2026-04-10T00:00:00.000Z",
+      continuityState: "active",
+      memoryRefs: ["memory://task-42"]
+    });
+
+    await first.saveChannelSessionLink({
+      linkId: "link-persisted",
+      threadId: "thread-persisted",
+      assistantId: "assistant-main",
+      channelType: "whatsapp",
+      externalUserId: "persisted@s.whatsapp.net",
+      externalChatId: "persisted@s.whatsapp.net",
+      lastSeenAt: "2026-04-10T00:00:00.000Z",
+      connectionState: "connected"
+    });
+
+    await first.appendConversationEvent({
+      eventId: "event-persisted",
+      threadId: "thread-persisted",
+      channelType: "whatsapp",
+      direction: "incoming",
+      kind: "status_query",
+      payload: { text: "还在吗" },
+      createdAt: "2026-04-10T00:01:00.000Z"
+    });
+
+    const second = createFileConversationStore({ rootDir });
+
+    const resolved = await second.findThreadByChannelIdentity({
+      channelType: "whatsapp",
+      externalUserId: "persisted@s.whatsapp.net",
+      externalChatId: "persisted@s.whatsapp.net"
+    });
+    const events = await second.getConversationEvents("thread-persisted");
+    const profiles = await second.listAssistantProfiles();
+
+    expect(resolved?.threadId).toBe("thread-persisted");
+    expect(resolved?.activeTaskId).toBe("task-42");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.eventId).toBe("event-persisted");
+    expect(profiles.map((profile) => profile.assistantId)).toEqual(["assistant-main"]);
+  });
+
+  it("uses durable conversation storage outside test mode", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "conversation-runtime-store-"));
+    const store = createConversationStoreForRuntime({
+      repoRoot: rootDir,
+      mode: "production"
+    });
+
+    await store.createThread({
+      threadId: "thread-runtime",
+      assistantId: "assistant-main",
+      userIdentityKey: "user:whatsapp:runtime",
+      status: "idle",
+      lastInteractionAt: "2026-04-10T00:00:00.000Z",
+      continuityState: "new",
+      memoryRefs: []
+    });
+
+    const reloaded = createConversationStoreForRuntime({
+      repoRoot: rootDir,
+      mode: "production"
+    });
+    const thread = await reloaded.getThread("thread-runtime");
+
+    expect(thread?.threadId).toBe("thread-runtime");
+  });
+
+  it("persists assistant channel state across store recreation", async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "conversation-channel-state-"));
+    const first = createFileConversationStore({ rootDir });
+
+    await first.updateAssistantChannelState({
+      assistantId: "assistant-main",
+      channelType: "whatsapp",
+      connectionState: "connected",
+      updatedAt: "2026-04-10T01:00:00.000Z"
+    });
+
+    const second = createFileConversationStore({ rootDir });
+    const state = await second.getAssistantChannelState("assistant-main", "whatsapp");
+
+    expect(state).toEqual({
+      assistantId: "assistant-main",
+      channelType: "whatsapp",
+      connectionState: "connected",
+      updatedAt: "2026-04-10T01:00:00.000Z"
+    });
   });
 });

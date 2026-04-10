@@ -5,6 +5,7 @@ type AssistantProfilePanelProps = {
     assistantId: string;
     displayName: string;
     personaProfile?: string;
+    channelConnectionState?: string;
   }>;
   threadCount: number;
   activeThreadCount: number;
@@ -26,6 +27,9 @@ export function AssistantProfilePanel({ assistants, threadCount, activeThreadCou
                 <div className="mt-1 font-mono text-[11px] text-neutral-400">{assistant.assistantId}</div>
                 {assistant.personaProfile ? (
                   <div className="mt-1 text-[11px] text-neutral-300">{assistant.personaProfile}</div>
+                ) : null}
+                {assistant.channelConnectionState ? (
+                  <div className="mt-1 text-[11px] text-emerald-300">whatsapp={assistant.channelConnectionState}</div>
                 ) : null}
               </div>
             ))}

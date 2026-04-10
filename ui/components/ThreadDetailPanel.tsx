@@ -4,6 +4,15 @@ type ThreadDetailPanelProps = {
   detail: {
     taskId: string;
     graphStatus: string;
+    channelConnectionState?: string;
+    latestEventSummary?: string;
+    latestEventAt?: string;
+    verifierSummary?: string;
+    recentEvents?: Array<{
+      direction?: string;
+      summary?: string;
+      createdAt?: string;
+    }>;
     conversation: {
       assistantId: string;
       threadId: string;
@@ -41,6 +50,7 @@ export function ThreadDetailPanel({ detail }: ThreadDetailPanelProps) {
   const latestOwnerId = typeof detail.latestAsyncNode?.payload.owner_id === "string"
     ? detail.latestAsyncNode.payload.owner_id
     : "";
+  const recentEvents = detail.recentEvents?.filter((event) => event.summary) ?? [];
 
   return (
     <div className="rounded border border-white/10 bg-black/30 p-3">
@@ -52,11 +62,28 @@ export function ThreadDetailPanel({ detail }: ThreadDetailPanelProps) {
         <DetailLine label="graph" value={detail.graphStatus} />
         <DetailLine label="status" value={detail.conversation.threadStatus} />
         <DetailLine label="channel" value={detail.conversation.channelType} />
+        <DetailLine label="connection" value={detail.channelConnectionState ?? ""} />
         <DetailLine label="external user" value={detail.conversation.externalUserId} />
+        <DetailLine label="latest event" value={detail.latestEventSummary ?? ""} />
+        <DetailLine label="event time" value={detail.latestEventAt ?? ""} />
+        <DetailLine label="verifier" value={detail.verifierSummary ?? ""} />
         <DetailLine label="human action" value={humanReason} />
         <DetailLine label="latest node" value={latestNodeId} />
         <DetailLine label="latest owner" value={latestOwnerId} />
       </div>
+      {recentEvents.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">recent events</div>
+          {recentEvents.map((event, index) => (
+            <div key={`${event.createdAt ?? "event"}-${index}`} className="rounded border border-white/10 bg-black/30 px-2 py-1">
+              <div className="text-[10px] text-neutral-500">
+                {event.direction ? `${event.direction} · ` : ""}{event.createdAt ?? ""}
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-200">{event.summary}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

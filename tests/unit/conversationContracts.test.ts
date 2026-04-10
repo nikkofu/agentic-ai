@@ -35,6 +35,7 @@ describe("conversationContracts", () => {
       "status_query",
       "resume_request",
       "approval_response",
+      "rejection_response",
       "clarification_response"
     ]);
     expect(isConversationMessageKind("resume_request")).toBe(true);

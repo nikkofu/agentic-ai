@@ -160,12 +160,14 @@ describe("runtime executor", () => {
     const result = await executor.resolveHumanAction({
       taskId: "task-hitl-1",
       nodeId: "node-hitl-1",
+      action: "approve",
       feedback: "approved"
     });
 
     expect(result).toEqual({
       taskId: "task-hitl-1",
       nodeId: "node-hitl-1",
+      action: "approve",
       resolved: true
     });
   });

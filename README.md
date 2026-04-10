@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.5.1`
+当前版本：`1.6.0`
 
 ## 🚀 核心特性
 
@@ -44,9 +44,10 @@
 - **Dream Runtime**：新增安全的空闲期 Dream runtime，可在后台生成 reflections、hypotheses、skill drafts 和 recommendations，默认不执行外部动作。
 - **Memory Inspector**：Dashboard 现在会展示 personal/project/task memory 摘要以及 Dream 输出预览。
 - **Phase 16 Closure**：默认 runtime 现在会接通 live memory / Dream inspector，project memory 会自动 curate/compress，Dream 具备安全 idle trigger，MemoryPanel 会展示空态与 freshness truth。
-- **Phase 17 持续助理界面第一波**：WhatsApp continuity、assistant/thread/task 关联、Conversation Service、ConversationLinked 事件、以及 thread-aware control center 第一层已经打通。
-- **Control Center 第一层**：Dashboard 现在已有 `Assistant / Work Queue / Thread Detail / Conversation / Conversation List` 五块协同视图，支持 thread 导航、active-only 过滤、inspect/resume/approve 最小操作面。
-- **最小 HITL 闭环**：`awaiting_user_input` 线程现在能在 Work Queue 中触发真实 `approve` 动作，通过 `taskLifecycle -> executor -> orchestrator.resumeHitl` 贯通。
+- **Phase 17 持续助理界面完成**：WhatsApp continuity、durable conversation persistence、Conversation Service、thread/link/event 持久化、以及面向 thread 的 control center 已经收口。
+- **完整 Control Center**：Dashboard 现在已有 `Assistant / Work Queue / Thread Detail / Follow Up / Conversation / Conversation List / Companionship` 七块协同视图，支持 thread 导航、过滤、inspect、resume、approve、reject、clarify。
+- **更完整 HITL 闭环**：`awaiting_user_input` 线程现在能在 Work Queue 中触发真实 `approve / reject / clarify` 动作，并通过 `taskLifecycle -> executor -> orchestrator.resumeHitl` 贯通。
+- **生产级 WhatsApp Continuity**：Adapter 现在具备连接状态显式化、消息去重、assistant channel-state 暴露，以及 richer inbound flow proof。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -112,7 +113,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 15**: QA / Verifier Harness，acceptance proof、typed findings、research/browser verifier flow、verifier-enforced handoff。
 - [x] **Phase 16**: Memory Productization & Dream Runtime，三层记忆、memory engine、bounded memory injection、Dream 反思与产品化 memory surface。
 - [x] **Phase 16 Closure**: 默认 memory/dream inspector 接线、auto-curate/compress、demote/forget、safe Dream idle trigger、memory product truth。
-- [x] **Phase 17 First Wave**: Persistent Assistant Surface 的第一波，WhatsApp continuity、Conversation Service、Control Center 第一层、最小 HITL approval 入口。
+- [x] **Phase 17**: Persistent Assistant Surface 完成，WhatsApp continuity、durable conversation persistence、完整 Control Center、richer HITL workflow、Companionship Layer。
 
 ## 📄 开源协议
 

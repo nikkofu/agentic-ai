@@ -11,7 +11,23 @@ import type { ConversationStore } from "./conversationStore";
 type TaskLifecycle = {
   startTask(input: { input: string }): Promise<{ taskId: string }>;
   resumeTask(input: { taskId: string; maxParallel?: number }): Promise<{ taskId: string }>;
-  inspectTask(taskId: string): Promise<unknown>;
+  inspectTask(taskId: string): Promise<{
+    latestHumanAction?: {
+      type: string;
+      payload: Record<string, unknown>;
+    } | null;
+  }>;
+  resolveHumanAction(input: {
+    taskId: string;
+    nodeId: string;
+    action?: "approve" | "reject" | "clarify";
+    feedback: string;
+  }): Promise<{
+    taskId: string;
+    nodeId: string;
+    action: "approve" | "reject" | "clarify";
+    resolved: boolean;
+  }>;
 };
 
 export type IncomingConversationMessage = {
@@ -27,6 +43,7 @@ export type ConversationAction =
   | { kind: "start_task"; taskId: string }
   | { kind: "resume_task"; taskId: string }
   | { kind: "inspect_task"; taskId: string }
+  | { kind: "resolve_human_action"; taskId: string; nodeId: string; action: "approve" | "reject" | "clarify" }
   | { kind: "chat_reply" };
 
 export function createConversationService(deps: {
@@ -134,6 +151,72 @@ export function createConversationService(deps: {
         };
       }
 
+      if (
+        (messageKind === "approval_response" || messageKind === "clarification_response" || messageKind === "rejection_response")
+        && thread.activeTaskId
+      ) {
+        const inspection = await deps.taskLifecycle.inspectTask(thread.activeTaskId);
+        const nodeId = typeof inspection.latestHumanAction?.payload?.node_id === "string"
+          ? inspection.latestHumanAction.payload.node_id
+          : "";
+
+        if (nodeId) {
+          const action = messageKind === "approval_response"
+            ? "approve"
+            : messageKind === "rejection_response"
+              ? "reject"
+              : "clarify";
+          const resolved = await deps.taskLifecycle.resolveHumanAction({
+            taskId: thread.activeTaskId,
+            nodeId,
+            action,
+            feedback: input.text
+          });
+          const summary = action === "approve"
+            ? "已收到你的批准，我会继续推进这条任务。"
+            : action === "reject"
+              ? "已收到你的拒绝意见，我会保持这条会话并等待下一步指示。"
+              : "已收到你的补充说明，我会带着这些反馈继续处理。";
+          await deps.conversationStore.updateThread(thread.threadId, {
+            status: action === "approve" ? "task_running" : action === "reject" ? "task_blocked" : "awaiting_user_input",
+            continuityState: action === "approve" ? "approved" : action === "reject" ? "rejected" : "clarified",
+            lastInteractionAt: new Date().toISOString()
+          });
+          const updated = (await deps.conversationStore.getThread(thread.threadId))!;
+          await appendOutgoingSummary(deps.conversationStore, updated.threadId, input.channelType, summary);
+          return {
+            thread: updated,
+            messageKind,
+            action: {
+              kind: "resolve_human_action",
+              taskId: resolved.taskId,
+              nodeId: resolved.nodeId,
+              action: resolved.action
+            },
+            reply: { summary }
+          };
+        }
+      }
+
+      if (messageKind === "approval_response" || messageKind === "clarification_response" || messageKind === "rejection_response") {
+        await deps.conversationStore.updateThread(thread.threadId, {
+          lastInteractionAt: new Date().toISOString()
+        });
+        const updated = (await deps.conversationStore.getThread(thread.threadId))!;
+        const summary = messageKind === "approval_response"
+          ? "已收到你的批准，我会保留这条会话的上下文并等待后续处理。"
+          : messageKind === "rejection_response"
+            ? "已收到你的拒绝意见，我会保留这条会话并等待后续处理。"
+            : "已收到你的补充说明，我会保留这条会话的上下文并等待后续处理。";
+        await appendOutgoingSummary(deps.conversationStore, updated.threadId, input.channelType, summary);
+        return {
+          thread: updated,
+          messageKind,
+          action: { kind: "chat_reply" },
+          reply: { summary }
+        };
+      }
+
       await deps.conversationStore.updateThread(thread.threadId, {
         lastInteractionAt: new Date().toISOString()
       });
@@ -193,6 +276,20 @@ async function appendOutgoingSummary(
 
 function classifyIncomingMessage(text: string, thread: ConversationThread): ConversationMessageKind {
   const normalized = text.trim();
+
+  if (thread.status === "awaiting_user_input") {
+    if (/(拒绝|驳回|不通过|先别继续|reject|rejected)/i.test(normalized)) {
+      return "rejection_response";
+    }
+
+    if (/(批准|同意|通过|可以继续|approve|approved)/i.test(normalized)) {
+      return "approval_response";
+    }
+
+    if (/(补充|说明|澄清|clarify|clarification)/i.test(normalized)) {
+      return "clarification_response";
+    }
+  }
 
   if (/[状進进]度|状态|怎么.?样|完成了吗|到哪了/.test(normalized) && thread.activeTaskId) {
     return "status_query";

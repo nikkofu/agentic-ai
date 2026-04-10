@@ -15,7 +15,7 @@ type ThreadWorkQueuePanelProps = {
   threads: ThreadQueueItem[];
   onInspectTask?: (taskId: string) => void;
   onResumeTask?: (taskId: string) => void;
-  onApproveTask?: (taskId: string, nodeId: string) => void;
+  onResolveHumanAction?: (taskId: string, nodeId: string, action: "approve" | "reject" | "clarify") => void;
 };
 
 export function getQueuedThreads(threads: ThreadQueueItem[]): ThreadQueueItem[] {
@@ -26,7 +26,7 @@ export function getQueuedThreads(threads: ThreadQueueItem[]): ThreadQueueItem[] 
   );
 }
 
-export function ThreadWorkQueuePanel({ threads, onInspectTask, onResumeTask, onApproveTask }: ThreadWorkQueuePanelProps) {
+export function ThreadWorkQueuePanel({ threads, onInspectTask, onResumeTask, onResolveHumanAction }: ThreadWorkQueuePanelProps) {
   const queuedThreads = getQueuedThreads(threads);
 
   return (
@@ -69,13 +69,29 @@ export function ThreadWorkQueuePanel({ threads, onInspectTask, onResumeTask, onA
                       </button>
                     ) : null}
                     {thread.status === "awaiting_user_input" && thread.latestHumanActionNodeId ? (
-                      <button
-                        type="button"
-                        onClick={() => onApproveTask?.(thread.activeTaskId!, thread.latestHumanActionNodeId!)}
-                        className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200 transition hover:bg-emerald-500/20"
-                      >
-                        approve
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onResolveHumanAction?.(thread.activeTaskId!, thread.latestHumanActionNodeId!, "approve")}
+                          className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200 transition hover:bg-emerald-500/20"
+                        >
+                          approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onResolveHumanAction?.(thread.activeTaskId!, thread.latestHumanActionNodeId!, "reject")}
+                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-rose-200 transition hover:bg-rose-500/20"
+                        >
+                          reject
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onResolveHumanAction?.(thread.activeTaskId!, thread.latestHumanActionNodeId!, "clarify")}
+                          className="rounded border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-violet-200 transition hover:bg-violet-500/20"
+                        >
+                          clarify
+                        </button>
+                      </>
                     ) : null}
                   </div>
                 ) : null}

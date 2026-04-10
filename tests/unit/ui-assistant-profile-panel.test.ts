@@ -11,7 +11,8 @@ describe("assistant profile panel", () => {
         assistants: [{
           assistantId: "assistant-main",
           displayName: "Aether",
-          personaProfile: "persistent assistant"
+          personaProfile: "persistent assistant",
+          channelConnectionState: "connected"
         }],
         threadCount: 3,
         activeThreadCount: 2
@@ -22,6 +23,7 @@ describe("assistant profile panel", () => {
     expect(html).toContain("Aether");
     expect(html).toContain("assistant-main");
     expect(html).toContain("persistent assistant");
+    expect(html).toContain("connected");
     expect(html).toContain("threads=3");
     expect(html).toContain("active=2");
   });

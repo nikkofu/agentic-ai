@@ -47,6 +47,7 @@ type ResumeInput = {
 type ResolveHumanActionInput = {
   taskId: string;
   nodeId: string;
+  action?: "approve" | "reject" | "clarify";
   feedback: string;
 };
 
@@ -124,7 +125,7 @@ type TaskExecutorDeps = {
       status: "completed" | "aborted";
       message?: string;
     }>;
-    resumeHitl: (taskId: string, nodeId: string, feedback: string) => Promise<void>;
+    resumeHitl: (taskId: string, nodeId: string, feedback: string, action?: "approve" | "reject" | "clarify") => Promise<void>;
   };
   finalizeDelivery: (args: {
     taskId: string;
@@ -615,10 +616,11 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     },
 
     async resolveHumanAction(input: ResolveHumanActionInput) {
-      await deps.orchestrator.resumeHitl(input.taskId, input.nodeId, input.feedback);
+      await deps.orchestrator.resumeHitl(input.taskId, input.nodeId, input.feedback, input.action);
       return {
         taskId: input.taskId,
         nodeId: input.nodeId,
+        action: input.action ?? "approve",
         resolved: true
       };
     }

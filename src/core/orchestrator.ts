@@ -765,8 +765,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       };
     },
 
-    resumeHitl: async (taskId: string, nodeId: string, feedback: string) => {
-      publish(deps.eventBus, "HumanActionResolved", { task_id: taskId, node_id: nodeId, feedback });
+    resumeHitl: async (taskId: string, nodeId: string, feedback: string, action?: "approve" | "reject" | "clarify") => {
+      publish(deps.eventBus, "HumanActionResolved", { task_id: taskId, node_id: nodeId, action, feedback });
     }
   };
 }
