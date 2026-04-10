@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { MemoryPanel } from "./MemoryPanel";
+import { ConversationPanel } from "./ConversationPanel";
+import { ConversationListPanel } from "./ConversationListPanel";
+import { AssistantProfilePanel } from "./AssistantProfilePanel";
+import { ThreadWorkQueuePanel } from "./ThreadWorkQueuePanel";
+import { ThreadDetailPanel } from "./ThreadDetailPanel";
 
 type TaskLifecyclePanelProps = {
   taskId: string | null;
@@ -67,6 +72,13 @@ type InspectionResult = {
       latestJoinDecision: string;
       activeNodePath: string;
     } | null;
+    conversation: {
+      assistantId: string;
+      threadId: string;
+      threadStatus: string;
+      channelType: string;
+      externalUserId: string;
+    } | null;
     explanation: string;
     actionHint: string;
   } | null;
@@ -87,6 +99,10 @@ type InspectionResult = {
     type: string;
     payload: Record<string, unknown>;
   } | null;
+  latestHumanAction: {
+    type: string;
+    payload: Record<string, unknown>;
+  } | null;
   eventCount: number;
 };
 
@@ -94,8 +110,40 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
   const [inspection, setInspection] = useState<InspectionResult | null>(null);
+  const [conversationList, setConversationList] = useState<{
+    assistants: Array<{
+      assistantId: string;
+      displayName: string;
+      personaProfile?: string;
+    }>;
+    threads: Array<{
+      threadId: string;
+      assistantId: string;
+      assistantDisplayName?: string;
+      status: string;
+      activeTaskId?: string;
+      latestHumanActionNodeId?: string;
+      lastInteractionAt: string;
+      latestEventDirection?: string;
+      latestEventSummary?: string;
+      latestEventAt?: string;
+    }>;
+  } | null>(null);
+  const [activeThreadsOnly, setActiveThreadsOnly] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    startTransition(() => {
+      void inspectConversations()
+        .then((result) => {
+          setConversationList(result);
+        })
+        .catch((cause) => {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        });
+    });
+  }, []);
 
   useEffect(() => {
     if (!taskId) {
@@ -182,6 +230,13 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
         >
           Resume
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveThreadsOnly((current) => !current)}
+          className="rounded border border-white/10 px-3 py-2 font-medium text-neutral-200 transition hover:bg-white/5"
+        >
+          {activeThreadsOnly ? "Show All Threads" : "Active Threads Only"}
+        </button>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <InspectorCard title="Intent">
@@ -257,6 +312,82 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
           <InspectorLine label="owner" value={inspection?.latestAsyncNode?.payload.owner_id ? String(inspection.latestAsyncNode.payload.owner_id) : ""} />
           <InspectorLine label="dedupe" value={inspection?.latestAsyncNode?.payload.dedupe_key ? String(inspection.latestAsyncNode.payload.dedupe_key) : ""} />
         </InspectorCard>
+      </div>
+
+      <div className="mt-3">
+      <AssistantProfilePanel
+        assistants={conversationList?.assistants ?? []}
+        threadCount={conversationList?.threads.length ?? 0}
+        activeThreadCount={(conversationList?.threads ?? []).filter((thread) => Boolean(thread.activeTaskId) || thread.status === "task_running" || thread.status === "awaiting_user_input").length}
+      />
+      </div>
+
+      <div className="mt-3">
+      <ThreadWorkQueuePanel
+        threads={conversationList?.threads ?? []}
+        onInspectTask={(selectedTaskId) => {
+          router.push(`/dashboard?taskId=${selectedTaskId}&token=valid-session`);
+        }}
+        onResumeTask={(selectedTaskId) => {
+          startTransition(() => {
+            void resumeTask(selectedTaskId)
+              .then((result) => {
+                router.push(`/dashboard?taskId=${result.taskId}&token=valid-session`);
+              })
+              .catch((cause) => {
+                setError(cause instanceof Error ? cause.message : String(cause));
+              });
+          });
+        }}
+        onApproveTask={(selectedTaskId, nodeId) => {
+          startTransition(() => {
+            void resolveHumanAction(selectedTaskId, nodeId, "approved from control center")
+              .then((result) => {
+                router.push(`/dashboard?taskId=${result.taskId}&token=valid-session`);
+              })
+              .catch((cause) => {
+                setError(cause instanceof Error ? cause.message : String(cause));
+              });
+          });
+        }}
+      />
+      </div>
+
+      <div className="mt-3">
+        <ThreadDetailPanel
+          detail={inspection ? {
+            taskId: inspection.taskId,
+            graphStatus: inspection.graph?.status ?? "",
+            conversation: inspection.runtimeInspector?.conversation ?? null,
+            latestHumanAction: inspection.latestHumanAction ?? null,
+            latestAsyncNode: inspection.latestAsyncNode ?? null
+          } : null}
+        />
+      </div>
+
+      <div className="mt-3">
+        <ConversationListPanel
+          data={conversationList}
+          activeOnly={activeThreadsOnly}
+        onSelectTask={(selectedTaskId) => {
+          router.push(`/dashboard?taskId=${selectedTaskId}&token=valid-session`);
+        }}
+        onResumeTask={(selectedTaskId) => {
+          startTransition(() => {
+            void resumeTask(selectedTaskId)
+              .then((result) => {
+                router.push(`/dashboard?taskId=${result.taskId}&token=valid-session`);
+              })
+              .catch((cause) => {
+                setError(cause instanceof Error ? cause.message : String(cause));
+              });
+          });
+        }}
+      />
+      </div>
+
+      <div className="mt-3">
+        <ConversationPanel inspection={inspection?.runtimeInspector?.conversation ?? null} />
       </div>
 
       {inspection?.runtimeInspector ? (
@@ -338,6 +469,32 @@ async function inspectTask(taskId: string) {
   return response.json() as Promise<InspectionResult>;
 }
 
+async function inspectConversations() {
+  const response = await fetch("/api/conversations");
+  if (!response.ok) {
+    throw new Error(`inspect_conversations_failed:${response.status}`);
+  }
+  return response.json() as Promise<{
+    assistants: Array<{
+      assistantId: string;
+      displayName: string;
+      personaProfile?: string;
+    }>;
+    threads: Array<{
+      threadId: string;
+      assistantId: string;
+      assistantDisplayName?: string;
+      status: string;
+      activeTaskId?: string;
+      latestHumanActionNodeId?: string;
+      lastInteractionAt: string;
+      latestEventDirection?: string;
+      latestEventSummary?: string;
+      latestEventAt?: string;
+    }>;
+  }>;
+}
+
 async function resumeTask(taskId: string) {
   const response = await fetch(`/api/tasks/${taskId}/resume`, {
     method: "POST"
@@ -346,4 +503,18 @@ async function resumeTask(taskId: string) {
     throw new Error(`resume_task_failed:${response.status}`);
   }
   return response.json() as Promise<{ taskId: string }>;
+}
+
+async function resolveHumanAction(taskId: string, nodeId: string, feedback: string) {
+  const response = await fetch(`/api/tasks/${taskId}/hitl`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ nodeId, feedback })
+  });
+  if (!response.ok) {
+    throw new Error(`resolve_human_action_failed:${response.status}`);
+  }
+  return response.json() as Promise<{ taskId: string; nodeId: string; resolved: boolean }>;
 }

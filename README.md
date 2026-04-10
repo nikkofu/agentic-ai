@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.4.0`
+当前版本：`1.5.0`
 
 ## 🚀 核心特性
 
@@ -44,6 +44,9 @@
 - **Dream Runtime**：新增安全的空闲期 Dream runtime，可在后台生成 reflections、hypotheses、skill drafts 和 recommendations，默认不执行外部动作。
 - **Memory Inspector**：Dashboard 现在会展示 personal/project/task memory 摘要以及 Dream 输出预览。
 - **Phase 16 Closure**：默认 runtime 现在会接通 live memory / Dream inspector，project memory 会自动 curate/compress，Dream 具备安全 idle trigger，MemoryPanel 会展示空态与 freshness truth。
+- **Phase 17 持续助理界面第一波**：WhatsApp continuity、assistant/thread/task 关联、Conversation Service、ConversationLinked 事件、以及 thread-aware control center 第一层已经打通。
+- **Control Center 第一层**：Dashboard 现在已有 `Assistant / Work Queue / Thread Detail / Conversation / Conversation List` 五块协同视图，支持 thread 导航、active-only 过滤、inspect/resume/approve 最小操作面。
+- **最小 HITL 闭环**：`awaiting_user_input` 线程现在能在 Work Queue 中触发真实 `approve` 动作，通过 `taskLifecycle -> executor -> orchestrator.resumeHitl` 贯通。
 
 ## 🖥️ 可视化 Dashboard
 
@@ -105,6 +108,12 @@ npx tsx src/cli/runTask.ts --template research -p "量子计算" # 使用模板
   [`docs/superpowers/specs/2026-04-09-phase16-memory-productization-and-dream-runtime-design.md`](docs/superpowers/specs/2026-04-09-phase16-memory-productization-and-dream-runtime-design.md)
 - Phase 16 的实现计划见：
   [`docs/superpowers/plans/2026-04-09-phase16-memory-productization-and-dream-runtime.md`](docs/superpowers/plans/2026-04-09-phase16-memory-productization-and-dream-runtime.md)
+- Phase 17 的 Persistent Assistant Surface 设计见：
+  [`docs/superpowers/specs/2026-04-09-phase17-persistent-assistant-surface-design.md`](docs/superpowers/specs/2026-04-09-phase17-persistent-assistant-surface-design.md)
+- Phase 17 的实现计划见：
+  [`docs/superpowers/plans/2026-04-09-phase17-persistent-assistant-surface.md`](docs/superpowers/plans/2026-04-09-phase17-persistent-assistant-surface.md)
+- Phase 17 的阶段交接记录见：
+  [`docs/phase-handoff-playbook/2026-04-09-phase17-persistent-assistant-surface-handoff.md`](docs/phase-handoff-playbook/2026-04-09-phase17-persistent-assistant-surface-handoff.md)
 - 发版个人日记会归档到：
   [`diary/`](diary/)
 
@@ -132,6 +141,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 15**: QA / Verifier Harness，acceptance proof、typed findings、research/browser verifier flow、verifier-enforced handoff。
 - [x] **Phase 16**: Memory Productization & Dream Runtime，三层记忆、memory engine、bounded memory injection、Dream 反思与产品化 memory surface。
 - [x] **Phase 16 Closure**: 默认 memory/dream inspector 接线、auto-curate/compress、demote/forget、safe Dream idle trigger、memory product truth。
+- [x] **Phase 17 First Wave**: Persistent Assistant Surface 的第一波，WhatsApp continuity、Conversation Service、Control Center 第一层、最小 HITL approval 入口。
 
 ## 📄 开源协议
 

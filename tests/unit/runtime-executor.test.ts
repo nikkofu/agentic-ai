@@ -114,6 +114,62 @@ describe("runtime executor", () => {
     expect(result.delivery.final_result).toBe("ok");
   });
 
+  it("resolves a human-action gate through the orchestrator", async () => {
+    const executor = createTaskExecutor({
+      config: {
+        models: {
+          default: "test-model",
+          fallback: [],
+          by_agent_role: {
+            planner: "test-model",
+            researcher: "test-model",
+            coder: "test-model",
+            writer: "test-model"
+          },
+          embeddings: { default: "embed-model" }
+        },
+        reasoner: {
+          default: "medium",
+          by_agent_role: {
+            planner: "medium",
+            researcher: "medium",
+            coder: "medium",
+            writer: "medium"
+          }
+        },
+        scheduler: { default_policy: "bfs", policy_overrides: {} },
+        guardrails: { max_depth: 4, max_branch: 3, max_steps: 60, max_budget: 5 },
+        evaluator: { weights: { quality: 0.6, cost: 0.2, latency: 0.2 } },
+        retry: { max_retries: 3, base_delay_ms: 1000 },
+        mcp_servers: {}
+      } as any,
+      eventBus: { publish: vi.fn(), subscribe: vi.fn() } as any,
+      eventLogStore: { append: vi.fn(), getAll: vi.fn().mockReturnValue([]) } as any,
+      runtime: { run: vi.fn() } as any,
+      orchestrator: {
+        resumeHitl: vi.fn().mockResolvedValue(undefined)
+      } as any,
+      finalizeDelivery: vi.fn(),
+      resolveModelRoute: vi.fn().mockReturnValue({
+        model: "test-model",
+        reasoner: "medium",
+        apiKey: "test-key"
+      })
+    });
+
+    const result = await executor.resolveHumanAction({
+      taskId: "task-hitl-1",
+      nodeId: "node-hitl-1",
+      feedback: "approved"
+    });
+
+    expect(result).toEqual({
+      taskId: "task-hitl-1",
+      nodeId: "node-hitl-1",
+      resolved: true
+    });
+  });
+
   it("threads the research_writing family and normalized proof through execution", async () => {
     const eventBus = {
       publish: vi.fn(),

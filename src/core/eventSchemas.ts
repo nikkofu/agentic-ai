@@ -10,6 +10,14 @@ export const eventSchemaRegistry = {
     required_capabilities: z.array(z.string()).optional(),
     verification_policy: z.string().optional()
   }),
+  ConversationLinked: z.object({
+    task_id: z.string(),
+    assistant_id: z.string(),
+    thread_id: z.string(),
+    thread_status: z.string(),
+    channel_type: z.string(),
+    external_user_id: z.string()
+  }),
   NodeScheduled: z.object({ task_id: z.string(), node_id: z.string() }),
   AgentStarted: z.object({ task_id: z.string(), node_id: z.string(), role: z.string() }),
   PromptComposed: z.object({ task_id: z.string(), node_id: z.string() }),
@@ -58,6 +66,16 @@ export const eventSchemaRegistry = {
     task_id: z.string(),
     job_kind: z.string(),
     error: z.string()
+  }),
+  HumanActionRequired: z.object({
+    task_id: z.string(),
+    node_id: z.string(),
+    reason: z.string().optional()
+  }),
+  HumanActionResolved: z.object({
+    task_id: z.string(),
+    node_id: z.string(),
+    feedback: z.string()
   }),
   Evaluated: z.object({ task_id: z.string(), node_id: z.string(), decision: z.string() }),
   NodeCompleted: z.object({ task_id: z.string(), node_id: z.string() }),

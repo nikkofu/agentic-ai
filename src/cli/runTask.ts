@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { PrismaClient } from "@prisma/client";
 
 function forceLoadEnv() {
   try {
@@ -32,10 +33,11 @@ import { getRuntimeConfig } from "../config/loadRuntimeConfig";
 import { WebHub } from "../core/webHub";
 import { initTelemetry } from "../core/telemetry";
 import { SlackBot } from "../bots/slackBot";
-import { WhatsAppBot } from "../bots/whatsappBot";
+import { createWhatsAppAdapter } from "../bots/whatsappAdapter";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
+import type { FamilyDeliveryBundle } from "../runtime/contracts";
 import { createRuntimeServices } from "../runtime/runtimeServices";
 import YAML from "yaml";
 
@@ -55,7 +57,7 @@ type RunTaskResult = {
   taskId: string;
   finalState: "completed" | "aborted";
   outputText?: string;
-  delivery: DeliveryBundle;
+  delivery: DeliveryBundle | FamilyDeliveryBundle;
   summary: {
     nodeCount: number;
     childSpawns: number;
@@ -100,8 +102,12 @@ export async function runTask(args: RunTaskInput): Promise<RunTaskResult> {
     const slackBot = new SlackBot(process.env.SLACK_BOT_TOKEN, process.env.SLACK_CHANNEL_ID, services.eventBus);
     await slackBot.init();
   } else if (args.notify === "whatsapp" && process.env.WHATSAPP_RECIPIENT) {
-    const waBot = new WhatsAppBot(process.env.WHATSAPP_RECIPIENT, services.eventBus);
-    await waBot.init();
+    const waAdapter = createWhatsAppAdapter({
+      recipientJid: process.env.WHATSAPP_RECIPIENT,
+      eventBus: services.eventBus,
+      conversationService: services.conversationService
+    });
+    await waAdapter.init();
   }
   const taskId = randomUUID();
   if (args.verbose) {

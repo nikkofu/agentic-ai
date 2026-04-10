@@ -44,6 +44,11 @@ type TaskLifecycleDeps = {
   executor: {
     execute: (input: { input: string; workflow?: DagWorkflow }) => Promise<ExecuteResult>;
     resume: (input: { taskId: string; maxParallel?: number }) => Promise<ExecuteResult>;
+    resolveHumanAction: (input: { taskId: string; nodeId: string; feedback: string }) => Promise<{
+      taskId: string;
+      nodeId: string;
+      resolved: boolean;
+    }>;
   };
   taskStore: TaskStore;
   memoryInspector?: {
@@ -124,6 +129,13 @@ type RuntimeInspector = {
     latestJoinDecision: string;
     activeNodePath: string;
   } | null;
+  conversation: {
+    assistantId: string;
+    threadId: string;
+    threadStatus: string;
+    channelType: string;
+    externalUserId: string;
+  } | null;
   explanation: string;
   actionHint: string;
 };
@@ -136,6 +148,10 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
 
     resumeTask(input: { taskId: string; maxParallel?: number }) {
       return deps.executor.resume(input);
+    },
+
+    resolveHumanAction(input: { taskId: string; nodeId: string; feedback: string }) {
+      return deps.executor.resolveHumanAction(input);
     },
 
     async inspectTask(taskId: string) {
@@ -161,6 +177,9 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
       const latestAsyncNode = [...events].reverse().find((event) =>
         event.type === "AsyncNodeQueued" || event.type === "AsyncNodeSettled" || event.type === "AsyncNodeFailed"
       );
+      const latestHumanAction = [...events].reverse().find((event) =>
+        event.type === "HumanActionRequired" || event.type === "HumanActionResolved"
+      );
 
       return {
         taskId,
@@ -168,6 +187,7 @@ export function createTaskLifecycle(deps: TaskLifecycleDeps) {
         latestClose: latestClose ?? null,
         latestAsync: latestAsync ?? null,
         latestAsyncNode: latestAsyncNode ?? null,
+        latestHumanAction: latestHumanAction ?? null,
         runtimeInspector: await summarizeRuntimeInspector(events, graph, memorySummary, dreamSummary),
         distributedSummary: summarizeDistributedGraph(graph),
         eventCount: events.length
@@ -207,6 +227,7 @@ async function summarizeRuntimeInspector(
   const latestTerminal = [...events].reverse().find((event) =>
     event.type === "TaskClosed" || event.type === "AsyncTaskSettled" || event.type === "AsyncTaskFailed"
   );
+  const latestConversationLink = [...events].reverse().find((event) => event.type === "ConversationLinked");
   const deliveryPayload = (latestTerminal?.payload.delivery as Record<string, unknown> | undefined) ?? undefined;
   const deliveryArtifacts = normalizeStringArray(deliveryPayload?.artifacts);
   const normalizedVerification = normalizeVerificationRecords(deliveryPayload?.verification);
@@ -276,6 +297,15 @@ async function summarizeRuntimeInspector(
             ?? Object.keys(graph.nodes)[0]
             ?? ""
           )
+        }
+      : null,
+    conversation: latestConversationLink
+      ? {
+          assistantId: String(latestConversationLink.payload.assistant_id ?? ""),
+          threadId: String(latestConversationLink.payload.thread_id ?? ""),
+          threadStatus: String(latestConversationLink.payload.thread_status ?? ""),
+          channelType: String(latestConversationLink.payload.channel_type ?? ""),
+          externalUserId: String(latestConversationLink.payload.external_user_id ?? "")
         }
       : null,
     explanation: buildRuntimeExplanation(finalDelivery),

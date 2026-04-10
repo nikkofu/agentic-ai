@@ -44,6 +44,12 @@ type ResumeInput = {
   maxParallel?: number;
 };
 
+type ResolveHumanActionInput = {
+  taskId: string;
+  nodeId: string;
+  feedback: string;
+};
+
 type ExecuteResult = {
   taskId: string;
   finalState: "completed" | "aborted";
@@ -118,6 +124,7 @@ type TaskExecutorDeps = {
       status: "completed" | "aborted";
       message?: string;
     }>;
+    resumeHitl: (taskId: string, nodeId: string, feedback: string) => Promise<void>;
   };
   finalizeDelivery: (args: {
     taskId: string;
@@ -604,6 +611,15 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
             .filter((event) => event.type === "Evaluated")
             .reduce((sum, event) => sum + Number(event.payload.cost ?? 0), 0)
         }
+      };
+    },
+
+    async resolveHumanAction(input: ResolveHumanActionInput) {
+      await deps.orchestrator.resumeHitl(input.taskId, input.nodeId, input.feedback);
+      return {
+        taskId: input.taskId,
+        nodeId: input.nodeId,
+        resolved: true
       };
     }
   };

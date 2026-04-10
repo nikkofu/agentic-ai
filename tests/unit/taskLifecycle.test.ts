@@ -14,7 +14,8 @@ describe("task lifecycle", () => {
     const lifecycle = createTaskLifecycle({
       executor: {
         execute: vi.fn().mockResolvedValue({ taskId: "task-1", finalState: "completed" }),
-        resume: vi.fn().mockResolvedValue({ taskId: "task-2", finalState: "completed" })
+        resume: vi.fn().mockResolvedValue({ taskId: "task-2", finalState: "completed" }),
+        resolveHumanAction: vi.fn().mockResolvedValue({ taskId: "task-3", nodeId: "node-hitl", resolved: true })
       } as any,
       taskStore: {
         getGraph: vi.fn(),
@@ -24,6 +25,7 @@ describe("task lifecycle", () => {
 
     await lifecycle.startTask({ input: "do work" });
     await lifecycle.resumeTask({ taskId: "task-2" });
+    await lifecycle.resolveHumanAction({ taskId: "task-3", nodeId: "node-hitl", feedback: "approved" });
 
     expect(lifecycle).toBeDefined();
   });
@@ -276,9 +278,99 @@ describe("task lifecycle", () => {
         latestJoinDecision: "",
         activeNodePath: "node-root"
       },
+      conversation: null,
       explanation: "Task blocked: policy_verification_required",
       actionHint: "Add verification evidence before attempting final delivery again."
     });
+  });
+
+  it("exposes conversation continuity facts in the runtime inspector", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-conversation-surface",
+          status: "running",
+          nodes: {
+            "node-root": { state: "running", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "ConversationLinked",
+            payload: {
+              task_id: "task-conversation-surface",
+              assistant_id: "assistant-main",
+              thread_id: "thread-123",
+              thread_status: "task_running",
+              channel_type: "whatsapp",
+              external_user_id: "8613800138000@s.whatsapp.net"
+            }
+          },
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-conversation-surface",
+              state: "completed",
+              delivery: {
+                status: "completed",
+                final_result: "done",
+                artifacts: [],
+                verification: []
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-conversation-surface");
+
+    expect(inspection.runtimeInspector?.conversation).toEqual({
+      assistantId: "assistant-main",
+      threadId: "thread-123",
+      threadStatus: "task_running",
+      channelType: "whatsapp",
+      externalUserId: "8613800138000@s.whatsapp.net"
+    });
+  });
+
+  it("exposes the latest human-action requirement for intervention surfaces", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn(),
+        resolveHumanAction: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-hitl-surface",
+          status: "running",
+          nodes: {
+            "node-root": { state: "running", role: "planner" },
+            "node-hitl": { state: "pending", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "HumanActionRequired",
+            payload: {
+              task_id: "task-hitl-surface",
+              node_id: "node-hitl",
+              reason: "approval needed"
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-hitl-surface");
+
+    expect(inspection.latestHumanAction?.type).toBe("HumanActionRequired");
+    expect(inspection.latestHumanAction?.payload.node_id).toBe("node-hitl");
   });
 
   it("includes plan and closure explanation from planner and join events", async () => {

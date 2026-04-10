@@ -238,3 +238,37 @@ Phase 17 first-wave success means:
 3. task completion and blocking states flow back into the thread
 4. the dashboard can show the assistant/thread/task relationship
 5. the design remains extensible for future channels
+
+## Current Implementation Status
+
+### Completed In First Wave
+
+- Task 1: shared channel and conversation contracts
+- Task 2: conversation persistence and resolution
+- Task 3: conversation service
+- Task 4: WhatsApp adapter minimum continuity path
+- Task 5: thread-aware control center foundations
+
+### Current Control Center Additions
+
+- assistant profile summary card
+- work queue surface
+- dedicated thread detail side panel
+- current thread detail
+- conversation list API
+- thread list with assistant summary
+- latest event preview
+- active-only filtering
+- `inspect` shortcut
+- blocked-thread `resume` shortcut
+- queue state language:
+  - `can resume`
+  - `needs intervention`
+- minimal real `approve` path for `awaiting_user_input`
+
+### Not Yet Completed
+
+- release-grade docs for a Phase 17 version
+- deeper control-center workflow surfaces
+- richer `HITL / approval` workflow path
+- companionship layer

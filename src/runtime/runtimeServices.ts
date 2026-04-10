@@ -21,7 +21,11 @@ import { createMemoryEngine } from "./memoryEngine";
 import { createDreamRuntime } from "./dreamRuntime";
 import { createDreamInspector, createMemoryInspector } from "./memoryInspectors";
 import { createDreamScheduler } from "./dreamScheduler";
+import { createConversationService } from "./conversationService";
+import { createInMemoryConversationStore } from "./conversationStore";
 import type { OpenRouterGenerateRequest, OpenRouterGenerateResponse } from "../model/openrouterClient";
+
+let sharedConversationStore: ReturnType<typeof createInMemoryConversationStore> | null = null;
 
 export async function createRuntimeServices(args?: {
   generate?: (request: OpenRouterGenerateRequest) => Promise<OpenRouterGenerateResponse>;
@@ -47,6 +51,9 @@ export async function createRuntimeServices(args?: {
     dreamRuntime,
     thresholdMinutes: config.dream?.idle_threshold_minutes ?? 20
   });
+  const conversationStore = process.env.NODE_ENV === "test"
+    ? createInMemoryConversationStore()
+    : (sharedConversationStore ??= createInMemoryConversationStore());
 
   let limiter: RequestLimiter | undefined;
   if (config.scheduler.rate_limit) {
@@ -114,6 +121,20 @@ export async function createRuntimeServices(args?: {
       userHome: process.env.HOME ?? process.cwd()
     })
   });
+  await conversationStore.saveAssistantProfile({
+    assistantId: "assistant-main",
+    displayName: "Aether",
+    personaProfile: "persistent assistant",
+    memoryPolicy: "default",
+    channelPolicies: {
+      whatsapp: "continuity-first"
+    }
+  });
+  const conversationService = createConversationService({
+    conversationStore,
+    taskLifecycle,
+    eventBus
+  });
 
   return {
     config,
@@ -124,6 +145,8 @@ export async function createRuntimeServices(args?: {
     memoryStore,
     dreamRuntime,
     dreamScheduler,
+    conversationStore,
+    conversationService,
     orchestrator,
     executor,
     taskLifecycle,

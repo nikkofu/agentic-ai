@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.5.0] - 2026-04-10
+### Added
+- **Phase 17 Channel Continuity**: Added shared conversation contracts, in-memory thread/session/event persistence, `ConversationService`, and a true WhatsApp adapter path for inbound continuity-aware messages.
+- **Control Center First Wave**: Added `AssistantProfilePanel`, `ThreadWorkQueuePanel`, `ThreadDetailPanel`, `ConversationPanel`, and `ConversationListPanel`, creating a first persistent assistant control surface in the dashboard.
+- **HITL Approval Path**: Added a minimal human-action resolution path via `executor.resolveHumanAction`, `taskLifecycle.resolveHumanAction`, new `HumanActionRequired/HumanActionResolved` schemas, and `/api/tasks/[taskId]/hitl`.
+
+### Changed
+- **Conversation Inspection**: `taskLifecycle.inspectTask()` now exposes conversation continuity facts and latest human-action events so control-center surfaces can reason about intervention state.
+- **Control Center Semantics**: Queue and thread surfaces now distinguish `can resume` from `needs intervention`, show latest event previews, and expose `inspect / resume / approve` shortcuts.
+
 ## [1.4.0] - 2026-04-09
 ### Changed
 - **Phase 16 Closure**: Wired default runtime memory and Dream inspectors so the dashboard now shows live memory and Dream summaries without test-only injection.
