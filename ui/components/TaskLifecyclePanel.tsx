@@ -67,6 +67,11 @@ type InspectionResult = {
       dimensionCount: number;
       recommendationCount: number;
       bundleComplete: boolean;
+      variantCount: number;
+      productionStepCount: number;
+      objectivePreview: string;
+      audiencePreview: string;
+      keyMessagePreview: string;
     } | null;
     memory: {
       personal: { count: number; latest: string[] };
@@ -449,6 +454,16 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
               <InspectorLine label="recommendations" value={String(inspection.runtimeInspector.finalDelivery.recommendationCount)} />
               <InspectorLine label="bundle complete" value={inspection.runtimeInspector.finalDelivery.bundleComplete ? "yes" : "no"} />
               <InspectorLine label="references" value={inspection.runtimeInspector.finalDelivery.referencesPreview.join(", ")} />
+            </>
+          ) : null}
+          {inspection?.runtimeInspector?.finalDelivery?.family === "content_pipeline" ? (
+            <>
+              <InspectorLine label="variants" value={String(inspection.runtimeInspector.finalDelivery.variantCount)} />
+              <InspectorLine label="production steps" value={String(inspection.runtimeInspector.finalDelivery.productionStepCount)} />
+              <InspectorLine label="bundle complete" value={inspection.runtimeInspector.finalDelivery.bundleComplete ? "yes" : "no"} />
+              <InspectorLine label="objective" value={inspection.runtimeInspector.finalDelivery.objectivePreview} />
+              <InspectorLine label="audience" value={inspection.runtimeInspector.finalDelivery.audiencePreview} />
+              <InspectorLine label="key message" value={inspection.runtimeInspector.finalDelivery.keyMessagePreview} />
             </>
           ) : null}
         </InspectorCard>

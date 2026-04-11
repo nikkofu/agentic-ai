@@ -275,7 +275,12 @@ describe("task lifecycle", () => {
         targetCount: 0,
         dimensionCount: 0,
         recommendationCount: 0,
-        bundleComplete: false
+        bundleComplete: false,
+        variantCount: 0,
+        productionStepCount: 0,
+        objectivePreview: "",
+        audiencePreview: "",
+        keyMessagePreview: ""
       },
       plan: {
         nodeCount: 1,
@@ -819,6 +824,99 @@ Agentic AI is differentiated by trusted delivery.
     expect(inspection.runtimeInspector?.finalDelivery?.bundleComplete).toBe(true);
     expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("targets=2; dimensions=2; recommendations=1; references=2");
     expect(inspection.runtimeInspector?.explanation).toBe("Competitive research accepted with 2 targets, 2 dimensions, and 2 verified sources");
+  });
+
+  it("builds family-aware content pipeline summaries", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-family-content",
+          status: "completed",
+          nodes: {
+            "node-root": { state: "completed", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-family-content",
+              state: "completed",
+              delivery: {
+                status: "completed",
+                final_result: `# Content Package
+
+## Objective
+Explain why task families matter.
+
+## Audience
+Operator teams.
+
+## Key Message
+Family-native runtimes improve trusted delivery.
+
+## Outline
+- Intro
+- Why families matter
+
+## Primary Draft
+# Why Task Families Matter
+
+Family-native runtimes improve trusted delivery.
+
+## Channel Variants
+- channel: linkedin
+  format: short_post
+  summary: summary
+  content: content
+  source_anchor: primary-draft
+
+## Production Plan
+- next_step: review draft
+- distribution_target: linkedin
+- handoff_check: verify bundle completeness
+`,
+                family: "content_pipeline",
+                artifacts: [
+                  "artifacts/task-family-content-outline.md",
+                  "artifacts/task-family-content-primary-draft.md",
+                  "artifacts/task-family-content-channel-variants.json",
+                  "artifacts/task-family-content-production-plan.json"
+                ],
+                verification: [
+                  { kind: "artifact_check", summary: "bundle archived", passed: true }
+                ],
+                acceptance_proof: {
+                  decision: "accept",
+                  verifierSummary: "Accepted content pipeline bundle with 1 variants and 1 production steps.",
+                  findings: []
+                },
+                delivery_proof: {
+                  family: "content_pipeline",
+                  steps: []
+                }
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-family-content");
+
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("content_pipeline");
+    expect(inspection.runtimeInspector?.finalDelivery?.variantCount).toBe(1);
+    expect(inspection.runtimeInspector?.finalDelivery?.productionStepCount).toBe(1);
+    expect(inspection.runtimeInspector?.finalDelivery?.bundleComplete).toBe(true);
+    expect(inspection.runtimeInspector?.finalDelivery?.objectivePreview).toBe("Explain why task families matter.");
+    expect(inspection.runtimeInspector?.finalDelivery?.audiencePreview).toBe("Operator teams.");
+    expect(inspection.runtimeInspector?.finalDelivery?.keyMessagePreview).toBe("Family-native runtimes improve trusted delivery.");
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("variants=1; production_steps=1; bundle=complete");
+    expect(inspection.runtimeInspector?.explanation).toBe("Content pipeline accepted with 1 variants and 1 production steps");
   });
 
   it("includes operator intelligence aggregates in the runtime inspector", async () => {

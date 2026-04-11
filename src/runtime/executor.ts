@@ -8,6 +8,7 @@ import { classifyTaskIntent } from "./intent";
 import { createExecutionContext } from "./context";
 import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "./deliveryHarness";
 import { auditFamilyDelivery } from "./familyAudit";
+import { finalizeContentPipelineDelivery } from "./contentPipeline";
 import { buildTaskFamilyPolicy, inferTaskFamily, normalizeTaskFamily } from "./taskFamily";
 import { finalizeCompetitiveResearchDelivery } from "./competitiveResearch";
 import { finalizeResearchWritingDelivery } from "./researchWriting";
@@ -457,6 +458,13 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           delivery: familyDelivery
         });
       }
+      if ("family" in familyDelivery && familyDelivery.family === "content_pipeline") {
+        familyDelivery = await finalizeContentPipelineDelivery({
+          taskId,
+          taskInput: input.input,
+          delivery: familyDelivery
+        });
+      }
       if ("family" in familyDelivery) {
         familyDelivery = applyFamilyDeliveryPolicy({
           delivery: familyDelivery,
@@ -566,6 +574,13 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       }
       if ("family" in familyDelivery && familyDelivery.family === "competitive_research") {
         familyDelivery = await finalizeCompetitiveResearchDelivery({
+          taskId: input.taskId,
+          taskInput,
+          delivery: familyDelivery
+        });
+      }
+      if ("family" in familyDelivery && familyDelivery.family === "content_pipeline") {
+        familyDelivery = await finalizeContentPipelineDelivery({
           taskId: input.taskId,
           taskInput,
           delivery: familyDelivery

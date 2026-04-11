@@ -10,10 +10,11 @@ import type { FamilyDeliveryBundle, VerificationRecord } from "../../src/runtime
 
 describe("taskFamily", () => {
   it("exposes the explicit phase 14 families", () => {
-    expect(TASK_FAMILIES).toEqual(["research_writing", "browser_workflow", "competitive_research"]);
+    expect(TASK_FAMILIES).toEqual(["research_writing", "browser_workflow", "competitive_research", "content_pipeline"]);
     expect(normalizeTaskFamily("research_writing")).toBe("research_writing");
     expect(normalizeTaskFamily("browser_workflow")).toBe("browser_workflow");
     expect(normalizeTaskFamily("competitive_research")).toBe("competitive_research");
+    expect(normalizeTaskFamily("content_pipeline")).toBe("content_pipeline");
     expect(normalizeTaskFamily("something-else")).toBeNull();
   });
 
@@ -21,6 +22,7 @@ describe("taskFamily", () => {
     const researchPolicy = buildTaskFamilyPolicy("research_writing");
     const browserPolicy = buildTaskFamilyPolicy("browser_workflow");
     const competitivePolicy = buildTaskFamilyPolicy("competitive_research");
+    const contentPolicy = buildTaskFamilyPolicy("content_pipeline");
 
     expect(researchPolicy).toMatchObject({
       family: "research_writing",
@@ -44,6 +46,13 @@ describe("taskFamily", () => {
       requireVerification: true,
       requireArtifacts: true,
       sourceCoverageMinimum: 2
+    });
+    expect(contentPolicy).toMatchObject({
+      family: "content_pipeline",
+      automationPriority: "medium",
+      trustPriority: "high",
+      requireVerification: true,
+      requireArtifacts: true
     });
   });
 
@@ -97,6 +106,15 @@ describe("taskFamily", () => {
         task: "Compare multiple competitors across dimensions and produce a decision memo"
       })
     ).toBe("competitive_research");
+
+    expect(
+      inferTaskFamily({
+        intent: {
+          task_kind: "content_pipeline"
+        } as any,
+        task: "Create a content package with outline, main draft, channel variants, and production plan"
+      })
+    ).toBe("content_pipeline");
 
     expect(
       inferTaskFamily({

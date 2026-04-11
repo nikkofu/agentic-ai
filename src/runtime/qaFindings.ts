@@ -58,6 +58,11 @@ function normalizeFindingKind(value: unknown): QaFinding["kind"] {
     || value === "weak_comparative_reasoning"
     || value === "non_actionable_recommendation"
     || value === "bundle_artifact_missing"
+    || value === "draft_structure_invalid"
+    || value === "missing_channel_variant"
+    || value === "variant_message_mismatch"
+    || value === "production_plan_invalid"
+    || value === "missing_content_brief"
     ? value
     : "policy_violation";
 }

@@ -28,11 +28,114 @@ export async function auditFamilyDelivery(args: {
     return auditCompetitiveResearchDelivery(args.delivery, artifacts, args.familyPolicy);
   }
 
+  if (args.delivery.family === "content_pipeline") {
+    return auditContentPipelineDelivery(args.delivery, artifacts, args.familyPolicy);
+  }
+
   return {
     ...args.delivery,
     acceptance_proof: buildAcceptanceProof({
       decision: "accept",
       verifierSummary: "No family-specific verifier applied."
+    })
+  };
+}
+
+function auditContentPipelineDelivery(
+  delivery: FamilyDeliveryBundle,
+  artifacts: ArtifactTruth[],
+  familyPolicy?: TaskFamilyPolicy
+): FamilyDeliveryBundle {
+  const findings: QaFinding[] = [];
+  const outlineArtifact = artifacts.find((artifact) => /outline/i.test(artifact.path));
+  const primaryDraftArtifact = artifacts.find((artifact) => /primary-draft/i.test(artifact.path));
+  const channelVariantsArtifact = artifacts.find((artifact) => /channel-variants/i.test(artifact.path));
+  const productionPlanArtifact = artifacts.find((artifact) => /production-plan/i.test(artifact.path));
+
+  if (familyPolicy?.requireArtifacts) {
+    const missingBundleArtifacts = [outlineArtifact, primaryDraftArtifact, channelVariantsArtifact, productionPlanArtifact]
+      .some((artifact) => !artifact?.nonEmpty);
+    if (missingBundleArtifacts) {
+      findings.push({
+        severity: "critical",
+        kind: "bundle_artifact_missing",
+        summary: "Content pipeline bundle is missing one or more required artifacts.",
+        evidenceRefs: artifacts.map((artifact) => artifact.path)
+      });
+    }
+  }
+
+  const contentShape = parseContentArtifacts({
+    outlineArtifact,
+    primaryDraftArtifact,
+    channelVariantsArtifact,
+    productionPlanArtifact
+  });
+
+  if (!contentShape.objective || !contentShape.audience || !contentShape.keyMessage) {
+    findings.push({
+      severity: "major",
+      kind: "missing_content_brief",
+      summary: "Content pipeline bundle is missing objective, audience, or key message framing."
+    });
+  }
+
+  if (!contentShape.primaryDraftReady) {
+    findings.push({
+      severity: "critical",
+      kind: "draft_structure_invalid",
+      summary: "Primary draft artifact is missing or structurally empty."
+    });
+  }
+
+  if (contentShape.variantCount === 0) {
+    findings.push({
+      severity: "critical",
+      kind: "missing_channel_variant",
+      summary: "Content pipeline bundle must include at least one channel variant."
+    });
+  }
+
+  if (!contentShape.variantAnchoredToPrimaryDraft) {
+    findings.push({
+      severity: "major",
+      kind: "variant_message_mismatch",
+      summary: "Channel variants are not anchored back to the primary draft."
+    });
+  }
+
+  if (!contentShape.productionPlanReady) {
+    findings.push({
+      severity: "major",
+      kind: "production_plan_invalid",
+      summary: "Production plan is missing actionable next steps or distribution targets."
+    });
+  }
+
+  const decision = findings.some((finding) => finding.severity === "critical") ? "reject" : findings.length > 0 ? "revise" : "accept";
+  const blockingReason = delivery.blocking_reason ?? (
+    decision === "accept"
+      ? undefined
+      : decision === "revise"
+        ? "verifier_revision_required"
+        : "verifier_rejected"
+  );
+
+  return {
+    ...delivery,
+    status: decision === "accept" ? delivery.status : "blocked",
+    blocking_reason: blockingReason,
+    next_actions: decision === "accept" ? delivery.next_actions : [
+      ...(delivery.next_actions ?? []),
+      "Complete the content package bundle and address verifier findings before handoff."
+    ],
+    acceptance_proof: buildAcceptanceProof({
+      decision,
+      findings,
+      acceptedAt: decision === "accept" ? Date.now() : undefined,
+      verifierSummary: decision === "accept"
+        ? `Accepted content pipeline bundle with ${contentShape.variantCount} variants and ${contentShape.productionStepCount} production steps.`
+        : `Content pipeline verifier found ${findings.length} issue(s).`
     })
   };
 }
@@ -338,4 +441,85 @@ function normalizeStringArray(value: unknown): string[] {
   }
 
   return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+}
+
+function parseContentArtifacts(args: {
+  outlineArtifact?: ArtifactTruth;
+  primaryDraftArtifact?: ArtifactTruth;
+  channelVariantsArtifact?: ArtifactTruth;
+  productionPlanArtifact?: ArtifactTruth;
+}) {
+  const outlineText = readArtifactText(args.outlineArtifact);
+  const primaryDraftText = readArtifactText(args.primaryDraftArtifact);
+  const channelVariants = readArtifactJson(args.channelVariantsArtifact);
+  const productionPlan = readArtifactJson(args.productionPlanArtifact);
+
+  const variantCount = Array.isArray(channelVariants) ? channelVariants.length : 0;
+  const variantAnchoredToPrimaryDraft = Array.isArray(channelVariants)
+    && channelVariants.every((entry) => entry && typeof entry === "object" && (entry as Record<string, unknown>).source_anchor === "primary-draft");
+  const nextSteps = Array.isArray((productionPlan as Record<string, unknown> | null)?.next_steps)
+    ? ((productionPlan as Record<string, unknown>).next_steps as unknown[]).filter((value) => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const distributionTargets = Array.isArray((productionPlan as Record<string, unknown> | null)?.distribution_targets)
+    ? ((productionPlan as Record<string, unknown>).distribution_targets as unknown[]).filter((value) => typeof value === "string" && value.trim().length > 0)
+    : [];
+
+  return {
+    objective: findSectionValue(outlineText, "Objective") || readJsonString(productionPlan, "objective"),
+    audience: findSectionValue(outlineText, "Audience") || readJsonString(productionPlan, "audience"),
+    keyMessage: findSectionValue(outlineText, "Key Message") || firstJsonStringArrayValue(productionPlan, "key_messages"),
+    primaryDraftReady: primaryDraftText.trim().length > 0 && /#|[A-Za-z0-9]/.test(primaryDraftText),
+    variantCount,
+    variantAnchoredToPrimaryDraft,
+    productionPlanReady: nextSteps.length > 0 || distributionTargets.length > 0,
+    productionStepCount: nextSteps.length
+  };
+}
+
+function readArtifactText(artifact?: ArtifactTruth): string {
+  if (!artifact?.exists) {
+    return "";
+  }
+
+  try {
+    return require("node:fs").readFileSync(path.resolve(artifact.path), "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function readArtifactJson(artifact?: ArtifactTruth): unknown {
+  if (!artifact?.exists) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(require("node:fs").readFileSync(path.resolve(artifact.path), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function findSectionValue(markdown: string, heading: string): string {
+  const match = markdown.match(new RegExp(`##\\s+${heading}\\s*\\n([^#\\n][\\s\\S]*?)(?:\\n##\\s+|$)`, "i"));
+  return match?.[1]?.trim().split(/\r?\n/)[0]?.trim() ?? "";
+}
+
+function readJsonString(value: unknown, key: string): string {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  const entry = (value as Record<string, unknown>)[key];
+  return typeof entry === "string" ? entry : "";
+}
+
+function firstJsonStringArrayValue(value: unknown, key: string): string {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  const entry = (value as Record<string, unknown>)[key];
+  if (!Array.isArray(entry)) {
+    return "";
+  }
+  return typeof entry[0] === "string" ? entry[0] : "";
 }

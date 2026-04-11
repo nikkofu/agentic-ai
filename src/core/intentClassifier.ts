@@ -1,7 +1,7 @@
 import type { AgentRole } from "../types/runtime";
 
 export type TaskIntent = {
-  task_kind: "general" | "research_writing" | "competitive_research" | "code_execution" | "analysis";
+  task_kind: "general" | "research_writing" | "competitive_research" | "content_pipeline" | "code_execution" | "analysis";
   execution_mode: "single_node" | "tree";
   roles: AgentRole[];
   needs_verification: boolean;
@@ -25,7 +25,7 @@ export async function classifyIntent(args: {
         content: [
           "You are an intent classifier for an autonomous agent runtime.",
           "Return JSON only.",
-          'Schema: {"task_kind":"general|research_writing|competitive_research|code_execution|analysis","execution_mode":"single_node|tree","roles":["planner","researcher","coder","writer"],"needs_verification":true,"reason":"short reason"}',
+          'Schema: {"task_kind":"general|research_writing|competitive_research|content_pipeline|code_execution|analysis","execution_mode":"single_node|tree","roles":["planner","researcher","coder","writer"],"needs_verification":true,"reason":"short reason"}',
           "Choose tree only when the task clearly benefits from multiple roles or staged execution.",
           "Use needs_verification=true when the task depends on factual research, external claims, or source-backed content."
         ].join("\n")
@@ -92,6 +92,7 @@ function normalizeTaskKind(value: unknown): TaskIntent["task_kind"] | null {
   return value === "general" ||
     value === "research_writing" ||
     value === "competitive_research" ||
+    value === "content_pipeline" ||
     value === "code_execution" ||
     value === "analysis"
     ? value

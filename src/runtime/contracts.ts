@@ -2,7 +2,7 @@ import type { DagNode, DagWorkflow } from "../types/dag";
 import type { AgentRole } from "../types/runtime";
 import type { DeliveryBundle } from "../types/runtime";
 
-export const TASK_FAMILIES = ["research_writing", "browser_workflow", "competitive_research"] as const;
+export const TASK_FAMILIES = ["research_writing", "browser_workflow", "competitive_research", "content_pipeline"] as const;
 
 export type TaskFamily = (typeof TASK_FAMILIES)[number];
 
@@ -52,7 +52,12 @@ export type QaFinding = {
     | "insufficient_evidence_mapping"
     | "weak_comparative_reasoning"
     | "non_actionable_recommendation"
-    | "bundle_artifact_missing";
+    | "bundle_artifact_missing"
+    | "draft_structure_invalid"
+    | "missing_channel_variant"
+    | "variant_message_mismatch"
+    | "production_plan_invalid"
+    | "missing_content_brief";
   summary: string;
   evidenceRefs?: string[];
   nodeId?: string;

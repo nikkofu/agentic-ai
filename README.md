@@ -2,7 +2,7 @@
 
 `agentic-ai` 是一个基于 TypeScript 开发的高性能、可观测且具备韧性的多 Agent 调度运行时内核。它旨在为复杂的 Agent 任务提供结构化的执行环境，支持从简单的单节点任务到分布式的复杂 DAG 工作流调度。
 
-当前版本：`1.10.0`
+当前版本：`1.11.0`
 
 ## 🚀 核心特性
 
@@ -53,6 +53,8 @@
 - **Phase 19 Completion Harness**：runtime 现在会记录 benchmark/completion evidence、聚合 task-family completion/acceptance rate，并把 release gate readiness 暴露到 inspection 与 dashboard。
 - **Phase 20 Operator Intelligence**：Dashboard 现在具备面向企业管理员的 Executive Layer 与面向高级操作者的 Operator Layer，统一呈现 outcome、economics、risk、trust、queue、objective performance 与 runtime drilldown。
 - **Phase 21A Competitive Research**：新增 `competitive_research` 一等任务族，具备 bundle 交付包、family-specific verifier、`accept / revise / reject` 验收语义，以及 competitive scope truth。
+- **Phase 21B Content Pipeline**：新增 `content_pipeline` 一等任务族，具备 `outline / primary draft / channel variants / production plan` 四件套 bundle、family-specific verifier，以及内容生产 package truth。
+- **Content Package Truth**：inspection 和 Dashboard 现在会暴露 `variantCount / productionStepCount / bundleComplete / objective / audience / keyMessage`，让内容生产交付具备可验证的结构化真相。
 - **Competitive Research Bundle Truth**：inspection 和 Dashboard 现在会暴露 `targets / dimensions / recommendations / bundleComplete / referencesPreview`，让对比研究不再只是单篇报告文本。
 
 ## 🖥️ 可视化 Dashboard
@@ -124,6 +126,7 @@ npx tsx src/cli/runTask.ts --repl
 - [x] **Phase 19**: Completion Harness，benchmark/completion ledger、task-family scorecard、release gate、completion evidence product surface。
 - [x] **Phase 20**: Operator Intelligence，Executive Layer、Operator Layer、outcome/economics/risk/trust metrics、objective performance、intervention queue summary。
 - [x] **Phase 21A**: Competitive Research，family intent/policy、bundle artifacts、competitive verifier、inspection truth、accept/revise/reject proofs。
+- [x] **Phase 21B**: Content Pipeline，content package bundle、content verifier、inspection truth、accept/revise/reject proofs。
 
 ## 📄 开源协议
 

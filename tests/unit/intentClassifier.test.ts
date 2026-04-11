@@ -70,4 +70,29 @@ describe("intent classifier", () => {
     expect(result.roles).toEqual(["planner", "researcher", "writer"]);
     expect(result.needs_verification).toBe(true);
   });
+
+  it("accepts content pipeline as a first-class family intent", async () => {
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          task_kind: "content_pipeline",
+          execution_mode: "tree",
+          roles: ["planner", "writer"],
+          needs_verification: true,
+          reason: "content package required"
+        })
+      })
+    };
+
+    const result = await classifyIntent({
+      task: "生成一套内容生产包，包括提纲、主稿、渠道变体和发布计划",
+      runtime: runtime as any,
+      runtimeInput: { model: "mock-model" }
+    });
+
+    expect(result.task_kind).toBe("content_pipeline");
+    expect(result.execution_mode).toBe("tree");
+    expect(result.roles).toEqual(["planner", "writer"]);
+    expect(result.needs_verification).toBe(true);
+  });
 });

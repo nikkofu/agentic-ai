@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.11.0] - 2026-04-11
+### Added
+- **Phase 21B Content Pipeline Family**: Added `content_pipeline` as a first-class task family with its own intent, family policy, bundle finalization, verifier taxonomy, and lifecycle surface.
+- **Content Package Bundle**: Added structured content-package generation for `outline.md`, `primary-draft.md`, `channel-variants.json`, and `production-plan.json`.
+- **Content Pipeline Proofs**: Added executor-level proofs for `accept / revise / reject` outcomes plus lifecycle inspection coverage for variant count, production-step count, bundle completeness, and content brief previews.
+
+### Changed
+- **Family Inspection Enrichment**: `taskLifecycle.inspectTask()` and the dashboard lifecycle panel now surface content-pipeline package truth alongside research-writing, browser workflow, and competitive research families.
+
 ## [1.10.0] - 2026-04-11
 ### Added
 - **Phase 21A Competitive Research Family**: Added `competitive_research` as a first-class task family with its own intent, family policy, delivery bundle, verifier taxonomy, and completion-safe runtime path.

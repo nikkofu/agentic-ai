@@ -3,10 +3,15 @@ import type { TaskFamily, TaskFamilyPolicy } from "./contracts";
 
 export type { TaskFamily, TaskFamilyPolicy } from "./contracts";
 
-export const TASK_FAMILIES = ["research_writing", "browser_workflow", "competitive_research"] as const;
+export const TASK_FAMILIES = ["research_writing", "browser_workflow", "competitive_research", "content_pipeline"] as const;
 
 export function normalizeTaskFamily(value: unknown): TaskFamily | null {
-  return value === "research_writing" || value === "browser_workflow" || value === "competitive_research" ? value : null;
+  return value === "research_writing" ||
+    value === "browser_workflow" ||
+    value === "competitive_research" ||
+    value === "content_pipeline"
+    ? value
+    : null;
 }
 
 export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
@@ -37,6 +42,14 @@ export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
         requireArtifacts: true,
         sourceCoverageMinimum: 2
       };
+    case "content_pipeline":
+      return {
+        family,
+        automationPriority: "medium",
+        trustPriority: "high",
+        requireVerification: true,
+        requireArtifacts: true
+      };
   }
 }
 
@@ -62,6 +75,10 @@ export function inferTaskFamily(args: {
     return "competitive_research";
   }
 
+  if (matchesContentPipelineTask(task)) {
+    return "content_pipeline";
+  }
+
   if (matchesBrowserTask(task)) {
     return "browser_workflow";
   }
@@ -75,6 +92,10 @@ function matchesResearchTask(task: string): boolean {
 
 function matchesCompetitiveResearchTask(task: string): boolean {
   return /competitive|competitor|compare|comparison|vs\.?|versus|market landscape|positioning|benchmark/.test(task);
+}
+
+function matchesContentPipelineTask(task: string): boolean {
+  return /content package|content pipeline|channel variants|production plan|content brief|content calendar|outline.+primary draft|primary draft.+outline/.test(task);
 }
 
 function matchesBrowserTask(task: string): boolean {

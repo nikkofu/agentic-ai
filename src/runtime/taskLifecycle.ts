@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
+import { summarizeContentPackage, type ContentPackageSummary } from "./contentPipeline";
 import { summarizeCompetitiveResearchReport, type CompetitiveResearchSummary } from "./competitiveResearch";
 import { computeResearchSourceCoverage } from "./researchWriting";
 import { summarizeBrowserWorkflow } from "./browserWorkflow";
@@ -157,6 +158,11 @@ type RuntimeInspector = {
     dimensionCount: number;
     recommendationCount: number;
     bundleComplete: boolean;
+    variantCount: number;
+    productionStepCount: number;
+    objectivePreview: string;
+    audiencePreview: string;
+    keyMessagePreview: string;
   } | null;
   memory: {
     personal: { count: number; latest: string[] };
@@ -364,6 +370,12 @@ async function summarizeRuntimeInspector(
         artifacts: deliveryArtifacts
       })
     : null;
+  const contentSummary = family === "content_pipeline"
+    ? summarizeContentPackage({
+        report: String(deliveryPayload?.final_result ?? ""),
+        artifacts: deliveryArtifacts
+      })
+    : null;
   const verificationPreview = normalizedVerification.map((record) => record.summary).slice(0, 3);
   const referencesPreview = normalizedVerification
     .filter((record) => record.kind === "source")
@@ -388,7 +400,8 @@ async function summarizeRuntimeInspector(
           sourceCoverage,
           referencesPreview,
           browserSummary,
-          competitiveSummary
+          competitiveSummary,
+          contentSummary
         }),
         acceptanceDecision: acceptanceProof?.decision ?? "",
         verifierSummary: acceptanceProof?.verifierSummary ?? "",
@@ -400,7 +413,12 @@ async function summarizeRuntimeInspector(
         targetCount: competitiveSummary?.comparisonTargets.length ?? 0,
         dimensionCount: competitiveSummary?.comparisonDimensions.length ?? 0,
         recommendationCount: competitiveSummary?.recommendations.length ?? 0,
-        bundleComplete: competitiveSummary?.bundleComplete ?? false
+        bundleComplete: competitiveSummary?.bundleComplete ?? contentSummary?.bundleComplete ?? false,
+        variantCount: contentSummary?.variantCount ?? 0,
+        productionStepCount: contentSummary?.productionStepCount ?? 0,
+        objectivePreview: contentSummary?.objective ?? "",
+        audiencePreview: contentSummary?.audience ?? "",
+        keyMessagePreview: contentSummary?.keyMessage ?? ""
       }
     : null;
   const totalCostUsd = normalizeTelemetryCost(latestTerminal?.payload.telemetry);
@@ -680,6 +698,12 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
       : `Competitive research blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
   }
 
+  if (finalDelivery.family === "content_pipeline" && (finalDelivery.status === "blocked" || finalDelivery.blockingReason)) {
+    return finalDelivery.acceptanceDecision === "reject" || finalDelivery.acceptanceDecision === "revise"
+      ? `Content pipeline ${finalDelivery.acceptanceDecision}: ${finalDelivery.verifierSummary || finalDelivery.blockingReason || "unknown_reason"}`
+      : `Content pipeline blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+  }
+
   if (finalDelivery.status === "blocked" || finalDelivery.blockingReason) {
     return `Task blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
   }
@@ -700,6 +724,12 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
     return finalDelivery.acceptanceDecision === "accept"
       ? `Competitive research accepted with ${finalDelivery.targetCount} targets, ${finalDelivery.dimensionCount} dimensions, and ${finalDelivery.sourceCoverage} verified sources`
       : `Competitive research completed with ${finalDelivery.targetCount} targets, ${finalDelivery.dimensionCount} dimensions, and ${finalDelivery.sourceCoverage} verified sources`;
+  }
+
+  if (finalDelivery.family === "content_pipeline" && finalDelivery.status === "completed") {
+    return finalDelivery.acceptanceDecision === "accept"
+      ? `Content pipeline accepted with ${finalDelivery.variantCount} variants and ${finalDelivery.productionStepCount} production steps`
+      : `Content pipeline completed with ${finalDelivery.variantCount} variants and ${finalDelivery.productionStepCount} production steps`;
   }
 
   if (finalDelivery.status === "completed") {
@@ -746,6 +776,14 @@ function buildActionHint(finalDelivery: RuntimeInspector["finalDelivery"]) {
     return "Do not hand off this competitive research bundle until the required artifacts and evidence are complete.";
   }
 
+  if (finalDelivery.family === "content_pipeline" && finalDelivery.acceptanceDecision === "revise") {
+    return "Strengthen the content brief, variants, or production plan before re-submitting the package.";
+  }
+
+  if (finalDelivery.family === "content_pipeline" && finalDelivery.acceptanceDecision === "reject") {
+    return "Do not hand off this content package until the required artifacts and production checks are complete.";
+  }
+
   if (finalDelivery.blockingReason === "policy_verification_required" || finalDelivery.blockingReason === "verification_missing") {
     return "Add verification evidence before attempting final delivery again.";
   }
@@ -767,6 +805,7 @@ function buildRunProofSummary(args: {
   referencesPreview: string[];
   browserSummary: ReturnType<typeof summarizeBrowserWorkflow>;
   competitiveSummary: CompetitiveResearchSummary | null;
+  contentSummary: ContentPackageSummary | null;
 }) {
   if (args.family === "research_writing") {
     return `source_coverage=${args.sourceCoverage}; references=${args.referencesPreview.length}`;
@@ -778,6 +817,10 @@ function buildRunProofSummary(args: {
 
   if (args.family === "competitive_research") {
     return `targets=${args.competitiveSummary?.comparisonTargets.length ?? 0}; dimensions=${args.competitiveSummary?.comparisonDimensions.length ?? 0}; recommendations=${args.competitiveSummary?.recommendations.length ?? 0}; references=${args.referencesPreview.length}`;
+  }
+
+  if (args.family === "content_pipeline") {
+    return `variants=${args.contentSummary?.variantCount ?? 0}; production_steps=${args.contentSummary?.productionStepCount ?? 0}; bundle=${args.contentSummary?.bundleComplete ? "complete" : "incomplete"}`;
   }
 
   return "";
