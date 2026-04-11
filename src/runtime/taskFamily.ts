@@ -3,10 +3,10 @@ import type { TaskFamily, TaskFamilyPolicy } from "./contracts";
 
 export type { TaskFamily, TaskFamilyPolicy } from "./contracts";
 
-export const TASK_FAMILIES = ["research_writing", "browser_workflow"] as const;
+export const TASK_FAMILIES = ["research_writing", "browser_workflow", "competitive_research"] as const;
 
 export function normalizeTaskFamily(value: unknown): TaskFamily | null {
-  return value === "research_writing" || value === "browser_workflow" ? value : null;
+  return value === "research_writing" || value === "browser_workflow" || value === "competitive_research" ? value : null;
 }
 
 export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
@@ -27,6 +27,15 @@ export function buildTaskFamilyPolicy(family: TaskFamily): TaskFamilyPolicy {
         trustPriority: "medium",
         requireVerification: true,
         requireArtifacts: true
+      };
+    case "competitive_research":
+      return {
+        family,
+        automationPriority: "medium",
+        trustPriority: "high",
+        requireVerification: true,
+        requireArtifacts: true,
+        sourceCoverageMinimum: 2
       };
   }
 }
@@ -49,6 +58,10 @@ export function inferTaskFamily(args: {
     return "research_writing";
   }
 
+  if (matchesCompetitiveResearchTask(task)) {
+    return "competitive_research";
+  }
+
   if (matchesBrowserTask(task)) {
     return "browser_workflow";
   }
@@ -58,6 +71,10 @@ export function inferTaskFamily(args: {
 
 function matchesResearchTask(task: string): boolean {
   return /research|article|summary|report|citation|source|analysis|paper|essay|literature|study/.test(task);
+}
+
+function matchesCompetitiveResearchTask(task: string): boolean {
+  return /competitive|competitor|compare|comparison|vs\.?|versus|market landscape|positioning|benchmark/.test(task);
 }
 
 function matchesBrowserTask(task: string): boolean {

@@ -9,6 +9,7 @@ import { createExecutionContext } from "./context";
 import { applyFamilyDeliveryPolicy, createFamilyDeliveryBundle, normalizeDeliveryProof } from "./deliveryHarness";
 import { auditFamilyDelivery } from "./familyAudit";
 import { buildTaskFamilyPolicy, inferTaskFamily, normalizeTaskFamily } from "./taskFamily";
+import { finalizeCompetitiveResearchDelivery } from "./competitiveResearch";
 import { finalizeResearchWritingDelivery } from "./researchWriting";
 import type { ExecutionContext, FamilyDeliveryBundle, JoinDecision, PlannerPolicy, TaskFamily, TaskFamilyPolicy } from "./contracts";
 import { evaluateAcceptanceProof } from "../eval/evaluator";
@@ -449,6 +450,19 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           delivery: familyDelivery
         });
       }
+      if ("family" in familyDelivery && familyDelivery.family === "competitive_research") {
+        familyDelivery = await finalizeCompetitiveResearchDelivery({
+          taskId,
+          taskInput: input.input,
+          delivery: familyDelivery
+        });
+      }
+      if ("family" in familyDelivery) {
+        familyDelivery = applyFamilyDeliveryPolicy({
+          delivery: familyDelivery,
+          familyPolicy
+        });
+      }
       if ("family" in familyDelivery) {
         familyDelivery = await auditFamilyDelivery({
           delivery: familyDelivery,
@@ -548,6 +562,19 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           taskId: input.taskId,
           taskInput,
           delivery: familyDelivery
+        });
+      }
+      if ("family" in familyDelivery && familyDelivery.family === "competitive_research") {
+        familyDelivery = await finalizeCompetitiveResearchDelivery({
+          taskId: input.taskId,
+          taskInput,
+          delivery: familyDelivery
+        });
+      }
+      if ("family" in familyDelivery) {
+        familyDelivery = applyFamilyDeliveryPolicy({
+          delivery: familyDelivery,
+          familyPolicy
         });
       }
       if ("family" in familyDelivery) {
@@ -759,17 +786,13 @@ function finalizeTaskFamilyDelivery(args: {
     family: args.family,
     delivery: args.delivery
   });
-  const policyAppliedDelivery = applyFamilyDeliveryPolicy({
-    delivery: familyDelivery,
-    familyPolicy: args.familyPolicy
-  });
 
   return {
-    ...policyAppliedDelivery,
+    ...familyDelivery,
     delivery_proof: normalizeDeliveryProof({
       family: args.family,
-      proof: policyAppliedDelivery.delivery_proof,
-      delivery: policyAppliedDelivery
+      proof: familyDelivery.delivery_proof,
+      delivery: familyDelivery
     })
   };
 }

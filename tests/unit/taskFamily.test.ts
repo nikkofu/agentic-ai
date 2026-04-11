@@ -10,15 +10,17 @@ import type { FamilyDeliveryBundle, VerificationRecord } from "../../src/runtime
 
 describe("taskFamily", () => {
   it("exposes the explicit phase 14 families", () => {
-    expect(TASK_FAMILIES).toEqual(["research_writing", "browser_workflow"]);
+    expect(TASK_FAMILIES).toEqual(["research_writing", "browser_workflow", "competitive_research"]);
     expect(normalizeTaskFamily("research_writing")).toBe("research_writing");
     expect(normalizeTaskFamily("browser_workflow")).toBe("browser_workflow");
+    expect(normalizeTaskFamily("competitive_research")).toBe("competitive_research");
     expect(normalizeTaskFamily("something-else")).toBeNull();
   });
 
-  it("builds trust-first and automation-first defaults for the two families", () => {
+  it("builds trust-first and automation-first defaults for the supported families", () => {
     const researchPolicy = buildTaskFamilyPolicy("research_writing");
     const browserPolicy = buildTaskFamilyPolicy("browser_workflow");
+    const competitivePolicy = buildTaskFamilyPolicy("competitive_research");
 
     expect(researchPolicy).toMatchObject({
       family: "research_writing",
@@ -34,6 +36,14 @@ describe("taskFamily", () => {
       trustPriority: "medium",
       requireVerification: true,
       requireArtifacts: true
+    });
+    expect(competitivePolicy).toMatchObject({
+      family: "competitive_research",
+      automationPriority: "medium",
+      trustPriority: "high",
+      requireVerification: true,
+      requireArtifacts: true,
+      sourceCoverageMinimum: 2
     });
   });
 
@@ -78,6 +88,15 @@ describe("taskFamily", () => {
         task: "Research and write a summary"
       })
     ).toBe("research_writing");
+
+    expect(
+      inferTaskFamily({
+        intent: {
+          task_kind: "competitive_research"
+        } as any,
+        task: "Compare multiple competitors across dimensions and produce a decision memo"
+      })
+    ).toBe("competitive_research");
 
     expect(
       inferTaskFamily({

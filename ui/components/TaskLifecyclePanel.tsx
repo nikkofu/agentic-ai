@@ -63,6 +63,10 @@ type InspectionResult = {
       }>;
       verificationPreview: string[];
       referencesPreview: string[];
+      targetCount: number;
+      dimensionCount: number;
+      recommendationCount: number;
+      bundleComplete: boolean;
     } | null;
     memory: {
       personal: { count: number; latest: string[] };
@@ -436,6 +440,15 @@ export function TaskLifecyclePanel({ taskId }: TaskLifecyclePanelProps) {
               <InspectorLine label="last successful step" value={inspection.runtimeInspector.finalDelivery.lastSuccessfulStep} />
               <InspectorLine label="validation" value={inspection.runtimeInspector.finalDelivery.validationSummary} />
               <InspectorLine label="recovery attempts" value={String(inspection.runtimeInspector.finalDelivery.recoveryAttempts)} />
+            </>
+          ) : null}
+          {inspection?.runtimeInspector?.finalDelivery?.family === "competitive_research" ? (
+            <>
+              <InspectorLine label="targets" value={String(inspection.runtimeInspector.finalDelivery.targetCount)} />
+              <InspectorLine label="dimensions" value={String(inspection.runtimeInspector.finalDelivery.dimensionCount)} />
+              <InspectorLine label="recommendations" value={String(inspection.runtimeInspector.finalDelivery.recommendationCount)} />
+              <InspectorLine label="bundle complete" value={inspection.runtimeInspector.finalDelivery.bundleComplete ? "yes" : "no"} />
+              <InspectorLine label="references" value={inspection.runtimeInspector.finalDelivery.referencesPreview.join(", ")} />
             </>
           ) : null}
         </InspectorCard>

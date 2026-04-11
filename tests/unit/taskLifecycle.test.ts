@@ -271,7 +271,11 @@ describe("task lifecycle", () => {
         findingsPreview: [],
         artifacts: [],
         verificationPreview: ["https://example.com/source"],
-        referencesPreview: []
+        referencesPreview: [],
+        targetCount: 0,
+        dimensionCount: 0,
+        recommendationCount: 0,
+        bundleComplete: false
       },
       plan: {
         nodeCount: 1,
@@ -731,6 +735,90 @@ describe("task lifecycle", () => {
     expect(inspection.runtimeInspector?.finalDelivery?.findingsPreview).toEqual(["submit button missing"]);
     expect(inspection.runtimeInspector?.explanation).toBe("Browser workflow revise: Browser verifier found 1 issue(s).");
     expect(inspection.runtimeInspector?.actionHint).toBe("Retry the workflow, re-locate the target, or reload the page before resuming.");
+  });
+
+  it("builds family-aware competitive research summaries", async () => {
+    const lifecycle = createTaskLifecycle({
+      executor: {
+        execute: vi.fn(),
+        resume: vi.fn()
+      } as any,
+      taskStore: {
+        getGraph: vi.fn().mockResolvedValue({
+          taskId: "task-family-competitive",
+          status: "completed",
+          nodes: {
+            "node-root": { state: "completed", role: "planner" }
+          }
+        }),
+        getEvents: vi.fn().mockResolvedValue([
+          {
+            type: "TaskClosed",
+            payload: {
+              task_id: "task-family-competitive",
+              state: "completed",
+              delivery: {
+                status: "completed",
+                final_result: `# Competitive Research
+
+## Subject
+Agentic AI
+
+## Comparison Targets
+- OpenClaw
+- Hermes Agent
+
+## Comparison Dimensions
+- positioning
+- trust
+
+## Executive Summary
+Agentic AI is differentiated by trusted delivery.
+
+## Key Findings
+- Agentic AI is stronger on delivery trust.
+- Hermes Agent is stronger on memory automation.
+
+## Recommendations
+- Keep pushing trusted delivery.
+`,
+                family: "competitive_research",
+                artifacts: [
+                  "artifacts/task-family-competitive-report.md",
+                  "artifacts/task-family-competitive-summary.md",
+                  "artifacts/task-family-competitive-comparison.json",
+                  "artifacts/task-family-competitive-references.json"
+                ],
+                verification: [
+                  { kind: "source", sourceId: "a", summary: "OpenClaw README", passed: true },
+                  { kind: "source", sourceId: "b", summary: "Hermes README", passed: true }
+                ],
+                acceptance_proof: {
+                  decision: "accept",
+                  verifierSummary: "Accepted competitive research bundle with 2 targets and 2 verified sources.",
+                  findings: []
+                },
+                delivery_proof: {
+                  family: "competitive_research",
+                  steps: []
+                }
+              }
+            }
+          }
+        ])
+      } as any
+    });
+
+    const inspection = await lifecycle.inspectTask("task-family-competitive");
+
+    expect(inspection.runtimeInspector?.finalDelivery?.family).toBe("competitive_research");
+    expect(inspection.runtimeInspector?.finalDelivery?.sourceCoverage).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.targetCount).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.dimensionCount).toBe(2);
+    expect(inspection.runtimeInspector?.finalDelivery?.recommendationCount).toBe(1);
+    expect(inspection.runtimeInspector?.finalDelivery?.bundleComplete).toBe(true);
+    expect(inspection.runtimeInspector?.finalDelivery?.runProofSummary).toBe("targets=2; dimensions=2; recommendations=1; references=2");
+    expect(inspection.runtimeInspector?.explanation).toBe("Competitive research accepted with 2 targets, 2 dimensions, and 2 verified sources");
   });
 
   it("includes operator intelligence aggregates in the runtime inspector", async () => {

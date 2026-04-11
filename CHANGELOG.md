@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.10.0] - 2026-04-11
+### Added
+- **Phase 21A Competitive Research Family**: Added `competitive_research` as a first-class task family with its own intent, family policy, delivery bundle, verifier taxonomy, and completion-safe runtime path.
+- **Competitive Research Bundle**: Added bundle generation for `report.md`, `summary.md`, `comparison.json`, and `references.json` so comparative research can be handed off as a structured package instead of a single prose blob.
+- **Competitive Research Proofs**: Added executor-level proofs for `accept / revise / reject` outcomes plus lifecycle inspection coverage for target count, dimension count, recommendation count, bundle completeness, and comparative references.
+
+### Changed
+- **Family Policy Ordering**: Family-specific artifact generation now happens before family policy enforcement, preventing artifact-required families from being blocked before their bundle is materialized.
+- **Runtime Inspection Enrichment**: `taskLifecycle.inspectTask()` and the dashboard lifecycle panel now surface competitive research bundle truth alongside existing research-writing and browser workflow family views.
+
 ## [1.9.0] - 2026-04-11
 ### Added
 - **Phase 20 Operator Intelligence**: Added a business-facing operator intelligence layer that exposes outcome, economics, risk, trust, human-load, queue, and objective summaries alongside the existing runtime truth model.

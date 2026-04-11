@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { DagWorkflow } from "../types/dag";
 import type { DeliveryBundle } from "../types/runtime";
+import { summarizeCompetitiveResearchReport, type CompetitiveResearchSummary } from "./competitiveResearch";
 import { computeResearchSourceCoverage } from "./researchWriting";
 import { summarizeBrowserWorkflow } from "./browserWorkflow";
 import type { AcceptanceProof, DeliveryProofStep, FamilyDeliveryBundle, VerificationRecord } from "./contracts";
@@ -152,6 +153,10 @@ type RuntimeInspector = {
     }>;
     verificationPreview: string[];
     referencesPreview: string[];
+    targetCount: number;
+    dimensionCount: number;
+    recommendationCount: number;
+    bundleComplete: boolean;
   } | null;
   memory: {
     personal: { count: number; latest: string[] };
@@ -353,6 +358,12 @@ async function summarizeRuntimeInspector(
   const family = typeof deliveryPayload?.family === "string" ? deliveryPayload.family : "";
   const acceptanceProof = normalizeAcceptanceProof(deliveryPayload?.acceptance_proof);
   const sourceCoverage = computeResearchSourceCoverage(normalizedVerification);
+  const competitiveSummary = family === "competitive_research"
+    ? summarizeCompetitiveResearchReport({
+        report: String(deliveryPayload?.final_result ?? ""),
+        artifacts: deliveryArtifacts
+      })
+    : null;
   const verificationPreview = normalizedVerification.map((record) => record.summary).slice(0, 3);
   const referencesPreview = normalizedVerification
     .filter((record) => record.kind === "source")
@@ -376,7 +387,8 @@ async function summarizeRuntimeInspector(
           family,
           sourceCoverage,
           referencesPreview,
-          browserSummary
+          browserSummary,
+          competitiveSummary
         }),
         acceptanceDecision: acceptanceProof?.decision ?? "",
         verifierSummary: acceptanceProof?.verifierSummary ?? "",
@@ -384,7 +396,11 @@ async function summarizeRuntimeInspector(
         findingsPreview: acceptanceProof?.findings.map((finding) => finding.summary).slice(0, 3) ?? [],
         artifacts: await inspectArtifacts(deliveryArtifacts),
         verificationPreview,
-        referencesPreview
+        referencesPreview,
+        targetCount: competitiveSummary?.comparisonTargets.length ?? 0,
+        dimensionCount: competitiveSummary?.comparisonDimensions.length ?? 0,
+        recommendationCount: competitiveSummary?.recommendations.length ?? 0,
+        bundleComplete: competitiveSummary?.bundleComplete ?? false
       }
     : null;
   const totalCostUsd = normalizeTelemetryCost(latestTerminal?.payload.telemetry);
@@ -658,6 +674,12 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
       : `Browser workflow blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
   }
 
+  if (finalDelivery.family === "competitive_research" && (finalDelivery.status === "blocked" || finalDelivery.blockingReason)) {
+    return finalDelivery.acceptanceDecision === "reject" || finalDelivery.acceptanceDecision === "revise"
+      ? `Competitive research ${finalDelivery.acceptanceDecision}: ${finalDelivery.verifierSummary || finalDelivery.blockingReason || "unknown_reason"}`
+      : `Competitive research blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
+  }
+
   if (finalDelivery.status === "blocked" || finalDelivery.blockingReason) {
     return `Task blocked: ${finalDelivery.blockingReason || "unknown_reason"}`;
   }
@@ -672,6 +694,12 @@ function buildRuntimeExplanation(finalDelivery: RuntimeInspector["finalDelivery"
     return finalDelivery.acceptanceDecision === "accept"
       ? `Browser workflow accepted in ${finalDelivery.stepCount} steps with validation: ${finalDelivery.validationSummary || "passed"}`
       : `Browser workflow completed in ${finalDelivery.stepCount} steps with validation: ${finalDelivery.validationSummary || "passed"}`;
+  }
+
+  if (finalDelivery.family === "competitive_research" && finalDelivery.status === "completed") {
+    return finalDelivery.acceptanceDecision === "accept"
+      ? `Competitive research accepted with ${finalDelivery.targetCount} targets, ${finalDelivery.dimensionCount} dimensions, and ${finalDelivery.sourceCoverage} verified sources`
+      : `Competitive research completed with ${finalDelivery.targetCount} targets, ${finalDelivery.dimensionCount} dimensions, and ${finalDelivery.sourceCoverage} verified sources`;
   }
 
   if (finalDelivery.status === "completed") {
@@ -710,6 +738,14 @@ function buildActionHint(finalDelivery: RuntimeInspector["finalDelivery"]) {
     return "Do not hand off this workflow run until the verifier findings are resolved.";
   }
 
+  if (finalDelivery.family === "competitive_research" && finalDelivery.acceptanceDecision === "revise") {
+    return "Fill in missing comparison dimensions or recommendations before re-submitting the bundle.";
+  }
+
+  if (finalDelivery.family === "competitive_research" && finalDelivery.acceptanceDecision === "reject") {
+    return "Do not hand off this competitive research bundle until the required artifacts and evidence are complete.";
+  }
+
   if (finalDelivery.blockingReason === "policy_verification_required" || finalDelivery.blockingReason === "verification_missing") {
     return "Add verification evidence before attempting final delivery again.";
   }
@@ -730,6 +766,7 @@ function buildRunProofSummary(args: {
   sourceCoverage: number;
   referencesPreview: string[];
   browserSummary: ReturnType<typeof summarizeBrowserWorkflow>;
+  competitiveSummary: CompetitiveResearchSummary | null;
 }) {
   if (args.family === "research_writing") {
     return `source_coverage=${args.sourceCoverage}; references=${args.referencesPreview.length}`;
@@ -737,6 +774,10 @@ function buildRunProofSummary(args: {
 
   if (args.family === "browser_workflow") {
     return `steps=${args.browserSummary.stepCount}; last_successful=${args.browserSummary.lastSuccessfulStep || "none"}; validation=${args.browserSummary.validationSummary || "none"}`;
+  }
+
+  if (args.family === "competitive_research") {
+    return `targets=${args.competitiveSummary?.comparisonTargets.length ?? 0}; dimensions=${args.competitiveSummary?.comparisonDimensions.length ?? 0}; recommendations=${args.competitiveSummary?.recommendations.length ?? 0}; references=${args.referencesPreview.length}`;
   }
 
   return "";

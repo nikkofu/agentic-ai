@@ -52,6 +52,12 @@ function normalizeFindingKind(value: unknown): QaFinding["kind"] {
     || value === "browser_outcome_mismatch"
     || value === "browser_recovery_exhausted"
     || value === "policy_violation"
+    || value === "missing_comparison_target"
+    || value === "missing_dimension_coverage"
+    || value === "insufficient_evidence_mapping"
+    || value === "weak_comparative_reasoning"
+    || value === "non_actionable_recommendation"
+    || value === "bundle_artifact_missing"
     ? value
     : "policy_violation";
 }

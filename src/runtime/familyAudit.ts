@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { buildAcceptanceProof } from "./qaFindings";
+import { buildCompetitiveComparisonArtifact, computeCompetitiveSourceCoverage } from "./competitiveResearch";
 import { computeResearchSourceCoverage } from "./researchWriting";
 import type { FamilyDeliveryBundle, QaFinding, TaskFamilyPolicy, VerificationRecord } from "./contracts";
 
@@ -21,6 +22,10 @@ export async function auditFamilyDelivery(args: {
 
   if (args.delivery.family === "browser_workflow") {
     return auditBrowserDelivery(args.delivery, artifacts, args.familyPolicy);
+  }
+
+  if (args.delivery.family === "competitive_research") {
+    return auditCompetitiveResearchDelivery(args.delivery, artifacts, args.familyPolicy);
   }
 
   return {
@@ -104,6 +109,108 @@ function auditResearchDelivery(
   };
 }
 
+function auditCompetitiveResearchDelivery(
+  delivery: FamilyDeliveryBundle,
+  artifacts: ArtifactTruth[],
+  familyPolicy?: TaskFamilyPolicy
+): FamilyDeliveryBundle {
+  const findings: QaFinding[] = [];
+  const sourceCoverage = computeCompetitiveSourceCoverage(delivery.verification);
+  const reportArtifact = artifacts.find((artifact) => /report/i.test(artifact.path));
+  const summaryArtifact = artifacts.find((artifact) => /summary/i.test(artifact.path));
+  const comparisonArtifact = artifacts.find((artifact) => /comparison/i.test(artifact.path));
+  const referencesArtifact = artifacts.find((artifact) => /reference/i.test(artifact.path));
+
+  if (familyPolicy?.requireArtifacts) {
+    const missingBundleArtifacts = [reportArtifact, summaryArtifact, comparisonArtifact, referencesArtifact]
+      .some((artifact) => !artifact?.nonEmpty);
+    if (missingBundleArtifacts) {
+      findings.push({
+        severity: "critical",
+        kind: "bundle_artifact_missing",
+        summary: "Competitive research bundle is missing one or more required artifacts.",
+        evidenceRefs: artifacts.map((artifact) => artifact.path)
+      });
+    }
+  }
+
+  if (!delivery.verification.some((record) => record.kind === "source" && record.passed)) {
+    findings.push({
+      severity: "critical",
+      kind: "insufficient_evidence_mapping",
+      summary: "Competitive research delivery does not include passing source verification."
+    });
+  }
+
+  if (typeof familyPolicy?.sourceCoverageMinimum === "number" && sourceCoverage < familyPolicy.sourceCoverageMinimum) {
+    findings.push({
+      severity: "major",
+      kind: "insufficient_evidence_mapping",
+      summary: `Competitive research only verified ${sourceCoverage} distinct sources, below the required ${familyPolicy.sourceCoverageMinimum}.`
+    });
+  }
+
+  const comparisonShape = parseComparisonArtifact(comparisonArtifact, delivery.final_result);
+  if (comparisonShape.comparisonTargets.length < 2) {
+    findings.push({
+      severity: "critical",
+      kind: "missing_comparison_target",
+      summary: "Competitive research must compare at least two targets."
+    });
+  }
+
+  if (comparisonShape.comparisonDimensions.length === 0) {
+    findings.push({
+      severity: "major",
+      kind: "missing_dimension_coverage",
+      summary: "Competitive research bundle is missing explicit comparison dimensions."
+    });
+  }
+
+  if (comparisonShape.keyFindings.length === 0) {
+    findings.push({
+      severity: "major",
+      kind: "weak_comparative_reasoning",
+      summary: "Competitive research bundle is missing clear comparative findings."
+    });
+  }
+
+  if (comparisonShape.recommendations.length === 0) {
+    findings.push({
+      severity: "major",
+      kind: "non_actionable_recommendation",
+      summary: "Competitive research bundle is missing actionable recommendations."
+    });
+  }
+
+  const decision = findings.some((finding) => finding.severity === "critical") ? "reject" : findings.length > 0 ? "revise" : "accept";
+  const blockingReason = delivery.blocking_reason ?? (
+    decision === "accept"
+      ? undefined
+      : decision === "revise"
+        ? "verifier_revision_required"
+        : "verifier_rejected"
+  );
+
+  return {
+    ...delivery,
+    status: decision === "accept" ? delivery.status : "blocked",
+    blocking_reason: blockingReason,
+    next_actions: decision === "accept" ? delivery.next_actions : [
+      ...(delivery.next_actions ?? []),
+      "Complete the competitive research bundle and address verifier findings before handoff."
+    ],
+    acceptance_proof: buildAcceptanceProof({
+      decision,
+      findings,
+      acceptedAt: decision === "accept" ? Date.now() : undefined,
+      verifierSummary: decision === "accept"
+        ? `Accepted competitive research bundle with ${comparisonShape.comparisonTargets.length} targets and ${sourceCoverage} verified sources.`
+        : `Competitive research verifier found ${findings.length} issue(s).`
+    })
+  };
+}
+
 function auditBrowserDelivery(
   delivery: FamilyDeliveryBundle,
   artifacts: ArtifactTruth[],
@@ -181,4 +288,54 @@ async function inspectArtifacts(artifactPaths: string[]): Promise<ArtifactTruth[
       }
     })
   );
+}
+
+function parseComparisonArtifact(
+  comparisonArtifact: ArtifactTruth | undefined,
+  fallbackReport: string
+): {
+  comparisonTargets: string[];
+  comparisonDimensions: string[];
+  keyFindings: string[];
+  recommendations: string[];
+} {
+  if (comparisonArtifact?.exists) {
+    try {
+      const raw = require("node:fs").readFileSync(path.resolve(comparisonArtifact.path), "utf8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return {
+        comparisonTargets: normalizeStringArray(parsed.comparisonTargets),
+        comparisonDimensions: normalizeStringArray(parsed.comparisonDimensions),
+        keyFindings: normalizeStringArray(parsed.keyFindings),
+        recommendations: normalizeStringArray(parsed.recommendations)
+      };
+    } catch {
+      // Fall through to report parsing.
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(buildCompetitiveComparisonArtifact(fallbackReport).content) as Record<string, unknown>;
+    return {
+      comparisonTargets: normalizeStringArray(parsed.comparisonTargets),
+      comparisonDimensions: normalizeStringArray(parsed.comparisonDimensions),
+      keyFindings: normalizeStringArray(parsed.keyFindings),
+      recommendations: normalizeStringArray(parsed.recommendations)
+    };
+  } catch {
+    return {
+      comparisonTargets: [],
+      comparisonDimensions: [],
+      keyFindings: [],
+      recommendations: []
+    };
+  }
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
 }

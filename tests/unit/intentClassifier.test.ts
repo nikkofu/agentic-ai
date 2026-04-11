@@ -45,4 +45,29 @@ describe("intent classifier", () => {
     expect(result.roles).toEqual(["planner"]);
     expect(result.reason).toBe("classifier_fallback");
   });
+
+  it("accepts competitive research as a first-class family intent", async () => {
+    const runtime = {
+      run: vi.fn().mockResolvedValue({
+        outputText: JSON.stringify({
+          task_kind: "competitive_research",
+          execution_mode: "tree",
+          roles: ["planner", "researcher", "writer"],
+          needs_verification: true,
+          reason: "comparative package required"
+        })
+      })
+    };
+
+    const result = await classifyIntent({
+      task: "对比 OpenClaw、Hermes Agent 和本项目的产品差异",
+      runtime: runtime as any,
+      runtimeInput: { model: "mock-model" }
+    });
+
+    expect(result.task_kind).toBe("competitive_research");
+    expect(result.execution_mode).toBe("tree");
+    expect(result.roles).toEqual(["planner", "researcher", "writer"]);
+    expect(result.needs_verification).toBe(true);
+  });
 });
