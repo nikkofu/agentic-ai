@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.9.0] - 2026-04-11
+### Added
+- **Phase 20 Operator Intelligence**: Added a business-facing operator intelligence layer that exposes outcome, economics, risk, trust, human-load, queue, and objective summaries alongside the existing runtime truth model.
+- **Executive Layer**: Added dashboard executive panels for accepted outcomes, delivery economics, blocked risk, intervention load, and objective performance.
+- **Operator Layer**: Added a dedicated operator deep-view panel that keeps codex-like access to node graph, tool call, event stream, verifier, artifact, and lifecycle drilldown surfaces.
+
+### Changed
+- **Inspection Enrichment**: `taskLifecycle.inspectTask()` now returns `operatorIntelligence` snapshots derived from delivery state, completion evidence, release-gate readiness, and human-action signals.
+- **Dashboard Default Framing**: The dashboard now opens with business-facing outcome and economics context before descending into lower-level runtime cards.
+
 ## [1.8.1] - 2026-04-10
 ### Fixed
 - **Phase 19 Closure Fixes**: Closed the remaining Phase 19 regressions by restoring completion-safe task-family inference, hardening Dream idle scheduling against missing candidate arrays, and making simulated runtime loops complete deterministically in orchestration and resume tests.
